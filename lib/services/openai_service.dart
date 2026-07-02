@@ -35,6 +35,11 @@ String getSiteName() {
   return 'A.R.Y.A';
 }
 
+void clearCachedSettings() {
+  _cachedApiKey = null;
+  _cachedModel = null;
+}
+
 Future<bool> hasValidApiKey() async {
   final key = await getApiKey();
   return key.isNotEmpty;

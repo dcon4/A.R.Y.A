@@ -59,8 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (model.isNotEmpty) {
       await prefs.setString('openrouter_model', model);
     }
-    _cachedApiKey = null;
-    _cachedModel = null;
+    clearCachedSettings();
     setState(() {
       _isSaved = true;
     });
