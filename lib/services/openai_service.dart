@@ -99,11 +99,16 @@ Remember: You are ARYA, the user's personal AI assistant.
         return 'Please add your API key in Settings first.';
       }
 
-      final model = await getModel();
+      var model = await getModel();
       final baseUrl = await getBaseUrlCached();
       if (baseUrl.isEmpty) {
         _logger.log('OpenAIService', 'API call blocked - no base URL set');
         return 'Please set a base URL for your custom provider in Settings.';
+      }
+
+      final webSearch = await providers.getWebSearchEnabled();
+      if (webSearch && !model.contains(':online')) {
+        model = '$model:online';
       }
 
       final requiresReferer = await getRequiresRefererCached();

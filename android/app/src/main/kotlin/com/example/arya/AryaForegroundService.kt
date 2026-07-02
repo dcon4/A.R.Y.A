@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media.session.MediaSessionCompat
 
 class AryaForegroundService : Service() {
     companion object {
@@ -32,11 +34,14 @@ class AryaForegroundService : Service() {
         }
     }
 
+    private var mediaSession: MediaSessionCompat? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        mediaSession = MediaSessionCompat(this, "arya_media_session")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -46,11 +51,19 @@ class AryaForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
             ACTION_STOP -> {
+                mediaSession?.release()
+                mediaSession = null
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        mediaSession?.release()
+        mediaSession = null
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
@@ -59,7 +72,7 @@ class AryaForegroundService : Service() {
             "ARYA Background Service",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Keeps ARYA running in the background"
+            description = "Keeps ARYA running in the background. RemoteFix can trigger the mic action."
             setShowBadge(false)
         }
         val manager = getSystemService(NotificationManager::class.java)
@@ -87,18 +100,24 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val token = mediaSession?.sessionToken
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
-            .setContentText("Tap to open. RemoteFix can trigger the mic button.")
+            .setContentText("RemoteFix can trigger the mic button.")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(Notification.CATEGORY_SERVICE)
             .setContentIntent(openPendingIntent)
             .addAction(
                 android.R.drawable.ic_btn_speak_now,
                 "Start Mic",
                 micPendingIntent
             )
+            .setStyle(MediaStyle()
+                .setMediaSession(token)
+                .setShowActionsInCompactView(0))
             .build()
     }
 }

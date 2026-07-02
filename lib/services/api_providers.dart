@@ -4,6 +4,7 @@ const _prefsProvider = 'api_provider';
 const _prefsKey = 'api_key';
 const _prefsModel = 'api_model';
 const _prefsCustomBaseUrl = 'api_custom_base_url';
+const _prefsWebSearch = 'web_search_enabled';
 
 class ApiProvider {
   final String id;
@@ -145,6 +146,16 @@ Future<String> getBaseUrl() async {
 Future<bool> getRequiresReferer() async {
   final provider = await getSelectedProvider();
   return provider.requiresReferer;
+}
+
+Future<bool> getWebSearchEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_prefsWebSearch) ?? false;
+}
+
+Future<void> setWebSearchEnabled(bool enabled) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_prefsWebSearch, enabled);
 }
 
 void clearCachedSettings() {

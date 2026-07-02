@@ -539,6 +539,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildWebSearchToggle() {
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Web Search",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Appends :online to the model so OpenRouter runs a web search before answering. Costs extra credits even on free models (~$0.001/search on Exa, varies for native search models).",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Web search on every request",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: providers.getWebSearchEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await providers.setWebSearchEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _modelTile(String id, String label, bool isSelected) {
     return InkWell(
       onTap: () {
@@ -619,6 +679,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildCustomBaseUrlField(),
             _buildSaveButton(),
             _buildModelSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            _buildWebSearchToggle(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

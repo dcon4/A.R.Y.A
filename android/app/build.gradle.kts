@@ -41,6 +41,7 @@ android {
 
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.media:media:1.7.0")
 }
 
 flutter {
