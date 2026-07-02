@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:arya/screens/settings_screen.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:arya/services/conversation_service.dart';
+import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/theme/app_theme.dart';
 import 'package:arya/widgets/feature_box.dart';
@@ -32,12 +35,16 @@ class _HomeScreenState extends State<HomeScreen> {
     initTextToSpeech();
   }
 
+  final _logger = DebugLogger();
+
   Future<void> initSpeechToText() async {
+    _logger.log('HomeScreen', 'Initializing speech to text');
     await speechToText.initialize();
     setState(() {});
   }
 
   Future<void> initTextToSpeech() async {
+    _logger.log('HomeScreen', 'Initializing text to speech');
     await flutterTts.setLanguage("en-US");
     await flutterTts.setPitch(1.0);
     await flutterTts.setSpeechRate(0.5);
@@ -45,10 +52,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> systemSpeak(String content) async {
+    _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
     await flutterTts.speak(content);
   }
 
   Future<void> startListening() async {
+    _logger.log('HomeScreen', 'Starting voice listening');
     await speechToText.listen(
       onResult: onSpeechResult,
       listenFor: Duration(seconds: 30),
@@ -58,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> stopListening() async {
+    _logger.log('HomeScreen', 'Stopped listening - words detected: ${lastWords.length > 0}');
     await speechToText.stop();
     setState(() {});
 
@@ -73,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     if (result.finalResult && lastWords.isNotEmpty) {
-      debugPrint("Final result detected: $lastWords");
+      _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
       Future.delayed(Duration(milliseconds: 500), () {
         sendMessageToOpenRouter();
       });
@@ -83,16 +93,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> sendMessageToOpenRouter() async {
     if (lastWords.isEmpty) return;
 
-    debugPrint("Sending to AI: $lastWords");
+    _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
 
     setState(() {
       isLoading = true;
     });
 
     final model = await getModel();
+    _logger.log('HomeScreen', 'Using model: $model');
     final response = await openaiService.chatGPTAPI(lastWords);
 
-    debugPrint("AI Response received: $response");
+    _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
 
     setState(() {
       generatedContent = response;
@@ -189,6 +200,29 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         _showSnackBar('Failed to save: $e');
       }
+    }
+  }
+
+  void _shareLog() async {
+    final path = _logger.getLogFilePath();
+    if (path == null) {
+      _showSnackBar('Log not yet initialized');
+      return;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      _showSnackBar('Log file not found');
+      return;
+    }
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'ARYA debug log',
+      );
+      _logger.log('HomeScreen', 'Log shared via system share sheet');
+    } catch (e) {
+      _logger.error('HomeScreen', 'Share failed', e);
+      _showSnackBar('Share failed: $e');
     }
   }
 
@@ -311,6 +345,15 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
         actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.bug_report,
+              color: Color.fromRGBO(255, 87, 51, 1),
+              size: 28,
+            ),
+            onPressed: _shareLog,
+            tooltip: 'Share debug log',
+          ),
           IconButton(
             icon: const Icon(
               Icons.save_alt,

@@ -1,5 +1,8 @@
+import 'dart:io';
+import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 
@@ -70,6 +73,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     });
+  }
+
+  void _shareLog(BuildContext context) async {
+    final logger = DebugLogger();
+    final path = logger.getLogFilePath();
+    if (path == null) {
+      _showSnack(context, 'Log not yet initialized');
+      return;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      _showSnack(context, 'Log file not found');
+      return;
+    }
+    try {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'ARYA debug log',
+        text: 'ARYA debug log - ${DateTime.now()}',
+      );
+    } catch (e) {
+      _showSnack(context, 'Share failed: $e');
+    }
+  }
+
+  void _showSnack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override
@@ -331,6 +363,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            const Text(
+              "Debug Logging",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setInnerState) {
+                final logger = DebugLogger();
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "Verbose logging (more detail in log)",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: logger.verboseEnabled,
+                          onChanged: (val) {
+                            logger.setVerboseEnabled(val);
+                            setInnerState(() {});
+                          },
+                          activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _shareLog(context),
+                        icon: const Icon(
+                          Icons.bug_report,
+                          color: Color.fromRGBO(255, 87, 51, 1),
+                        ),
+                        label: const Text(
+                          "Share Log",
+                          style: TextStyle(
+                            color: Color.fromRGBO(255, 87, 51, 1),
+                            fontFamily: 'Cera Pro',
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

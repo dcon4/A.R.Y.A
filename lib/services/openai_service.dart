@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:arya/services/debug_logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -74,13 +75,17 @@ When responding:
 Remember: You are ARYA, the user's personal AI assistant.
 ''';
 
+  final _logger = DebugLogger();
+
   Future<String?> chatGPTAPI(String prompt) async {
     try {
       final apiKey = await getApiKey();
       if (apiKey.isEmpty) {
+        _logger.log('OpenAIService', 'API call blocked - no API key set');
         return 'Please add your OpenRouter API key in Settings first.';
       }
       final model = await getModel();
+      _logger.log('OpenAIService', 'Sending request to OpenRouter model=$model');
       final response = await http.post(
         Uri.parse('$baseUrl/chat/completions'),
         headers: {
@@ -99,12 +104,13 @@ Remember: You are ARYA, the user's personal AI assistant.
       );
 
       if (response.statusCode == 200) {
+        _logger.log('OpenAIService', 'API response OK (${response.body.length} chars)');
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'];
         return content;
       } else {
-        print('Error: ${response.statusCode}');
-        print('Response: ${response.body}');
+        _logger.error('OpenAIService', 'API error HTTP ${response.statusCode}');
+        _logger.verbose('OpenAIService', 'Response body: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
         String detail;
         try {
           final err = jsonDecode(response.body);
@@ -115,7 +121,7 @@ Remember: You are ARYA, the user's personal AI assistant.
         return 'API error: $detail';
       }
     } catch (e) {
-      print('Exception: $e');
+      _logger.error('OpenAIService', 'Request exception', e);
       return 'Sorry, something went wrong. Please check your connection.';
     }
   }
