@@ -7,10 +7,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.session.MediaSession
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
-import androidx.media.session.MediaSessionCompat
 
 class AryaForegroundService : Service() {
     companion object {
@@ -34,14 +34,15 @@ class AryaForegroundService : Service() {
         }
     }
 
-    private var mediaSession: MediaSessionCompat? = null
+    private var mediaSession: MediaSession? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        mediaSession = MediaSessionCompat(this, "arya_media_session")
+        mediaSession = MediaSession(this, "arya_media_session")
+        mediaSession?.setCallback(null)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
