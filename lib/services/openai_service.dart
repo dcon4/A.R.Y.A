@@ -1,11 +1,8 @@
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 String? _cachedApiKey;
-String? _cachedSiteUrl;
-String? _cachedSiteName;
 
 Future<String> getApiKey() async {
   if (_cachedApiKey != null) return _cachedApiKey!;
@@ -15,23 +12,15 @@ Future<String> getApiKey() async {
     _cachedApiKey = savedKey;
     return savedKey;
   }
-  final envKey = dotenv.env['OPENROUTER_API_KEY'];
-  if (envKey != null && envKey.isNotEmpty) {
-    _cachedApiKey = envKey;
-    return envKey;
-  }
   return '';
 }
 
 String getSiteUrl() {
-  _cachedSiteUrl ??=
-      dotenv.env['SITE_URL'] ?? 'https://github.com/4bhisheksharma/A.R.Y.A';
-  return _cachedSiteUrl!;
+  return 'https://github.com/4bhisheksharma/A.R.Y.A';
 }
 
 String getSiteName() {
-  _cachedSiteName ??= dotenv.env['SITE_NAME'] ?? 'A.R.Y.A';
-  return _cachedSiteName!;
+  return 'A.R.Y.A';
 }
 
 Future<bool> hasValidApiKey() async {
