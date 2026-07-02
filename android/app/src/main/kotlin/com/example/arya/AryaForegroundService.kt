@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.session.MediaSession
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
@@ -34,15 +33,11 @@ class AryaForegroundService : Service() {
         }
     }
 
-    private var mediaSession: MediaSession? = null
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        mediaSession = MediaSession(this, "arya_media_session")
-        mediaSession?.setCallback(null)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -52,19 +47,11 @@ class AryaForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
             ACTION_STOP -> {
-                mediaSession?.release()
-                mediaSession = null
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
         return START_STICKY
-    }
-
-    override fun onDestroy() {
-        mediaSession?.release()
-        mediaSession = null
-        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
@@ -101,8 +88,6 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val token = mediaSession?.sessionToken
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
             .setContentText("RemoteFix can trigger the mic button.")
@@ -117,7 +102,6 @@ class AryaForegroundService : Service() {
                 micPendingIntent
             )
             .setStyle(MediaStyle()
-                .setMediaSession(token)
                 .setShowActionsInCompactView(0))
             .build()
     }
