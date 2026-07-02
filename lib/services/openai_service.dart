@@ -25,7 +25,7 @@ Future<String> getModel() async {
     _cachedModel = savedModel;
     return savedModel;
   }
-  return 'openai/gpt-4o-mini-2024-07-18';
+  return '~openai/gpt-mini-latest';
 }
 
 String getSiteUrl() {

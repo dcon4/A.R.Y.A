@@ -18,17 +18,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customModelController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
-  String _selectedModel = 'openai/gpt-4o-mini-2024-07-18';
+  String _selectedModel = '~openai/gpt-mini-latest';
   bool _useCustomModel = false;
 
   static const List<Map<String, String>> _presetModels = [
-    {'id': 'openai/gpt-4o-mini-2024-07-18', 'label': 'GPT-4o Mini (original, worked before)'},
-    {'id': 'openai/gpt-4o-mini', 'label': 'GPT-4o Mini (latest)'},
-    {'id': 'openai/gpt-4o', 'label': 'GPT-4o (most capable)'},
-    {'id': 'google/gemini-2.0-flash-001', 'label': 'Gemini 2.0 Flash (fast, cheap)'},
-    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open)'},
-    {'id': 'anthropic/claude-3-haiku', 'label': 'Claude 3 Haiku (fast)'},
-    {'id': 'anthropic/claude-sonnet-4-20250305', 'label': 'Claude Sonnet 4'},
+    {'id': '~openai/gpt-mini-latest', 'label': 'GPT Mini (latest, cheapest)'},
+    {'id': 'openai/gpt-5.4-mini', 'label': 'GPT 5.4 Mini (pinned)'},
+    {'id': '~openai/gpt-latest', 'label': 'GPT (latest full)'},
+    {'id': 'google/gemini-3.5-flash', 'label': 'Gemini 3.5 Flash (fast)'},
+    {'id': 'google/gemini-3.1-flash-lite', 'label': 'Gemini 3.1 Flash Lite (cheap)'},
+    {'id': 'anthropic/claude-sonnet-5', 'label': 'Claude Sonnet 5'},
+    {'id': '~anthropic/claude-haiku-latest', 'label': 'Claude Haiku (latest, cheap)'},
+    {'id': 'deepseek/deepseek-v4-flash', 'label': 'DeepSeek V4 Flash (fast, cheap)'},
+    {'id': 'mistralai/mistral-small-2603', 'label': 'Mistral Small (cheap)'},
+    {'id': 'qwen/qwen3.5-9b', 'label': 'Qwen 3.5 9B (cheap)'},
   ];
 
   @override
@@ -40,7 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedKey = prefs.getString('openrouter_api_key') ?? '';
-    final savedModel = prefs.getString('openrouter_model') ?? 'openai/gpt-4o-mini-2024-07-18';
+    final savedModel = prefs.getString('openrouter_model') ?? '~openai/gpt-mini-latest';
     final isCustom = !_presetModels.any((m) => m['id'] == savedModel);
     setState(() {
       _apiKeyController.text = savedKey;
@@ -273,7 +276,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: _saveSettings,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  _isSaved ? "Saved!" : "Save Settings",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cera Pro',
+                  ),
+                ),
+              ),
+            ),
+            if (_isSaved)
+              const Padding(
+                padding: EdgeInsets.only(top: 12, bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      "Settings saved.",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 14,
+                        fontFamily: 'Cera Pro',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             const Text(
               "AI Model",
               style: TextStyle(
@@ -285,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Most models need a credit card added to your OpenRouter account (even cheap ones). OpenRouter gives $1 free credit to start. Tap Custom model to enter any model ID.",
+              "You now have credits, so all paid models work. Pick one below or tap Custom model to enter any model ID.",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -342,7 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
-                    hintText: "e.g. openai/gpt-4o-mini",
+                    hintText: "e.g. ~openai/gpt-mini-latest",
                     hintStyle: TextStyle(
                       color: Colors.grey[600],
                       fontFamily: 'Cera Pro',
@@ -431,53 +483,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  _isSaved ? "Saved!" : "Save Settings",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Cera Pro',
-                  ),
-                ),
-              ),
-            ),
-            if (_isSaved)
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      "Settings saved.",
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 14,
-                        fontFamily: 'Cera Pro',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
