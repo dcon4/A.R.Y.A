@@ -18,16 +18,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customModelController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
-  String _selectedModel = 'openai/gpt-4o-mini';
+  String _selectedModel = 'openai/gpt-4o-mini-2024-07-18';
   bool _useCustomModel = false;
 
   static const List<Map<String, String>> _presetModels = [
-    {'id': 'openai/gpt-4o-mini', 'label': 'GPT-4o Mini (fast, cheap)'},
+    {'id': 'openai/gpt-4o-mini-2024-07-18', 'label': 'GPT-4o Mini (version-pinned, original)'},
+    {'id': 'openai/gpt-4o-mini', 'label': 'GPT-4o Mini (latest)'},
     {'id': 'openai/gpt-4o', 'label': 'GPT-4o (most capable)'},
-    {'id': 'google/gemini-2.0-flash-001', 'label': 'Gemini 2.0 Flash (fast)'},
-    {'id': 'google/gemini-2.5-flash-preview-04-17', 'label': 'Gemini 2.5 Flash (free)'},
-    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open)'},
-    {'id': 'mistralai/mistral-7b-instruct:free', 'label': 'Mistral 7B (free tier)'},
+    {'id': 'google/gemini-2.0-flash-001', 'label': 'Gemini 2.0 Flash (fast, cheap)'},
+    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open, cheap)'},
+    {'id': 'mistralai/mistral-7b-instruct:free', 'label': 'Mistral 7B (free)'},
+    {'id': 'google/gemma-3-27b-it:free', 'label': 'Gemma 3 27B (free)'},
     {'id': 'cognitivecomputations/dolphin-mixtral-8x7b:free', 'label': 'Dolphin Mixtral (free)'},
     {'id': 'microsoft/phi-3-medium-128k-instruct:free', 'label': 'Phi-3 Medium (free)'},
     {'id': 'anthropic/claude-3.5-sonnet', 'label': 'Claude 3.5 Sonnet'},
@@ -43,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedKey = prefs.getString('openrouter_api_key') ?? '';
-    final savedModel = prefs.getString('openrouter_model') ?? 'openai/gpt-4o-mini';
+    final savedModel = prefs.getString('openrouter_model') ?? 'openai/gpt-4o-mini-2024-07-18';
     final isCustom = !_presetModels.any((m) => m['id'] == savedModel);
     setState(() {
       _apiKeyController.text = savedKey;
