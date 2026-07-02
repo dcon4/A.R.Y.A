@@ -1,11 +1,43 @@
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-final openRouterAPIKey = dotenv.env['OPENROUTER_API_KEY'];
-final siteUrl =
-    dotenv.env['SITE_URL'] ?? 'https://github.com/4bhisheksharma/A.R.Y.A';
-final siteName = dotenv.env['SITE_NAME'] ?? 'A.R.Y.A';
+String? _cachedApiKey;
+String? _cachedSiteUrl;
+String? _cachedSiteName;
+
+Future<String> getApiKey() async {
+  if (_cachedApiKey != null) return _cachedApiKey!;
+  final prefs = await SharedPreferences.getInstance();
+  final savedKey = prefs.getString('openrouter_api_key');
+  if (savedKey != null && savedKey.isNotEmpty) {
+    _cachedApiKey = savedKey;
+    return savedKey;
+  }
+  final envKey = dotenv.env['OPENROUTER_API_KEY'];
+  if (envKey != null && envKey.isNotEmpty) {
+    _cachedApiKey = envKey;
+    return envKey;
+  }
+  return '';
+}
+
+String getSiteUrl() {
+  _cachedSiteUrl ??=
+      dotenv.env['SITE_URL'] ?? 'https://github.com/4bhisheksharma/A.R.Y.A';
+  return _cachedSiteUrl!;
+}
+
+String getSiteName() {
+  _cachedSiteName ??= dotenv.env['SITE_NAME'] ?? 'A.R.Y.A';
+  return _cachedSiteName!;
+}
+
+Future<bool> hasValidApiKey() async {
+  final key = await getApiKey();
+  return key.isNotEmpty;
+}
 
 class OpenaiService {
   final String baseUrl = 'https://openrouter.ai/api/v1';
@@ -39,13 +71,17 @@ Remember: You are ARYA, the user's personal AI assistant.
 
   Future<String?> chatGPTAPI(String prompt) async {
     try {
+      final apiKey = await getApiKey();
+      if (apiKey.isEmpty) {
+        return 'Please add your OpenRouter API key in Settings first.';
+      }
       final response = await http.post(
         Uri.parse('$baseUrl/chat/completions'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $openRouterAPIKey',
-          'HTTP-Referer': siteUrl,
-          'X-Title': siteName,
+          'Authorization': 'Bearer $apiKey',
+          'HTTP-Referer': getSiteUrl(),
+          'X-Title': getSiteName(),
         },
         body: jsonEncode({
           'model': model,

@@ -25,12 +25,6 @@ jobs:
         with:
           channel: stable
 
-      - name: Create dummy .env file
-        run: |
-          echo "OPENROUTER_API_KEY=dummy_key_replace_with_real_one" > .env
-          echo "SITE_URL=https://github.com/4bhisheksharma/A.R.Y.A" >> .env
-          echo "SITE_NAME=A.R.Y.A" >> .env
-
       - name: Install dependencies
         run: flutter pub get
 

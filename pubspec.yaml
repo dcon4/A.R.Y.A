@@ -19,6 +19,7 @@ dependencies:
   http: ^1.5.0
   flutter_tts: ^4.2.0
   flutter_launcher_icons: ^0.14.4
+  shared_preferences: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -40,7 +41,6 @@ flutter:
   assets:
     - assets/images/
     - assets/audios/
-    - .env
 
   fonts:
     - family: Cera Pro
