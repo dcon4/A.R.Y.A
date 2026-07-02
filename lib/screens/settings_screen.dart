@@ -22,17 +22,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _useCustomModel = false;
 
   static const List<Map<String, String>> _presetModels = [
-    {'id': 'openai/gpt-4o-mini-2024-07-18', 'label': 'GPT-4o Mini (version-pinned, original)'},
+    {'id': 'openai/gpt-4o-mini-2024-07-18', 'label': 'GPT-4o Mini (original, worked before)'},
     {'id': 'openai/gpt-4o-mini', 'label': 'GPT-4o Mini (latest)'},
     {'id': 'openai/gpt-4o', 'label': 'GPT-4o (most capable)'},
     {'id': 'google/gemini-2.0-flash-001', 'label': 'Gemini 2.0 Flash (fast, cheap)'},
-    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open, cheap)'},
-    {'id': 'mistralai/mistral-7b-instruct:free', 'label': 'Mistral 7B (free)'},
-    {'id': 'google/gemma-3-27b-it:free', 'label': 'Gemma 3 27B (free)'},
-    {'id': 'cognitivecomputations/dolphin-mixtral-8x7b:free', 'label': 'Dolphin Mixtral (free)'},
-    {'id': 'microsoft/phi-3-medium-128k-instruct:free', 'label': 'Phi-3 Medium (free)'},
-    {'id': 'anthropic/claude-3.5-sonnet', 'label': 'Claude 3.5 Sonnet'},
+    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open)'},
     {'id': 'anthropic/claude-3-haiku', 'label': 'Claude 3 Haiku (fast)'},
+    {'id': 'anthropic/claude-sonnet-4-20250305', 'label': 'Claude Sonnet 4'},
   ];
 
   @override
@@ -289,7 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Models tagged (free) are available without payment on OpenRouter. Other models need a credit card on your OpenRouter account.",
+              "Most models need a credit card added to your OpenRouter account (even cheap ones). OpenRouter gives $1 free credit to start. Tap Custom model to enter any model ID.",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
