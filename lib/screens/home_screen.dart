@@ -1,4 +1,5 @@
 import 'package:arya/screens/settings_screen.dart';
+import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/theme/app_theme.dart';
 import 'package:arya/widgets/feature_box.dart';
@@ -19,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final speechToText = SpeechToText();
   final FlutterTts flutterTts = FlutterTts();
   final OpenaiService openaiService = OpenaiService();
+  final ConversationService conversationService = ConversationService();
   String lastWords = "";
   String? generatedContent;
   bool isLoading = false;
@@ -87,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading = true;
     });
 
+    final model = await getModel();
     final response = await openaiService.chatGPTAPI(lastWords);
 
     debugPrint("AI Response received: $response");
@@ -96,10 +99,107 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading = false;
     });
 
-    // Speak the AI response
+    // Log the conversation entry
     if (response != null && response.isNotEmpty) {
+      conversationService.addEntry(ConversationEntry(
+        userQuery: lastWords,
+        aiResponse: response,
+        model: model,
+      ));
+
+      // Auto-save if enabled
+      try {
+        await conversationService.autoSave();
+      } catch (_) {
+        // Silently handle auto-save errors
+      }
+
       await systemSpeak(response);
     }
+  }
+
+  Future<void> _manualSave() async {
+    if (!conversationService.hasEntries) {
+      _showSnackBar('Nothing to save yet.');
+      return;
+    }
+
+    final subjectController = TextEditingController();
+    final firstQuery = conversationService.entries.first.userQuery;
+    subjectController.text = firstQuery.length > 40
+        ? firstQuery.substring(0, 40)
+        : firstQuery;
+
+    final subject = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text(
+          'Save Conversation',
+          style: TextStyle(color: Color.fromRGBO(255, 87, 51, 1)),
+        ),
+        content: TextField(
+          controller: subjectController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Enter a subject for this conversation',
+            hintStyle: TextStyle(color: Colors.grey[500]),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(
+                color: Color.fromRGBO(255, 87, 51, 1),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, subjectController.text),
+            child: const Text(
+              'Save',
+              style: TextStyle(color: Color.fromRGBO(255, 87, 51, 1)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (subject == null || subject.trim().isEmpty) return;
+
+    try {
+      final filePath = await conversationService.saveToFile(
+        subject: subject.trim(),
+      );
+      if (mounted) {
+        _showSnackBar('Saved: ${filePath.split('/').last}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Failed to save: $e');
+      }
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -211,6 +311,15 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
         actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.save_alt,
+              color: Color.fromRGBO(255, 87, 51, 1),
+              size: 28,
+            ),
+            onPressed: _manualSave,
+            tooltip: 'Save conversation',
+          ),
           IconButton(
             icon: const Icon(
               Icons.settings,
