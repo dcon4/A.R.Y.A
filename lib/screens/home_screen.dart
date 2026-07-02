@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:arya/screens/settings_screen.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:arya/services/background_service.dart';
 import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
@@ -33,6 +34,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     initSpeechToText();
     initTextToSpeech();
+    BackgroundService.setOnStartMicCallback(() {
+      if (speechToText.isNotListening) {
+        startListening();
+      }
+    });
   }
 
   final _logger = DebugLogger();

@@ -17,7 +17,7 @@ class DebugLogger {
   Future<void> initialize() async {
     if (_initialized) return;
     final prefs = await SharedPreferences.getInstance();
-    _verboseEnabled = prefs.getBool('verbose_logging') ?? false;
+    _verboseEnabled = prefs.getBool('verbose_logging') ?? !kReleaseMode;
     final dir = await getApplicationDocumentsDirectory();
     final now = DateTime.now();
     final y = now.year.toString().padLeft(4, '0');

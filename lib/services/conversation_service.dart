@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:arya/services/save_directory_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ConversationEntry {
@@ -58,7 +59,7 @@ class ConversationService {
     return truncated.isEmpty ? 'Conversation' : truncated;
   }
 
-  Future<String> getDocumentsDir() async {
+  Future<String> getSaveDir() async {
     final dir = await getApplicationDocumentsDirectory();
     return dir.path;
   }
@@ -95,11 +96,21 @@ class ConversationService {
     required String subject,
     DateTime? timestamp,
   }) async {
-    final dir = await getDocumentsDir();
     final ts = timestamp ?? DateTime.now();
     final fileName = buildFileName(subject, ts);
-    final filePath = '${dir}/$fileName';
     final content = buildContent(subject);
+
+    // Try custom save directory first
+    final saved = await SaveDirectoryPicker.writeFile(fileName, content);
+    if (saved) {
+      _currentFilePath = fileName;
+      _subject = subject;
+      return fileName;
+    }
+
+    // Fall back to app documents directory
+    final dir = await getSaveDir();
+    final filePath = '$dir/$fileName';
     final file = File(filePath);
     await file.writeAsString(content);
     _currentFilePath = filePath;
@@ -110,13 +121,18 @@ class ConversationService {
   Future<String> autoSave() async {
     if (_entries.isEmpty) return '';
 
-    // If we already have a file for this session, append the latest entry
-    if (_currentFilePath != null && File(_currentFilePath!).existsSync()) {
-      final latest = _entries.last;
-      return appendToFile(_currentFilePath!, latest);
+    if (_currentFilePath != null) {
+      // Check if we can append - only works for local files, not SAF
+      if (!_currentFilePath!.contains('/')) {
+        // SAF URI was used, can't append
+        return '';
+      }
+      if (File(_currentFilePath!).existsSync()) {
+        final latest = _entries.last;
+        return appendToFile(_currentFilePath!, latest);
+      }
     }
 
-    // First save - create the file
     final firstQuery = _entries.first.userQuery;
     final subject = _sanitizeSubject(firstQuery);
     return saveToFile(subject: subject, timestamp: _entries.first.timestamp);

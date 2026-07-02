@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'package:arya/services/api_providers.dart' as providers;
+import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
+import 'package:arya/services/save_directory_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,23 +19,20 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _apiKeyController = TextEditingController();
   final TextEditingController _customModelController = TextEditingController();
+  final TextEditingController _customBaseUrlController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
-  String _selectedModel = '~openai/gpt-mini-latest';
+  String _selectedProviderId = 'openrouter';
+  String _selectedModelId = '';
   bool _useCustomModel = false;
+  List<providers.ApiModel> _currentModels = [];
 
-  static const List<Map<String, String>> _presetModels = [
-    {'id': '~openai/gpt-mini-latest', 'label': 'GPT Mini (latest, cheapest)'},
-    {'id': 'openai/gpt-5.4-mini', 'label': 'GPT 5.4 Mini (pinned)'},
-    {'id': '~openai/gpt-latest', 'label': 'GPT (latest full)'},
-    {'id': 'google/gemini-3.5-flash', 'label': 'Gemini 3.5 Flash (fast)'},
-    {'id': 'google/gemini-3.1-flash-lite', 'label': 'Gemini 3.1 Flash Lite (cheap)'},
-    {'id': 'anthropic/claude-sonnet-5', 'label': 'Claude Sonnet 5'},
-    {'id': '~anthropic/claude-haiku-latest', 'label': 'Claude Haiku (latest, cheap)'},
-    {'id': 'deepseek/deepseek-v4-flash', 'label': 'DeepSeek V4 Flash (fast, cheap)'},
-    {'id': 'mistralai/mistral-small-2603', 'label': 'Mistral Small (cheap)'},
-    {'id': 'qwen/qwen3.5-9b', 'label': 'Qwen 3.5 9B (cheap)'},
-  ];
+  providers.ApiProvider get _selectedProvider {
+    return providers.apiProviders.firstWhere(
+      (p) => p.id == _selectedProviderId,
+      orElse: () => providers.apiProviders[0],
+    );
+  }
 
   @override
   void initState() {
@@ -42,26 +42,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedKey = prefs.getString('openrouter_api_key') ?? '';
-    final savedModel = prefs.getString('openrouter_model') ?? '~openai/gpt-mini-latest';
-    final isCustom = !_presetModels.any((m) => m['id'] == savedModel);
+    final savedProviderId = prefs.getString('api_provider') ?? 'openrouter';
+    final provider = providers.apiProviders.firstWhere(
+      (p) => p.id == savedProviderId,
+      orElse: () => providers.apiProviders[0],
+    );
+
+    final savedKey = prefs.getString(provider.prefKey) ?? '';
+    final savedModel = prefs.getString('api_model') ?? provider.defaultModel;
+    final isCustomModel = !provider.models.any((m) => m.id == savedModel);
+    final savedCustomBaseUrl = prefs.getString('api_custom_base_url') ?? '';
+
     setState(() {
+      _selectedProviderId = savedProviderId;
       _apiKeyController.text = savedKey;
-      _selectedModel = isCustom ? _presetModels[0]['id']! : savedModel;
-      _useCustomModel = isCustom;
-      _customModelController.text = isCustom ? savedModel : '';
+      _selectedModelId = isCustomModel ? provider.defaultModel : savedModel;
+      _useCustomModel = isCustomModel;
+      _customModelController.text = isCustomModel ? savedModel : '';
+      _customBaseUrlController.text = savedCustomBaseUrl;
+      _currentModels = provider.models;
     });
   }
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('openrouter_api_key', _apiKeyController.text.trim());
+    await prefs.setString('api_provider', _selectedProviderId);
+    final provider = _selectedProvider;
+    await prefs.setString(provider.prefKey, _apiKeyController.text.trim());
+
     final model = _useCustomModel
         ? _customModelController.text.trim()
-        : _selectedModel;
+        : _selectedModelId;
     if (model.isNotEmpty) {
-      await prefs.setString('openrouter_model', model);
+      await prefs.setString('api_model', model);
     }
+
+    if (provider.id == 'custom') {
+      await prefs.setString('api_custom_base_url', _customBaseUrlController.text.trim());
+    }
+
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -72,6 +91,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _isSaved = false;
         });
       }
+    });
+  }
+
+  void _onProviderChanged(String? newId) {
+    if (newId == null || newId == _selectedProviderId) return;
+    final newProvider = providers.apiProviders.firstWhere(
+      (p) => p.id == newId,
+      orElse: () => providers.apiProviders[0],
+    );
+    SharedPreferences.getInstance().then((prefs) {
+      final savedKey = prefs.getString(newProvider.prefKey) ?? '';
+      String savedCustomUrl = '';
+      if (newId == 'custom') {
+        savedCustomUrl = prefs.getString('api_custom_base_url') ?? '';
+      }
+      setState(() {
+        _selectedProviderId = newId;
+        _selectedModelId = newProvider.defaultModel;
+        _useCustomModel = false;
+        _customModelController.clear();
+        _currentModels = newProvider.models;
+        _apiKeyController.text = savedKey;
+        if (newId == 'custom') {
+          _customBaseUrlController.text = savedCustomUrl;
+        }
+      });
     });
   }
 
@@ -108,7 +153,390 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _apiKeyController.dispose();
     _customModelController.dispose();
+    _customBaseUrlController.dispose();
     super.dispose();
+  }
+
+  String _providerHintText(String id) {
+    switch (id) {
+      case 'openrouter': return 'sk-or-v1-...';
+      case 'openai': return 'sk-...';
+      case 'groq': return 'gsk_...';
+      case 'deepseek': return 'sk-...';
+      default: return 'API key';
+    }
+  }
+
+  String _providerDescription(String id) {
+    switch (id) {
+      case 'openrouter': return 'Get your free API key at openrouter.ai/keys. Access many models through one provider.';
+      case 'openai': return 'Get your API key at platform.openai.com/api-keys.';
+      case 'groq': return 'Get your free API key at console.groq.com/keys. Fast inference for open models.';
+      case 'deepseek': return 'Get your API key at platform.deepseek.com/api-keys.';
+      default: return 'Enter the base URL and API key for your custom provider.';
+    }
+  }
+
+  Widget _buildProviderSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "AI Provider",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _providerDescription(_selectedProviderId),
+          style: const TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(255, 255, 255, 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedProviderId,
+              isExpanded: true,
+              dropdownColor: Colors.grey[900],
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Cera Pro',
+                fontSize: 15,
+              ),
+              items: providers.apiProviders.map((p) {
+                return DropdownMenuItem(
+                  value: p.id,
+                  child: Text(p.name),
+                );
+              }).toList(),
+              onChanged: _onProviderChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApiKeyField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          "${_selectedProvider.name} API Key",
+          style: const TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _providerDescription(_selectedProviderId),
+          style: const TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _apiKeyController,
+          obscureText: _obscureKey,
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 15,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            hintText: _providerHintText(_selectedProviderId),
+            hintStyle: TextStyle(
+              color: Colors.grey[600],
+              fontFamily: 'Cera Pro',
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color.fromRGBO(255, 87, 51, 0.5),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                width: 2,
+              ),
+            ),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _obscureKey ? Icons.visibility_off : Icons.visibility,
+                    color: const Color.fromRGBO(255, 87, 51, 0.7),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureKey = !_obscureKey;
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.paste,
+                    color: Color.fromRGBO(255, 87, 51, 0.7),
+                  ),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data?.text != null) {
+                      _apiKeyController.text = data!.text!;
+                    }
+                  },
+                ),
+              ],
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomBaseUrlField() {
+    if (_selectedProviderId != 'custom') return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: TextField(
+        controller: _customBaseUrlController,
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Cera Pro',
+          fontSize: 15,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+          hintText: "https://api.example.com/v1",
+          hintStyle: TextStyle(
+            color: Colors.grey[600],
+            fontFamily: 'Cera Pro',
+          ),
+          labelText: "Base URL",
+          labelStyle: const TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontFamily: 'Cera Pro',
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: Color.fromRGBO(255, 87, 51, 1),
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton(
+            onPressed: _saveSettings,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 0,
+            ),
+            child: Text(
+              _isSaved ? "Saved!" : "Save Settings",
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+          ),
+        ),
+        if (_isSaved)
+          const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 18,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  "Settings saved.",
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 14,
+                    fontFamily: 'Cera Pro',
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildModelSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 32),
+        const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+        const SizedBox(height: 16),
+        const Text(
+          "Model",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _selectedProviderId == 'openrouter'
+              ? "Free models have :free suffix. Paid models use your OpenRouter credits."
+              : "Select a model for this provider.",
+          style: const TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ..._currentModels.map((m) => _modelTile(
+          m.id,
+          m.label,
+          !_useCustomModel && _selectedModelId == m.id,
+        )),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _useCustomModel = true;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                Icon(
+                  _useCustomModel
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: const Color.fromRGBO(255, 87, 51, 1),
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  "Custom model",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_useCustomModel)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 8, bottom: 16),
+            child: TextField(
+              controller: _customModelController,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Cera Pro',
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+                hintText: _selectedProviderId == 'openrouter'
+                    ? "e.g. ~openai/gpt-mini-latest"
+                    : "e.g. gpt-4o-mini",
+                hintStyle: TextStyle(
+                  color: Colors.grey[600],
+                  fontFamily: 'Cera Pro',
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _modelTile(String id, String label, bool isSelected) {
@@ -116,7 +544,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onTap: () {
         setState(() {
           _useCustomModel = false;
-          _selectedModel = id;
+          _selectedModelId = id;
         });
       },
       child: Padding(
@@ -186,232 +614,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-            const Text(
-              "OpenRouter API Key",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cera Pro',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Get your free API key at openrouter.ai/keys. ARYA needs this key to talk to the AI.",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 138, 101, 0.8),
-                fontSize: 14,
-                fontFamily: 'Cera Pro',
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _apiKeyController,
-              obscureText: _obscureKey,
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'Cera Pro',
-                fontSize: 15,
-              ),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
-                hintText: "sk-or-v1-...",
-                hintStyle: TextStyle(
-                  color: Colors.grey[600],
-                  fontFamily: 'Cera Pro',
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(
-                    color: Color.fromRGBO(255, 87, 51, 0.5),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(
-                    color: Color.fromRGBO(255, 87, 51, 1),
-                    width: 2,
-                  ),
-                ),
-                suffixIcon: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        _obscureKey ? Icons.visibility_off : Icons.visibility,
-                        color: const Color.fromRGBO(255, 87, 51, 0.7),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureKey = !_obscureKey;
-                        });
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.paste,
-                        color: Color.fromRGBO(255, 87, 51, 0.7),
-                      ),
-                      onPressed: () async {
-                        final data = await Clipboard.getData(Clipboard.kTextPlain);
-                        if (data?.text != null) {
-                          _apiKeyController.text = data!.text!;
-                        }
-                      },
-                    ),
-                  ],
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                child: Text(
-                  _isSaved ? "Saved!" : "Save Settings",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Cera Pro',
-                  ),
-                ),
-              ),
-            ),
-            if (_isSaved)
-              const Padding(
-                padding: EdgeInsets.only(top: 12, bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      "Settings saved.",
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 14,
-                        fontFamily: 'Cera Pro',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
-            const SizedBox(height: 16),
-            const Text(
-              "AI Model",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cera Pro',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "You now have credits, so all paid models work. Pick one below or tap Custom model to enter any model ID.",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 138, 101, 0.8),
-                fontSize: 14,
-                fontFamily: 'Cera Pro',
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ..._presetModels.map((m) => _modelTile(
-              m['id']!,
-              m['label']!,
-              !_useCustomModel && _selectedModel == m['id'],
-            )),
-            InkWell(
-              onTap: () {
-                setState(() {
-                  _useCustomModel = true;
-                });
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                child: Row(
-                  children: [
-                    Icon(
-                      _useCustomModel
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      color: const Color.fromRGBO(255, 87, 51, 1),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      "Custom model",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Cera Pro',
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_useCustomModel)
-              Padding(
-                padding: const EdgeInsets.only(left: 4, top: 8, bottom: 16),
-                child: TextField(
-                  controller: _customModelController,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Cera Pro',
-                    fontSize: 15,
-                  ),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
-                    hintText: "e.g. ~openai/gpt-mini-latest",
-                    hintStyle: TextStyle(
-                      color: Colors.grey[600],
-                      fontFamily: 'Cera Pro',
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
-              ),
+            _buildProviderSelector(),
+            _buildApiKeyField(),
+            _buildCustomBaseUrlField(),
+            _buildSaveButton(),
+            _buildModelSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
@@ -483,9 +690,124 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            const Text(
+              "Background Service",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Keeps ARYA running when the screen is locked. 'Start Mic' notification lets RemoteFix trigger voice input.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    BackgroundService.isRunning
+                        ? "Service is running"
+                        : "Service is stopped",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: BackgroundService.isRunning,
+                  onChanged: (val) async {
+                    await BackgroundService.setEnabled(val);
+                    setState(() {});
+                  },
+                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            const Text(
+              "Save Location",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Choose where conversation files are saved. Defaults to app documents folder.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _pickFolder,
+                icon: const Icon(
+                  Icons.folder_open,
+                  color: Color.fromRGBO(255, 87, 51, 1),
+                ),
+                label: const Text(
+                  "Pick Folder",
+                  style: TextStyle(
+                    color: Color.fromRGBO(255, 87, 51, 1),
+                    fontFamily: 'Cera Pro',
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickFolder() async {
+    final uri = await SaveDirectoryPicker.pickDirectory();
+    if (uri != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Save folder set. Files will be saved there.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Folder picking cancelled or failed.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 }

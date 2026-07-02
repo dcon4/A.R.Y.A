@@ -1,31 +1,45 @@
 import 'dart:convert';
+import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/debug_logger.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 String? _cachedApiKey;
 String? _cachedModel;
+String? _cachedBaseUrl;
+bool? _cachedRequiresReferer;
 
 Future<String> getApiKey() async {
   if (_cachedApiKey != null) return _cachedApiKey!;
-  final prefs = await SharedPreferences.getInstance();
-  final savedKey = prefs.getString('openrouter_api_key');
-  if (savedKey != null && savedKey.isNotEmpty) {
-    _cachedApiKey = savedKey;
-    return savedKey;
+  final key = await providers.getApiKey();
+  if (key.isNotEmpty) {
+    _cachedApiKey = key;
   }
-  return '';
+  return key;
 }
 
 Future<String> getModel() async {
   if (_cachedModel != null) return _cachedModel!;
-  final prefs = await SharedPreferences.getInstance();
-  final savedModel = prefs.getString('openrouter_model');
-  if (savedModel != null && savedModel.isNotEmpty) {
-    _cachedModel = savedModel;
-    return savedModel;
+  final model = await providers.getSelectedModel();
+  if (model.isNotEmpty) {
+    _cachedModel = model;
   }
-  return '~openai/gpt-mini-latest';
+  return model;
+}
+
+Future<String> getBaseUrlCached() async {
+  if (_cachedBaseUrl != null) return _cachedBaseUrl!;
+  final url = await providers.getBaseUrl();
+  if (url.isNotEmpty) {
+    _cachedBaseUrl = url;
+  }
+  return url;
+}
+
+Future<bool> getRequiresRefererCached() async {
+  if (_cachedRequiresReferer != null) return _cachedRequiresReferer!;
+  final val = await providers.getRequiresReferer();
+  _cachedRequiresReferer = val;
+  return val;
 }
 
 String getSiteUrl() {
@@ -39,6 +53,8 @@ String getSiteName() {
 void clearCachedSettings() {
   _cachedApiKey = null;
   _cachedModel = null;
+  _cachedBaseUrl = null;
+  _cachedRequiresReferer = null;
 }
 
 Future<bool> hasValidApiKey() async {
@@ -47,8 +63,6 @@ Future<bool> hasValidApiKey() async {
 }
 
 class OpenaiService {
-  final String baseUrl = 'https://openrouter.ai/api/v1';
-
   final String systemPrompt = '''
 You are ARYA (Adaptive Real-time Yielding Assistant), a helpful and friendly AI voice assistant.
 
@@ -82,18 +96,31 @@ Remember: You are ARYA, the user's personal AI assistant.
       final apiKey = await getApiKey();
       if (apiKey.isEmpty) {
         _logger.log('OpenAIService', 'API call blocked - no API key set');
-        return 'Please add your OpenRouter API key in Settings first.';
+        return 'Please add your API key in Settings first.';
       }
+
       final model = await getModel();
-      _logger.log('OpenAIService', 'Sending request to OpenRouter model=$model');
+      final baseUrl = await getBaseUrlCached();
+      if (baseUrl.isEmpty) {
+        _logger.log('OpenAIService', 'API call blocked - no base URL set');
+        return 'Please set a base URL for your custom provider in Settings.';
+      }
+
+      final requiresReferer = await getRequiresRefererCached();
+      _logger.log('OpenAIService', 'Sending request to $baseUrl model=$model');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      };
+      if (requiresReferer) {
+        headers['HTTP-Referer'] = getSiteUrl();
+        headers['X-Title'] = getSiteName();
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-          'HTTP-Referer': getSiteUrl(),
-          'X-Title': getSiteName(),
-        },
+        headers: headers,
         body: jsonEncode({
           'model': model,
           'messages': [

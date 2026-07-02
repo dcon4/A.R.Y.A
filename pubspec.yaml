@@ -22,6 +22,7 @@ dependencies:
   path_provider: ^2.1.0
   share_plus: ^10.0.0
 
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
