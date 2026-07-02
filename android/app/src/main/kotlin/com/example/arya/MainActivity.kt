@@ -87,6 +87,14 @@ class MainActivity : FlutterActivity() {
         startActivityForResult(intent, PICK_DIRECTORY_REQUEST)
     }
 
+    private fun handleMicIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("start_mic", false) == true) {
+            flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                MethodChannel(it, "arya.mic_trigger").invokeMethod("startListening", null)
+            }
+        }
+    }
+
     private fun writeFileToUri(uriString: String, fileName: String, content: String) {
         val treeUri = Uri.parse(uriString)
         val documentFile = DocumentFile.fromTreeUri(this, treeUri)
