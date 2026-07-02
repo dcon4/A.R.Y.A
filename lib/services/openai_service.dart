@@ -105,7 +105,14 @@ Remember: You are ARYA, the user's personal AI assistant.
       } else {
         print('Error: ${response.statusCode}');
         print('Response: ${response.body}');
-        return 'Sorry, I encountered an error. Please try again.';
+        String detail;
+        try {
+          final err = jsonDecode(response.body);
+          detail = err['error']['message'] ?? 'HTTP ${response.statusCode}';
+        } catch (_) {
+          detail = 'HTTP ${response.statusCode}';
+        }
+        return 'API error: $detail';
       }
     } catch (e) {
       print('Exception: $e');
