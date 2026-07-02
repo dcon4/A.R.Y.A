@@ -1,0 +1,46 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.31.0
+          channel: stable
+
+      - name: Create dummy .env file
+        run: |
+          echo "OPENROUTER_API_KEY=dummy_key_replace_with_real_one" > .env
+          echo "SITE_URL=https://github.com/4bhisheksharma/A.R.Y.A" >> .env
+          echo "SITE_NAME=A.R.Y.A" >> .env
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
