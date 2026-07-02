@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 String? _cachedApiKey;
+String? _cachedModel;
 
 Future<String> getApiKey() async {
   if (_cachedApiKey != null) return _cachedApiKey!;
@@ -13,6 +14,17 @@ Future<String> getApiKey() async {
     return savedKey;
   }
   return '';
+}
+
+Future<String> getModel() async {
+  if (_cachedModel != null) return _cachedModel!;
+  final prefs = await SharedPreferences.getInstance();
+  final savedModel = prefs.getString('openrouter_model');
+  if (savedModel != null && savedModel.isNotEmpty) {
+    _cachedModel = savedModel;
+    return savedModel;
+  }
+  return 'openai/gpt-4o-mini';
 }
 
 String getSiteUrl() {
@@ -30,7 +42,6 @@ Future<bool> hasValidApiKey() async {
 
 class OpenaiService {
   final String baseUrl = 'https://openrouter.ai/api/v1';
-  final String model = 'openai/gpt-4o-mini-2024-07-18';
 
   final String systemPrompt = '''
 You are ARYA (Adaptive Real-time Yielding Assistant), a helpful and friendly AI voice assistant.
@@ -64,6 +75,7 @@ Remember: You are ARYA, the user's personal AI assistant.
       if (apiKey.isEmpty) {
         return 'Please add your OpenRouter API key in Settings first.';
       }
+      final model = await getModel();
       final response = await http.post(
         Uri.parse('$baseUrl/chat/completions'),
         headers: {

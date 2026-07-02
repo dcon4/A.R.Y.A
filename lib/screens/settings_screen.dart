@@ -1,3 +1,4 @@
+import 'package:arya/services/openai_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
@@ -11,26 +12,55 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _apiKeyController = TextEditingController();
+  final TextEditingController _customModelController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
+  String _selectedModel = 'openai/gpt-4o-mini';
+  bool _useCustomModel = false;
+
+  static const List<Map<String, String>> _presetModels = [
+    {'id': 'openai/gpt-4o-mini', 'label': 'GPT-4o Mini (fast, cheap)'},
+    {'id': 'openai/gpt-4o', 'label': 'GPT-4o (most capable)'},
+    {'id': 'google/gemini-2.0-flash-001', 'label': 'Gemini 2.0 Flash (fast)'},
+    {'id': 'google/gemini-2.5-flash-preview-04-17', 'label': 'Gemini 2.5 Flash (free)'},
+    {'id': 'meta-llama/llama-3.3-70b-instruct', 'label': 'Llama 3.3 70B (open)'},
+    {'id': 'mistralai/mistral-7b-instruct:free', 'label': 'Mistral 7B (free tier)'},
+    {'id': 'cognitivecomputations/dolphin-mixtral-8x7b:free', 'label': 'Dolphin Mixtral (free)'},
+    {'id': 'microsoft/phi-3-medium-128k-instruct:free', 'label': 'Phi-3 Medium (free)'},
+    {'id': 'anthropic/claude-3.5-sonnet', 'label': 'Claude 3.5 Sonnet'},
+    {'id': 'anthropic/claude-3-haiku', 'label': 'Claude 3 Haiku (fast)'},
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadApiKey();
+    _loadSettings();
   }
 
-  Future<void> _loadApiKey() async {
+  Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedKey = prefs.getString('openrouter_api_key') ?? '';
+    final savedModel = prefs.getString('openrouter_model') ?? 'openai/gpt-4o-mini';
+    final isCustom = !_presetModels.any((m) => m['id'] == savedModel);
     setState(() {
       _apiKeyController.text = savedKey;
+      _selectedModel = isCustom ? _presetModels[0]['id']! : savedModel;
+      _useCustomModel = isCustom;
+      _customModelController.text = isCustom ? savedModel : '';
     });
   }
 
-  Future<void> _saveApiKey() async {
+  Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('openrouter_api_key', _apiKeyController.text.trim());
+    final model = _useCustomModel
+        ? _customModelController.text.trim()
+        : _selectedModel;
+    if (model.isNotEmpty) {
+      await prefs.setString('openrouter_model', model);
+    }
+    _cachedApiKey = null;
+    _cachedModel = null;
     setState(() {
       _isSaved = true;
     });
@@ -46,7 +76,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _apiKeyController.dispose();
+    _customModelController.dispose();
     super.dispose();
+  }
+
+  Widget _modelTile(String id, String label, bool isSelected) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _useCustomModel = false;
+          _selectedModel = id;
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: const Color.fromRGBO(255, 87, 51, 1),
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    id,
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontFamily: 'Cera Pro',
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -71,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         centerTitle: true,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,12 +245,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 32),
+            const Text(
+              "AI Model",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Models tagged (free) are available without payment on OpenRouter. Other models need a credit card on your OpenRouter account.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ..._presetModels.map((m) => _modelTile(
+              m['id']!,
+              m['label']!,
+              !_useCustomModel && _selectedModel == m['id'],
+            )),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _useCustomModel = true;
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      _useCustomModel
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color: const Color.fromRGBO(255, 87, 51, 1),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      "Custom model",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_useCustomModel)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, top: 8, bottom: 16),
+                child: TextField(
+                  controller: _customModelController,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 15,
+                  ),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+                    hintText: "e.g. openai/gpt-4o-mini",
+                    hintStyle: TextStyle(
+                      color: Colors.grey[600],
+                      fontFamily: 'Cera Pro',
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 54,
               child: ElevatedButton(
-                onPressed: _saveApiKey,
+                onPressed: _saveSettings,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
                   foregroundColor: Colors.white,
@@ -181,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   elevation: 0,
                 ),
                 child: Text(
-                  _isSaved ? "Saved!" : "Save API Key",
+                  _isSaved ? "Saved!" : "Save Settings",
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -203,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      "API key saved. ARYA is ready to use.",
+                      "Settings saved.",
                       style: TextStyle(
                         color: Colors.green,
                         fontSize: 14,
