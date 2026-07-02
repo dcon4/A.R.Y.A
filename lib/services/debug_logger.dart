@@ -59,6 +59,18 @@ class DebugLogger {
     }
   }
 
+  String _timestamp() {
+    final now = DateTime.now();
+    final y = now.year.toString().padLeft(4, '0');
+    final mo = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    final h = now.hour.toString().padLeft(2, '0');
+    final mi = now.minute.toString().padLeft(2, '0');
+    final s = now.second.toString().padLeft(2, '0');
+    final ms = now.millisecond.toString().padLeft(3, '0');
+    return '$y-$mo-$d $h:$mi:$s.$ms';
+  }
+
   void _writeToFile(String line) {
     try {
       _logFile?.writeAsStringSync('$line\n', mode: FileMode.append);
