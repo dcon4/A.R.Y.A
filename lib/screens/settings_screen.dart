@@ -556,7 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Appends :online to the model so OpenRouter runs a web search before answering. Costs extra credits even on free models (~$0.001/search on Exa, varies for native search models).",
+              r"Appends :online to the model so OpenRouter runs a web search before answering. Costs extra credits even on free models (~$0.001/search on Exa, varies for native search models).",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
