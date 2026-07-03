@@ -1,7 +1,12 @@
 package com.example.arya
 
+import android.content.Context
 import android.content.Intent
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.net.Uri
+import android.util.Log
+import android.view.KeyEvent
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,9 +18,12 @@ class MainActivity : FlutterActivity() {
     private val WAKE_WORD_CHANNEL = "arya.wake_word"
     private var saveDirectoryResult: MethodChannel.Result? = null
     private var wakeWordDetector: WakeWordDetector? = null
+    private var mediaSession: MediaSession? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        setupMediaSession()
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -77,7 +85,6 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "setThreshold" -> {
-                    val threshold = (call.argument<Double>("threshold") ?: 0.5).toFloat()
                     result.success(true)
                 }
                 else -> result.notImplemented()
@@ -85,20 +92,59 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun setupMediaSession() {
+        mediaSession = MediaSession(this, "arya_bluetooth_session")
+        mediaSession?.setCallback(object : MediaSession.Callback() {
+            override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
+                val event = mediaButtonIntent?.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                if (event?.action == KeyEvent.ACTION_DOWN &&
+                    event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                ) {
+                    Log.i("MainActivity", "Bluetooth media button pressed via MediaSession")
+                    val prefs = applicationContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                    val enabled = prefs.getBoolean("bluetooth_mic_control", false)
+                    if (enabled) {
+                        flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                            MethodChannel(it, "arya.bluetooth_mic_toggle").invokeMethod("toggleMic", null)
+                        }
+                    }
+                    return true
+                }
+                return super.onMediaButtonEvent(mediaButtonIntent)
+            }
+        })
+        mediaSession?.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY_PAUSE)
+                .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_INVALID, 0f)
+                .build()
+        )
+        mediaSession?.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+        mediaSession?.isActive = true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleMicIntent(intent)
-        handleBluetoothToggle(intent)
     }
 
     override fun onStart() {
         super.onStart()
         handleMicIntent(intent)
-        handleBluetoothToggle(intent)
+    }
+
+    override fun onPause() {
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        mediaSession?.isActive = false
+        mediaSession?.release()
         wakeWordDetector?.destroy()
     }
 
@@ -127,14 +173,6 @@ class MainActivity : FlutterActivity() {
         if (intent?.getBooleanExtra("start_mic", false) == true) {
             flutterEngine?.dartExecutor?.binaryMessenger?.let {
                 MethodChannel(it, "arya.mic_trigger").invokeMethod("startListening", null)
-            }
-        }
-    }
-
-    private fun handleBluetoothToggle(intent: Intent?) {
-        if (intent?.getBooleanExtra("bluetooth_mic_toggle", false) == true) {
-            flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                MethodChannel(it, "arya.bluetooth_mic_toggle").invokeMethod("toggleMic", null)
             }
         }
     }

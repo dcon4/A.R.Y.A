@@ -31,6 +31,12 @@ class ConversationService {
     _entries.add(entry);
   }
 
+  void clear() {
+    _entries.clear();
+    _currentFilePath = null;
+    _subject = null;
+  }
+
   String _formatTimestamp(DateTime dt) {
     final y = dt.year.toString().padLeft(4, '0');
     final mo = dt.month.toString().padLeft(2, '0');

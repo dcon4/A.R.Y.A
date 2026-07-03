@@ -238,6 +238,8 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                 flutterEngine?.dartExecutor?.binaryMessenger?.let {
                     MethodChannel(it, "arya.wake_word").invokeMethod("wakeWordDetected", null)
                 }
+            } else {
+                Log.v(TAG, "Inference score=$score (threshold=$threshold)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Inference error", e)

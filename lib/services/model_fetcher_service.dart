@@ -26,7 +26,7 @@ class ModelFetcherService {
             'pricing': m['pricing'] ?? {},
             'context_length': m['context_length'] ?? 0,
             'description': m['description'] ?? '',
-            'is_free': (m['pricing']?['prompt'] ?? 0) == 0,
+            'is_free': (m['pricing']?['prompt']?.toString() ?? '0') == '0',
             'supports_vision': m['architecture']?['modality']?.contains('image') ?? false,
           };
         }).toList();
@@ -200,11 +200,11 @@ class ModelFetcherService {
       filtered = filtered.where((m) => m['is_free'] == true).toList();
     }
 
-    // Filter by web search capability
+    // Filter by web search capability (any model on OpenRouter supports :online)
     if (webSearchOnly) {
       filtered = filtered.where((m) {
         final id = m['id'].toString().toLowerCase();
-        return id.contains(':online') || id.contains(':free');
+        return !id.contains(':free');
       }).toList();
     }
 

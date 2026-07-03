@@ -12,7 +12,7 @@ import androidx.core.app.NotificationCompat
 
 class AryaForegroundService : Service() {
     companion object {
-        private const val CHANNEL_ID = "arya_foreground"
+        private const val CHANNEL_ID = "arya_foreground_v2"
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_START = "com.example.arya.START_FOREGROUND"
         private const val ACTION_STOP = "com.example.arya.STOP_FOREGROUND"

@@ -22,7 +22,7 @@ class WakeWordService {
 
     final prefs = await SharedPreferences.getInstance();
     _isRunning = prefs.getBool('wake_word_enabled') ?? false;
-    _threshold = prefs.getDouble('wake_word_threshold') ?? 0.5;
+    _threshold = prefs.getDouble('wake_word_threshold') ?? 0.3;
 
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'wakeWordDetected') {

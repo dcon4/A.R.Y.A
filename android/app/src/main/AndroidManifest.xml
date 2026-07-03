@@ -44,13 +44,6 @@
             android:exported="false">
         </service>
 
-        <receiver
-            android:name=".BluetoothMicReceiver"
-            android:exported="true">
-            <intent-filter android:priority="1000">
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-        </receiver>
 
         <meta-data
             android:name="flutterEmbedding"

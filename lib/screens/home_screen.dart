@@ -84,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> startListening() async {
     _logger.log('HomeScreen', 'Starting voice listening');
+    lastWords = '';
     await speechToText.listen(
       onResult: onSpeechResult,
       listenFor: Duration(seconds: 30),
@@ -264,6 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
       generatedContent = null;
       lastWords = '';
     });
+    conversationService.clear();
     _showSnackBar('New conversation started');
   }
 
@@ -531,32 +533,53 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Column(
                 children: [
-                  if (speechToText.isListening)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.mic,
-                          color: MyAppTheme.mainFontColor,
-                          size: 20,
+                      if (speechToText.isListening && lastWords.isEmpty)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.mic,
+                              color: MyAppTheme.mainFontColor,
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              "Wake the mic...",
+                              style: TextStyle(
+                                color: MyAppTheme.mainFontColor,
+                                fontSize: 14,
+                                fontFamily: 'Cera Pro',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 8),
-                        Text(
-                          "Listening...",
-                          style: TextStyle(
-                            color: MyAppTheme.mainFontColor,
-                            fontSize: 14,
-                            fontFamily: 'Cera Pro',
-                            fontWeight: FontWeight.bold,
-                          ),
+                      if (speechToText.isListening && lastWords.isNotEmpty)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.transcribe,
+                              color: MyAppTheme.mainFontColor,
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              "Transcribing...",
+                              style: TextStyle(
+                                color: MyAppTheme.mainFontColor,
+                                fontSize: 14,
+                                fontFamily: 'Cera Pro',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  if (speechToText.isListening) SizedBox(height: 8),
-                  Text(
-                    lastWords.isEmpty
-                        ? "Hello! I am ARYA, your personal AI assistant. How can I help you today?"
-                        : lastWords,
+                      if (speechToText.isListening) SizedBox(height: 8),
+                      Text(
+                        lastWords.isEmpty
+                            ? "I am ARYA. Wake the mic to speak."
+                            : lastWords,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: MyAppTheme.mainFontColor,
