@@ -773,6 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildBraveSearchSection() {
+    bool braveSaved = false;
     final keyController = TextEditingController();
     return StatefulBuilder(
       builder: (context, setInnerState) {
@@ -832,21 +833,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               future: BraveSearchService.getApiKey(),
               builder: (context, snapshot) {
                 final currentKey = snapshot.data ?? '';
-                keyController.text = currentKey;
-                return TextField(
-                  controller: keyController,
-                  decoration: const InputDecoration(
-                    labelText: "Brave Search API Key",
-                    hintText: "Enter your Brave API key",
-                    border: OutlineInputBorder(),
-                    labelStyle: TextStyle(color: Colors.white70),
-                    hintStyle: TextStyle(color: Colors.white38),
-                  ),
-                  style: const TextStyle(color: Colors.white),
-                  obscureText: true,
-                  onSubmitted: (val) {
-                    BraveSearchService.setApiKey(val.trim());
-                  },
+                if (keyController.text.isEmpty && currentKey.isNotEmpty) {
+                  keyController.text = currentKey;
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: keyController,
+                      decoration: const InputDecoration(
+                        labelText: "Brave Search API Key",
+                        hintText: "Enter your Brave API key",
+                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: Colors.white70),
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
+                      style: const TextStyle(color: Colors.white),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () async {
+                            await BraveSearchService.setApiKey(keyController.text.trim());
+                            setInnerState(() {
+                              braveSaved = true;
+                            });
+                            Future.delayed(Duration(seconds: 2), () {
+                              setInnerState(() {
+                                braveSaved = false;
+                              });
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: Text(braveSaved ? "Saved!" : "Save Brave Key"),
+                        ),
+                        if (braveSaved) ...[
+                          const SizedBox(width: 8),
+                          const Text(
+                            "Saved!",
+                            style: TextStyle(
+                              color: Colors.greenAccent,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 );
               },
             ),

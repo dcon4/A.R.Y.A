@@ -94,7 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
       listenFor: Duration(seconds: 30),
       pauseFor: Duration(seconds: 3),
     );
-    setState(() {});
+    // Speech timed out or was stopped — reset state
+    setState(() {
+      _micReallyListening = false;
+    });
   }
 
   Future<void> stopListening() async {
