@@ -1,6 +1,7 @@
 package com.example.arya
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -13,6 +14,7 @@ import ai.onnxruntime.OrtSession
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.InputStream
+import java.nio.FloatBuffer
 import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.PI
@@ -20,7 +22,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-class WakeWordDetector(private val flutterEngine: FlutterEngine?) {
+class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val context: Context?) {
     companion object {
         private const val TAG = "WakeWordDetector"
         private const val SAMPLE_RATE = 16000
@@ -115,7 +117,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?) {
             return
         }
         if (ContextCompat.checkSelfPermission(
-                flutterEngine?.activity?.applicationContext ?: return,
+                context ?: return,
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "RECORD_AUDIO permission not granted")
@@ -221,7 +223,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?) {
                 }
             }
 
-            val tensor = OnnxTensor.createTensor(ortEnv, flatInput, longArrayOf(1, N_FRAMES.toLong(), N_MELS.toLong()))
+            val tensor = OnnxTensor.createTensor(ortEnv, FloatBuffer.wrap(flatInput), longArrayOf(1, N_FRAMES.toLong(), N_MELS.toLong()))
             val results = ortSession.run(mapOf(inputName to tensor))
             val output = results.get(outputName)?.get() as? Array<*>
             val score = output?.get(0)?.let { (it as? Array<*>)?.get(0) as? Float } ?: 0f

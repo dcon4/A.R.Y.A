@@ -62,7 +62,7 @@ class MainActivity : FlutterActivity() {
                     val threshold = (call.argument<Double>("threshold") ?: 0.5).toFloat()
                     if (wakeWordDetector == null) {
                         val modelStream = assets.open("wakeword/hey_rhasspy.onnx")
-                        wakeWordDetector = WakeWordDetector(flutterEngine)
+                        wakeWordDetector = WakeWordDetector(flutterEngine, this)
                         val ok = wakeWordDetector!!.initialize(modelStream)
                         if (!ok) {
                             result.error("INIT_FAILED", "Failed to initialize wake word detector", null)
