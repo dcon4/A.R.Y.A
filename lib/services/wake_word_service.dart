@@ -14,7 +14,7 @@ class WakeWordService {
   bool get isRunning => _isRunning;
   double get threshold => _threshold;
 
-  static void Function()? onWakeWordDetected;
+  void Function()? onWakeWordDetected;
 
   Future<void> initialize() async {
     if (_initialized) return;
