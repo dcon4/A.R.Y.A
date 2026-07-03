@@ -55,4 +55,14 @@ class BackgroundService {
       await stop();
     }
   }
+
+  static Future<bool> getBluetoothEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('bluetooth_mic_control') ?? false;
+  }
+
+  static Future<void> setBluetoothEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('bluetooth_mic_control', enabled);
+  }
 }

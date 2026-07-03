@@ -102,6 +102,17 @@ final List<ApiProvider> apiProviders = [
     ],
   ),
   ApiProvider(
+    id: 'cerebras',
+    name: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    defaultModel: 'llama3.1-8b',
+    models: const [
+      ApiModel(id: 'llama3.1-8b', label: 'Llama 3.1 8B'),
+      ApiModel(id: 'llama-3.3-70b', label: 'Llama 3.3 70B'),
+      ApiModel(id: 'llama3.1-70b', label: 'Llama 3.1 70B'),
+    ],
+  ),
+  ApiProvider(
     id: 'custom',
     name: 'Custom',
     baseUrl: '',

@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat.MediaStyle
 
 class AryaForegroundService : Service() {
     companion object {
@@ -17,6 +16,7 @@ class AryaForegroundService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_START = "com.example.arya.START_FOREGROUND"
         private const val ACTION_STOP = "com.example.arya.STOP_FOREGROUND"
+        const val ACTION_START_MIC = "com.example.arya.START_MIC"
 
         fun start(context: Context) {
             val intent = Intent(context, AryaForegroundService::class.java).apply {
@@ -28,6 +28,13 @@ class AryaForegroundService : Service() {
         fun stop(context: Context) {
             val intent = Intent(context, AryaForegroundService::class.java).apply {
                 action = ACTION_STOP
+            }
+            context.startService(intent)
+        }
+
+        fun startMic(context: Context) {
+            val intent = Intent(context, AryaForegroundService::class.java).apply {
+                action = ACTION_START_MIC
             }
             context.startService(intent)
         }
@@ -50,15 +57,26 @@ class AryaForegroundService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
+            ACTION_START_MIC -> {
+                triggerMic()
+            }
         }
         return START_STICKY
+    }
+
+    private fun triggerMic() {
+        val launchIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra("start_mic", true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(launchIntent)
     }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "ARYA Background Service",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Keeps ARYA running in the background. RemoteFix can trigger the mic action."
             setShowBadge(false)
@@ -68,10 +86,10 @@ class AryaForegroundService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val micIntent = Intent(this, MicActionReceiver::class.java).apply {
-            action = "com.example.arya.START_MIC"
+        val micIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_START_MIC
         }
-        val micPendingIntent = PendingIntent.getBroadcast(
+        val micPendingIntent = PendingIntent.getService(
             this,
             0,
             micIntent,
@@ -90,19 +108,17 @@ class AryaForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
-            .setContentText("RemoteFix can trigger the mic button.")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentText("Tap Start Mic to speak.")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(Notification.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(Notification.CATEGORY_ALARM)
             .setContentIntent(openPendingIntent)
             .addAction(
                 android.R.drawable.ic_btn_speak_now,
                 "Start Mic",
                 micPendingIntent
             )
-            .setStyle(MediaStyle()
-                .setShowActionsInCompactView(0))
             .build()
     }
 }

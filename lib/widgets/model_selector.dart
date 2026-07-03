@@ -27,11 +27,11 @@ class ModelSelector extends StatefulWidget {
 class _ModelSelectorState extends State<ModelSelector> {
   final _logger = DebugLogger();
   final _fetcher = ModelFetcherService();
-  
+
   List<Map<String, dynamic>> _allModels = [];
   List<Map<String, dynamic>> _filteredModels = [];
   bool _isLoading = false;
-  bool _showFreeOnly = true;
+  bool _showFreeOnly = false;
   bool _showWebSearchOnly = false;
   String _searchQuery = '';
   String? _error;
@@ -46,7 +46,7 @@ class _ModelSelectorState extends State<ModelSelector> {
   Future<void> _loadSavedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _showFreeOnly = prefs.getBool('filter_free_models_only') ?? true;
+      _showFreeOnly = prefs.getBool('filter_free_models_only') ?? false;
       _showWebSearchOnly = prefs.getBool('filter_web_search_only') ?? false;
     });
   }
@@ -60,7 +60,7 @@ class _ModelSelectorState extends State<ModelSelector> {
   Future<void> _fetchModels() async {
     if (widget.apiKey.isEmpty) {
       setState(() {
-        _error = 'API key is required to fetch models';
+        _error = 'Enter an API key to fetch available models';
       });
       return;
     }
@@ -86,12 +86,15 @@ class _ModelSelectorState extends State<ModelSelector> {
         case 'deepseek':
           models = await _fetcher.fetchDeepSeekModels(widget.apiKey);
           break;
+        case 'cerebras':
+          models = await _fetcher.fetchCerebrasModels(widget.apiKey);
+          break;
         default:
-          _error = 'Unknown provider: ${widget.providerId}';
+          _error = 'Model fetching not supported for this provider';
       }
 
       if (models.isEmpty && _error == null) {
-        _error = 'No models available. Check your API key.';
+        _error = 'No models found. Check your API key.';
       }
 
       setState(() {
@@ -99,12 +102,10 @@ class _ModelSelectorState extends State<ModelSelector> {
         _applyFilters();
         _isLoading = false;
       });
-
-      _logger.log('ModelSelector', 'Fetched ${models.length} models for ${widget.providerId}');
     } catch (e) {
       _logger.error('ModelSelector', 'Failed to fetch models', e);
       setState(() {
-        _error = 'Failed to fetch models: $e';
+        _error = 'Failed to fetch models';
         _isLoading = false;
       });
     }
@@ -147,7 +148,6 @@ class _ModelSelectorState extends State<ModelSelector> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header with refresh button
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -173,8 +173,6 @@ class _ModelSelectorState extends State<ModelSelector> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // Search field
         TextField(
           onChanged: _updateSearch,
           style: const TextStyle(
@@ -214,8 +212,6 @@ class _ModelSelectorState extends State<ModelSelector> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Filter toggles
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -228,17 +224,249 @@ class _ModelSelectorState extends State<ModelSelector> {
           child: Column(
             children: [
               Row(
-                children: [\n                  Expanded(\n                    child: Column(\n                      crossAxisAlignment: CrossAxisAlignment.start,\n                      children: [\n                        const Text(\n                          'Free Models Only',\n                          style: TextStyle(\n                            color: Colors.white,\n                            fontFamily: 'Cera Pro',\n                            fontSize: 12,\n                            fontWeight: FontWeight.bold,\n                          ),\n                        ),\n                        Text(\n                          '${_filteredModels.length} available',\n                          style: TextStyle(\n                            color: Colors.grey[500],\n                            fontFamily: 'Cera Pro',\n                            fontSize: 10,\n                          ),\n                        ),\n                      ],\n                    ),\n                  ),\n                  Switch(\n                    value: _showFreeOnly,\n                    onChanged: (_) => _toggleFreeFilter(),\n                    activeColor: const Color.fromRGBO(255, 87, 51, 1),\n                  ),\n                ],\n              ),\n              const Divider(\n                color: Color.fromRGBO(255, 87, 51, 0.2),\n                height: 12,\n              ),\n              Row(\n                children: [\n                  Expanded(\n                    child: Column(\n                      crossAxisAlignment: CrossAxisAlignment.start,\n                      children: [\n                        const Text(\n                          'Web Search Capable',\n                          style: TextStyle(\n                            color: Colors.white,\n                            fontFamily: 'Cera Pro',\n                            fontSize: 12,\n                            fontWeight: FontWeight.bold,\n                          ),\n                        ),\n                        Text(\n                          'Models that support :online suffix',\n                          style: TextStyle(\n                            color: Colors.grey[500],\n                            fontFamily: 'Cera Pro',\n                            fontSize: 10,\n                          ),\n                        ),\n                      ],\n                    ),\n                  ),\n                  Switch(\n                    value: _showWebSearchOnly,\n                    onChanged: (_) => _toggleWebSearchFilter(),\n                    activeColor: const Color.fromRGBO(255, 87, 51, 1),\n                  ),\n                ],\n              ),\n            ],\n          ),\n        ),
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Free Models Only',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Cera Pro',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${_filteredModels.length} available',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontFamily: 'Cera Pro',
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _showFreeOnly,
+                    onChanged: (_) => _toggleFreeFilter(),
+                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                ],
+              ),
+              const Divider(
+                color: Color.fromRGBO(255, 87, 51, 0.2),
+                height: 12,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Web Search Capable',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Cera Pro',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${_filteredModels.length} available',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontFamily: 'Cera Pro',
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _showWebSearchOnly,
+                    onChanged: (_) => _toggleWebSearchFilter(),
+                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
-
-        // Loading state
         if (_isLoading)
-n          const Padding(\n            padding: EdgeInsets.symmetric(vertical: 20),\n            child: Center(\n              child: CircularProgressIndicator(\n                valueColor: AlwaysStoppedAnimation<Color>(\n                  Color.fromRGBO(255, 87, 51, 1),\n                ),\n              ),\n            ),\n          ),
-
-        // Error state
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Color.fromRGBO(255, 87, 51, 1),
+                ),
+              ),
+            ),
+          ),
         if (_error != null)
-          Container(\n            padding: const EdgeInsets.all(12),\n            decoration: BoxDecoration(\n              color: Colors.red.withValues(alpha: 0.1),\n              borderRadius: BorderRadius.circular(12),\n              border: Border.all(\n                color: Colors.red.withValues(alpha: 0.3),\n              ),\n            ),\n            child: Text(\n              _error!,\n              style: const TextStyle(\n                color: Colors.redAccent,\n                fontFamily: 'Cera Pro',\n                fontSize: 12,\n              ),\n            ),\n          ),
-
-        // Models list
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              _error!,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontFamily: 'Cera Pro',
+                fontSize: 12,
+              ),
+            ),
+          ),
         if (!_isLoading && _error == null)
-          if (_filteredModels.isEmpty)\n            Container(\n              padding: const EdgeInsets.all(16),\n              decoration: BoxDecoration(\n                color: const Color.fromRGBO(255, 255, 255, 0.05),\n                borderRadius: BorderRadius.circular(12),\n                border: Border.all(\n                  color: const Color.fromRGBO(255, 87, 51, 0.2),\n                ),\n              ),\n              child: const Text(\n                'No models match your filters',\n                style: TextStyle(\n                  color: Colors.grey,\n                  fontFamily: 'Cera Pro',\n                  fontSize: 12,\n                  fontStyle: FontStyle.italic,\n                ),\n              ),\n            )\n          else\n            ConstrainedBox(\n              constraints: const BoxConstraints(maxHeight: 300),\n              child: ListView.builder(\n                shrinkWrap: true,\n                itemCount: _filteredModels.length,\n                itemBuilder: (context, index) {\n                  final model = _filteredModels[index];\n                  final isSelected =\n                      widget.selectedModelId == model['id'];\n                  return InkWell(\n                    onTap: () {\n                      widget.onModelSelected(model['id']);\n                    },\n                    child: Container(\n                      margin: const EdgeInsets.only(bottom: 8),\n                      padding: const EdgeInsets.all(12),\n                      decoration: BoxDecoration(\n                        color: isSelected\n                            ? const Color.fromRGBO(255, 87, 51, 0.2)\n                            : const Color.fromRGBO(255, 255, 255, 0.05),\n                        borderRadius: BorderRadius.circular(12),\n                        border: Border.all(\n                          color: isSelected\n                              ? const Color.fromRGBO(255, 87, 51, 1)\n                              : const Color.fromRGBO(255, 87, 51, 0.2),\n                          width: isSelected ? 2 : 1,\n                        ),\n                      ),\n                      child: Row(\n                        children: [\n                          Icon(\n                            isSelected\n                                ? Icons.radio_button_checked\n                                : Icons.radio_button_off,\n                            color: const Color.fromRGBO(255, 87, 51, 1),\n                            size: 18,\n                          ),\n                          const SizedBox(width: 12),\n                          Expanded(\n                            child: Column(\n                              crossAxisAlignment:\n                                  CrossAxisAlignment.start,\n                              children: [\n                                Text(\n                                  model['name'] ?? model['id'],\n                                  style: const TextStyle(\n                                    color: Colors.white,\n                                    fontFamily: 'Cera Pro',\n                                    fontSize: 12,\n                                    fontWeight: FontWeight.bold,\n                                  ),\n                                  maxLines: 1,\n                                  overflow: TextOverflow.ellipsis,\n                                ),\n                                Text(\n                                  model['id'],\n                                  style: TextStyle(\n                                    color: Colors.grey[500],\n                                    fontFamily: 'Cera Pro',\n                                    fontSize: 10,\n                                  ),\n                                  maxLines: 1,\n                                  overflow: TextOverflow.ellipsis,\n                                ),\n                              ],\n                            ),\n                          ),\n                          if (model['is_free'] == true)\n                            Container(\n                              padding: const EdgeInsets.symmetric(\n                                horizontal: 8,\n                                vertical: 4,\n                              ),\n                              decoration: BoxDecoration(\n                                color: Colors.green.withValues(alpha: 0.2),\n                                borderRadius: BorderRadius.circular(6),\n                                border: Border.all(\n                                  color: Colors.green.withValues(alpha: 0.5),\n                                ),\n                              ),\n                              child: const Text(\n                                'FREE',\n                                style: TextStyle(\n                                  color: Colors.greenAccent,\n                                  fontFamily: 'Cera Pro',\n                                  fontSize: 9,\n                                  fontWeight: FontWeight.bold,\n                                ),\n                              ),\n                            ),\n                        ],\n                      ),\n                    ),\n                  );\n                },\n              ),\n            ),\n      ],\n    );\n  }\n}\n", "path": "lib/widgets/model_selector.dart", "repo": "A.R.Y.A"}
+          if (_filteredModels.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(255, 255, 255, 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color.fromRGBO(255, 87, 51, 0.2),
+                ),
+              ),
+              child: const Text(
+                'No models match your filters',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontFamily: 'Cera Pro',
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _filteredModels.length,
+                itemBuilder: (context, index) {
+                  final model = _filteredModels[index];
+                  final isSelected = widget.selectedModelId == model['id'];
+                  final isFree = model['is_free'] == true;
+                  final supportsVision = model['supports_vision'] == true;
+                  return InkWell(
+                    onTap: () {
+                      widget.onModelSelected(model['id']);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color.fromRGBO(255, 87, 51, 0.2)
+                            : const Color.fromRGBO(255, 255, 255, 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color.fromRGBO(255, 87, 51, 1)
+                              : const Color.fromRGBO(255, 255, 255, 0.1),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: const Color.fromRGBO(255, 87, 51, 1),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  model['name'] ?? 'Unknown',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Cera Pro',
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  model['id'] ?? '',
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontFamily: 'Cera Pro',
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isFree)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.green.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: const Text(
+                                'FREE',
+                                style: TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontFamily: 'Cera Pro',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          if (supportsVision)
+                            const SizedBox(width: 6),
+                          if (supportsVision)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color.fromRGBO(255, 87, 51, 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color.fromRGBO(255, 87, 51, 0.5),
+                                ),
+                              ),
+                              child: const Text(
+                                'VISION',
+                                style: TextStyle(
+                                  color: Color.fromRGBO(255, 87, 51, 1),
+                                  fontFamily: 'Cera Pro',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+      ],
+    );
+  }
+}

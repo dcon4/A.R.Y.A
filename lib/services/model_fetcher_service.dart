@@ -104,7 +104,8 @@ class ModelFetcherService {
           };
         }).toList();
 
-        _logger.log('ModelFetcher', 'Fetched ${models.length} Groq models');\n        return models;
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Groq models');
+        return models;
       } else {
         _logger.error('ModelFetcher', 'Groq API error: ${response.statusCode}');
         return [];
@@ -150,6 +151,41 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from Cerebras (OpenAI-compatible API)
+  Future<List<Map<String, dynamic>>> fetchCerebrasModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Cerebras...');
+      
+      final response = await http.get(
+        Uri.parse('https://api.cerebras.ai/v1/models'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'is_free': false,
+            'supports_vision': (m['id'] as String).contains('vision'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Cerebras models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Cerebras API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Cerebras models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,
@@ -168,11 +204,7 @@ class ModelFetcherService {
     if (webSearchOnly) {
       filtered = filtered.where((m) {
         final id = m['id'].toString().toLowerCase();
-        // OpenRouter models with :online capability support web search
-        return id.contains(':free') || 
-               id.contains('gpt-4') || 
-               id.contains('gpt-3.5') ||
-               id.contains('claude');
+        return id.contains(':online') || id.contains(':free');
       }).toList();
     }
 

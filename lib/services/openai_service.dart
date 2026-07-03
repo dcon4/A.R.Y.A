@@ -91,7 +91,7 @@ Remember: You are ARYA, the user's personal AI assistant.
 
   final _logger = DebugLogger();
 
-  Future<String?> chatGPTAPI(String prompt) async {
+  Future<String?> chatGPTAPI(String prompt, {List<Map<String, String>>? history}) async {
     try {
       final apiKey = await getApiKey();
       if (apiKey.isEmpty) {
@@ -123,15 +123,20 @@ Remember: You are ARYA, the user's personal AI assistant.
         headers['X-Title'] = getSiteName();
       }
 
+      final messages = <Map<String, String>>[
+        {'role': 'system', 'content': systemPrompt},
+      ];
+      if (history != null) {
+        messages.addAll(history);
+      }
+      messages.add({'role': 'user', 'content': prompt});
+
       final response = await http.post(
         Uri.parse('$baseUrl/chat/completions'),
         headers: headers,
         body: jsonEncode({
           'model': model,
-          'messages': [
-            {'role': 'system', 'content': systemPrompt},
-            {'role': 'user', 'content': prompt},
-          ],
+          'messages': messages,
         }),
       );
 

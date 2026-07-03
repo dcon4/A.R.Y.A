@@ -45,10 +45,10 @@
         </service>
 
         <receiver
-            android:name=".MicActionReceiver"
+            android:name=".BluetoothMicReceiver"
             android:exported="true">
-            <intent-filter>
-                <action android:name="com.example.arya.START_MIC" />
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 

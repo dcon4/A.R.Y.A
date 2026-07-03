@@ -5,9 +5,11 @@ import 'package:arya/services/background_service.dart';
 import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
+import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
 import 'package:arya/widgets/feature_box.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:lottie/lottie.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -28,6 +30,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String lastWords = "";
   String? generatedContent;
   bool isLoading = false;
+  final List<Map<String, String>> _messageHistory = [];
+  static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
   @override
   void initState() {
@@ -37,6 +41,22 @@ class _HomeScreenState extends State<HomeScreen> {
     BackgroundService.setOnStartMicCallback(() {
       if (speechToText.isNotListening) {
         startListening();
+      }
+    });
+
+    WakeWordService.instance.onWakeWordDetected = () {
+      if (speechToText.isNotListening) {
+        startListening();
+      }
+    };
+
+    _btChannel.setMethodCallHandler((call) async {
+      if (call.method == 'toggleMic') {
+        if (speechToText.isListening) {
+          await stopListening();
+        } else {
+          await startListening();
+        }
       }
     });
   }
@@ -107,7 +127,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final model = await getModel();
     _logger.log('HomeScreen', 'Using model: $model');
-    final response = await openaiService.chatGPTAPI(lastWords);
+    final response = await openaiService.chatGPTAPI(
+      lastWords,
+      history: _messageHistory.isNotEmpty ? _messageHistory : null,
+    );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
 
@@ -118,6 +141,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Log the conversation entry
     if (response != null && response.isNotEmpty) {
+      _messageHistory.add({'role': 'user', 'content': lastWords});
+      _messageHistory.add({'role': 'assistant', 'content': response});
+
       conversationService.addEntry(ConversationEntry(
         userQuery: lastWords,
         aiResponse: response,
@@ -230,6 +256,15 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.error('HomeScreen', 'Share failed', e);
       _showSnackBar('Share failed: $e');
     }
+  }
+
+  void _newConversation() {
+    setState(() {
+      _messageHistory.clear();
+      generatedContent = null;
+      lastWords = '';
+    });
+    _showSnackBar('New conversation started');
   }
 
   void _showSnackBar(String message) {
@@ -368,6 +403,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             onPressed: _manualSave,
             tooltip: 'Save conversation',
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.add_comment,
+              color: Color.fromRGBO(255, 87, 51, 1),
+              size: 28,
+            ),
+            onPressed: _newConversation,
+            tooltip: 'New conversation',
           ),
           IconButton(
             icon: const Icon(

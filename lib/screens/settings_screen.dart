@@ -4,6 +4,8 @@ import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
+import 'package:arya/services/wake_word_service.dart';
+import 'package:arya/widgets/model_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -163,6 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'openai': return 'sk-...';
       case 'groq': return 'gsk_...';
       case 'deepseek': return 'sk-...';
+      case 'cerebras': return 'cerebras_...';
       default: return 'API key';
     }
   }
@@ -173,6 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'openai': return 'Get your API key at platform.openai.com/api-keys.';
       case 'groq': return 'Get your free API key at console.groq.com/keys. Fast inference for open models.';
       case 'deepseek': return 'Get your API key at platform.deepseek.com/api-keys.';
+      case 'cerebras': return 'Get your API key at cloud.cerebras.ai. Fast inference for open models via OpenAI-compatible API.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -456,9 +460,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          _selectedProviderId == 'openrouter'
-              ? "Free models have :free suffix. Paid models use your OpenRouter credits."
-              : "Select a model for this provider.",
+          _selectedProviderId == 'custom'
+              ? "Type a model name for your custom provider."
+              : "Select a model or type a custom one below. The dynamic list fetches models from the provider API when a valid key is saved.",
           style: const TextStyle(
             color: Color.fromRGBO(255, 138, 101, 0.8),
             fontSize: 14,
@@ -467,11 +471,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._currentModels.map((m) => _modelTile(
-          m.id,
-          m.label,
-          !_useCustomModel && _selectedModelId == m.id,
-        )),
+        if (_selectedProviderId != 'custom' && _apiKeyController.text.isNotEmpty)
+          ModelSelector(
+            key: ValueKey(_selectedProviderId),
+            providerId: _selectedProviderId,
+            apiKey: _apiKeyController.text.trim(),
+            selectedModelId: _useCustomModel ? '' : _selectedModelId,
+            onModelSelected: (modelId) {
+              setState(() {
+                _useCustomModel = false;
+                _selectedModelId = modelId;
+              });
+              _saveSettings();
+            },
+          ),
         InkWell(
           onTap: () {
             setState(() {
@@ -535,6 +548,165 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildWakeWordSection() {
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        final ww = WakeWordService.instance;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Wake Word Detection",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Say 'hey rhasspy' to trigger the mic without touching the phone. Uses openWakeWord on-device detection.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ww.isRunning ? "Wake word detection is active" : "Wake word detection is off",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: ww.isRunning,
+                  onChanged: (val) async {
+                    if (val) {
+                      await ww.start();
+                    } else {
+                      ww.stop();
+                    }
+                    setInnerState(() {});
+                    setState(() {});
+                  },
+                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text(
+                  "Sensitivity",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 14,
+                  ),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: ww.threshold,
+                    min: 0.1,
+                    max: 0.9,
+                    divisions: 8,
+                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    inactiveColor: const Color.fromRGBO(255, 255, 255, 0.2),
+                    label: ww.threshold.toStringAsFixed(1),
+                    onChanged: (val) {
+                      ww.setThreshold(val);
+                      setInnerState(() {});
+                    },
+                  ),
+                ),
+                Text(
+                  ww.threshold.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBluetoothSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 32),
+        const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+        const SizedBox(height: 16),
+        const Text(
+          "Bluetooth Mic Control",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Press the play/pause button on your Bluetooth headset to start or stop the microphone.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        StatefulBuilder(
+          builder: (context, setInnerState) {
+            return FutureBuilder<bool>(
+              future: BackgroundService.getBluetoothEnabled(),
+              builder: (context, snapshot) {
+                final enabled = snapshot.data ?? false;
+                return Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Bluetooth headset button control",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Cera Pro',
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await BackgroundService.setBluetoothEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ],
     );
   }
@@ -686,6 +858,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
+            _buildWakeWordSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             const Text(
               "Debug Logging",
               style: TextStyle(
@@ -801,6 +977,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            _buildBluetoothSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

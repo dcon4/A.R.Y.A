@@ -10,7 +10,9 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "arya.mic"
     private val SAVE_DIRECTORY_CHANNEL = "arya.save_directory"
+    private val WAKE_WORD_CHANNEL = "arya.wake_word"
     private var saveDirectoryResult: MethodChannel.Result? = null
+    private var wakeWordDetector: WakeWordDetector? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -53,16 +55,51 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WAKE_WORD_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    val threshold = (call.argument<Double>("threshold") ?: 0.5).toFloat()
+                    if (wakeWordDetector == null) {
+                        val modelStream = assets.open("wakeword/hey_rhasspy.onnx")
+                        wakeWordDetector = WakeWordDetector(flutterEngine)
+                        val ok = wakeWordDetector!!.initialize(modelStream)
+                        if (!ok) {
+                            result.error("INIT_FAILED", "Failed to initialize wake word detector", null)
+                            return@setMethodCallHandler
+                        }
+                    }
+                    wakeWordDetector?.start(threshold)
+                    result.success(true)
+                }
+                "stop" -> {
+                    wakeWordDetector?.stop()
+                    result.success(true)
+                }
+                "setThreshold" -> {
+                    val threshold = (call.argument<Double>("threshold") ?: 0.5).toFloat()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleMicIntent(intent)
+        handleBluetoothToggle(intent)
     }
 
     override fun onStart() {
         super.onStart()
         handleMicIntent(intent)
+        handleBluetoothToggle(intent)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        wakeWordDetector?.destroy()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -70,7 +107,6 @@ class MainActivity : FlutterActivity() {
         if (requestCode == PICK_DIRECTORY_REQUEST) {
             if (resultCode == RESULT_OK && data?.data != null) {
                 val uri = data.data!!
-                // Take persistable permission
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 saveDirectoryResult?.success(uri.toString())
             } else {
@@ -95,10 +131,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun handleBluetoothToggle(intent: Intent?) {
+        if (intent?.getBooleanExtra("bluetooth_mic_toggle", false) == true) {
+            flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                MethodChannel(it, "arya.bluetooth_mic_toggle").invokeMethod("toggleMic", null)
+            }
+        }
+    }
+
     private fun writeFileToUri(uriString: String, fileName: String, content: String) {
         val treeUri = Uri.parse(uriString)
         val documentFile = DocumentFile.fromTreeUri(this, treeUri)
-        // Try to find existing file or create new one
         var file = documentFile?.findFile(fileName)
         if (file == null || !file.exists()) {
             file = documentFile?.createFile("text/plain", fileName)
