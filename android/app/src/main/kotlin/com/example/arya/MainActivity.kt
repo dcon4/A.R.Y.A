@@ -95,8 +95,8 @@ class MainActivity : FlutterActivity() {
     private fun setupMediaSession() {
         mediaSession = MediaSession(this, "arya_bluetooth_session")
         mediaSession?.setCallback(object : MediaSession.Callback() {
-            override fun onMediaButtonEvent(mediaButtonIntent: Intent?): Boolean {
-                val event = mediaButtonIntent?.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+            override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                val event = mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
                 if (event?.action == KeyEvent.ACTION_DOWN &&
                     event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                 ) {
@@ -116,7 +116,7 @@ class MainActivity : FlutterActivity() {
         mediaSession?.setPlaybackState(
             PlaybackState.Builder()
                 .setActions(PlaybackState.ACTION_PLAY_PAUSE)
-                .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_INVALID, 0f)
+                .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0f)
                 .build()
         )
         mediaSession?.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
