@@ -26,7 +26,7 @@ class ModelFetcherService {
             'pricing': m['pricing'] ?? {},
             'context_length': m['context_length'] ?? 0,
             'description': m['description'] ?? '',
-            'is_free': (m['pricing']?['prompt']?.toString() ?? '0') == '0',
+            'is_free': double.tryParse(m['pricing']?['prompt']?.toString() ?? '0') == 0.0,
             'supports_vision': m['architecture']?['modality']?.contains('image') ?? false,
           };
         }).toList();
@@ -195,29 +195,41 @@ class ModelFetcherService {
   }) {
     var filtered = List<Map<String, dynamic>>.from(models);
 
+    _logger.verbose('ModelFetcher', 'Filter start: ${models.length} total models');
+
     // Filter by free models
     if (freeOnly) {
-      filtered = filtered.where((m) => m['is_free'] == true).toList();
+      final before = filtered.length;
+      filtered = filtered.where((m) {
+        final isFree = m['is_free'] == true;
+        if (!isFree) {
+          _logger.verbose('ModelFetcher', '  Excluding paid: ${m['id']} (is_free=${m['is_free']})');
+        }
+        return isFree;
+      }).toList();
+      _logger.log('ModelFetcher', 'Free filter: $before -> ${filtered.length} models');
     }
 
-    // Filter by web search capability (any model on OpenRouter supports :online)
+    // Filter by web search capability
+    // On OpenRouter, any model supports :online, so web search is universal.
+    // This filter simply shows all models when enabled (placeholder for future).
     if (webSearchOnly) {
-      filtered = filtered.where((m) {
-        final id = m['id'].toString().toLowerCase();
-        return !id.contains(':free');
-      }).toList();
+      // All models pass through - any OpenRouter model can use :online
     }
 
     // Filter by search query
     if (searchQuery != null && searchQuery.isNotEmpty) {
       final query = searchQuery.toLowerCase();
+      final before = filtered.length;
       filtered = filtered.where((m) {
         final id = (m['id'] ?? '').toString().toLowerCase();
         final name = (m['name'] ?? '').toString().toLowerCase();
         return id.contains(query) || name.contains(query);
       }).toList();
+      _logger.log('ModelFetcher', 'Search filter: $before -> ${filtered.length} models');
     }
 
+    _logger.log('ModelFetcher', 'Final filtered: ${filtered.length}/${models.length} models');
     return filtered;
   }
 

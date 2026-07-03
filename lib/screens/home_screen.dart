@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String lastWords = "";
   String? generatedContent;
   bool isLoading = false;
+  bool _micReallyListening = false;
   final List<Map<String, String>> _messageHistory = [];
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
@@ -85,6 +86,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> startListening() async {
     _logger.log('HomeScreen', 'Starting voice listening');
     lastWords = '';
+    setState(() {
+      _micReallyListening = true;
+    });
     await speechToText.listen(
       onResult: onSpeechResult,
       listenFor: Duration(seconds: 30),
@@ -96,7 +100,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> stopListening() async {
     _logger.log('HomeScreen', 'Stopped listening - words detected: ${lastWords.length > 0}');
     await speechToText.stop();
-    setState(() {});
+    setState(() {
+      _micReallyListening = false;
+    });
 
     // Automatically send to AI after stopping
     if (lastWords.isNotEmpty) {
@@ -495,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
               margin: EdgeInsets.symmetric(horizontal: 30),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: speechToText.isListening
+                  colors: _micReallyListening
                       ? [
                           MyAppTheme.mainFontColor.withValues(alpha: 0.4),
                           MyAppTheme.secondSuggestionBoxColor.withValues(
@@ -514,26 +520,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   end: Alignment.bottomRight,
                 ),
                 border: Border.all(
-                  color: speechToText.isListening
+                  color: _micReallyListening
                       ? MyAppTheme.mainFontColor
                       : MyAppTheme.borderColor,
-                  width: speechToText.isListening ? 2.0 : 1.5,
+                  width: _micReallyListening ? 2.0 : 1.5,
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                     color: MyAppTheme.mainFontColor.withValues(
-                      alpha: speechToText.isListening ? 0.3 : 0.1,
+                      alpha: _micReallyListening ? 0.3 : 0.1,
                     ),
-                    blurRadius: speechToText.isListening ? 20 : 10,
-                    spreadRadius: speechToText.isListening ? 4 : 2,
+                    blurRadius: _micReallyListening ? 20 : 10,
+                    spreadRadius: _micReallyListening ? 4 : 2,
                     offset: Offset(0, 4),
                   ),
                 ],
               ),
               child: Column(
                 children: [
-                      if (speechToText.isListening && lastWords.isEmpty)
+                      if (_micReallyListening && lastWords.isEmpty)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -554,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                      if (speechToText.isListening && lastWords.isNotEmpty)
+                      if (_micReallyListening && lastWords.isNotEmpty)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -575,7 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                      if (speechToText.isListening) SizedBox(height: 8),
+                      if (_micReallyListening) SizedBox(height: 8),
                       Text(
                         lastWords.isEmpty
                             ? "I am ARYA. Wake the mic to speak."
@@ -591,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : FontWeight.w600,
                     ),
                   ),
-                  if (isLoading && !speechToText.isListening)
+                  if (isLoading && !_micReallyListening)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Row(
