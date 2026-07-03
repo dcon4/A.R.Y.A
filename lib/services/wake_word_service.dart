@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'debug_logger.dart';
@@ -17,6 +18,9 @@ class WakeWordService {
   double get threshold => _threshold;
 
   void Function()? onWakeWordDetected;
+  void Function(double score)? onInferenceScore;
+
+  final List<double> _testScores = [];
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -32,6 +36,10 @@ class WakeWordService {
       if (call.method == 'wakeWordDetected') {
         _logger.log('WakeWordService', 'Wake word detected!');
         onWakeWordDetected?.call();
+      } else if (call.method == 'inferenceScore') {
+        final score = (call.arguments as num?)?.toDouble() ?? 0.0;
+        _testScores.add(score);
+        onInferenceScore?.call(score);
       }
     });
 
@@ -84,5 +92,44 @@ class WakeWordService {
         _logger.error('WakeWordService', 'Failed to set threshold', e);
       }
     }
+  }
+
+  Future<double> runTest({int durationSeconds = 5}) async {
+    _testScores.clear();
+    try {
+      await _channel.invokeMethod('setTestMode', {'enabled': true});
+    } catch (e) {
+      _logger.error('WakeWordService', 'Failed to set test mode', e);
+      return -1.0;
+    }
+
+    if (!_isRunning) {
+      try {
+        _logger.log('WakeWordService', 'Starting for test');
+        await _channel.invokeMethod('start', {
+          'threshold': _threshold,
+        });
+      } catch (e) {
+        _logger.error('WakeWordService', 'Failed to start test', e);
+        return -1.0;
+      }
+    }
+
+    await Future.delayed(Duration(seconds: durationSeconds));
+
+    if (_testScores.isEmpty) {
+      _logger.log('WakeWordService', 'Test completed: no scores received');
+    } else {
+      final maxScore = _testScores.reduce((a, b) => a > b ? a : b);
+      _logger.log('WakeWordService', 'Test completed: ${_testScores.length} scores, max=$maxScore');
+    }
+
+    try {
+      await _channel.invokeMethod('setTestMode', {'enabled': false});
+    } catch (e) {
+      _logger.error('WakeWordService', 'Failed to disable test mode', e);
+    }
+
+    return _testScores.isEmpty ? -1.0 : _testScores.reduce((a, b) => a > b ? a : b);
   }
 }

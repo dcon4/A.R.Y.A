@@ -41,6 +41,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     private var threshold = 0.5f
     private var lastTriggerTime = 0L
     private var captureThread: Thread? = null
+    var sendScoresToDart = false
 
     private lateinit var ortEnv: OrtEnvironment
     private lateinit var ortSession: OrtSession
@@ -232,6 +233,13 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             results.close()
 
             val now = System.currentTimeMillis()
+
+            if (sendScoresToDart) {
+                flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                    MethodChannel(it, "arya.wake_word").invokeMethod("inferenceScore", score.toDouble())
+                }
+            }
+
             if (score > threshold && (now - lastTriggerTime) > DEBOUNCE_MS) {
                 lastTriggerTime = now
                 Log.i(TAG, "Wake word detected! score=$score")

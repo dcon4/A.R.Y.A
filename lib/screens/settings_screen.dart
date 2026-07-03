@@ -643,6 +643,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text("Testing wake word detection for 5 seconds. Say 'hey rhasspy'..."),
+                    backgroundColor: Color.fromRGBO(255, 87, 51, 1),
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+                final maxScore = await WakeWordService.instance.runTest(durationSeconds: 5);
+                messenger.hideCurrentSnackBar();
+                if (maxScore < 0) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text("No audio received. Check microphone permission."),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                } else if (maxScore < 0.3) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text("Max score: ${maxScore.toStringAsFixed(3)}. Try speaking louder or reducing sensitivity."),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                } else {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text("Max score: ${maxScore.toStringAsFixed(3)}. If this is above your threshold, detection should work!"),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+                setInnerState(() {});
+              },
+              icon: const Icon(Icons.science_outlined, size: 18),
+              label: const Text("Test Wake Word"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                foregroundColor: Colors.white,
+              ),
+            ),
           ],
         );
       },
