@@ -13,7 +13,6 @@ import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat.MediaStyle
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
@@ -165,7 +164,6 @@ class AryaForegroundService : Service() {
                 "Start Mic",
                 micPendingIntent
             )
-            .setStyle(MediaStyle().setMediaSession(mediaSession?.sessionToken))
             .build()
     }
 
