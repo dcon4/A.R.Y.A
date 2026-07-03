@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:arya/services/api_providers.dart' as providers;
+import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:http/http.dart' as http;
 
@@ -106,7 +107,20 @@ Remember: You are ARYA, the user's personal AI assistant.
         return 'Please set a base URL for your custom provider in Settings.';
       }
 
-      final webSearch = await providers.getWebSearchEnabled();
+      final braveSearch = await BraveSearchService.isEnabled();
+      final braveKey = await BraveSearchService.getApiKey();
+
+      List<BraveSearchResult>? searchResults;
+      if (braveSearch && braveKey.isNotEmpty) {
+        _logger.log('OpenAIService', 'Running Brave Search for: $prompt');
+        final brave = BraveSearchService();
+        searchResults = await brave.search(prompt);
+        if (searchResults.isNotEmpty) {
+          _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
+        }
+      }
+
+      final webSearch = !braveSearch && await providers.getWebSearchEnabled();
       if (webSearch && !model.contains(':online')) {
         model = '$model:online';
       }
@@ -128,6 +142,10 @@ Remember: You are ARYA, the user's personal AI assistant.
       ];
       if (history != null) {
         messages.addAll(history);
+      }
+      if (searchResults != null && searchResults.isNotEmpty) {
+        final context = BraveSearchService().formatResults(searchResults);
+        messages.add({'role': 'system', 'content': context});
       }
       messages.add({'role': 'user', 'content': prompt});
 

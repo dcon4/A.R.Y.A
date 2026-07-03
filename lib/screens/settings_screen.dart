@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:arya/services/api_providers.dart' as providers;
+import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/openai_service.dart';
@@ -771,6 +772,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildBraveSearchSection() {
+    final keyController = TextEditingController();
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Brave Search",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Uses Brave Search API to find relevant web results, then feeds them into whatever provider/model you have selected. Works with any provider. Get a free API key at api.search.brave.com.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Use Brave Search",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: BraveSearchService.isEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await BraveSearchService.setEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FutureBuilder<String>(
+              future: BraveSearchService.getApiKey(),
+              builder: (context, snapshot) {
+                final currentKey = snapshot.data ?? '';
+                keyController.text = currentKey;
+                return TextField(
+                  controller: keyController,
+                  decoration: const InputDecoration(
+                    labelText: "Brave Search API Key",
+                    hintText: "Enter your Brave API key",
+                    border: OutlineInputBorder(),
+                    labelStyle: TextStyle(color: Colors.white70),
+                    hintStyle: TextStyle(color: Colors.white38),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                  obscureText: true,
+                  onSubmitted: (val) {
+                    BraveSearchService.setApiKey(val.trim());
+                  },
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _modelTile(String id, String label, bool isSelected) {
     return InkWell(
       onTap: () {
@@ -855,6 +940,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
             _buildWebSearchToggle(),
+            const SizedBox(height: 32),
+            _buildBraveSearchSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
