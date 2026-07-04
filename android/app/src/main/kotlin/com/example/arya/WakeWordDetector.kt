@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import ai.onnxruntime.OnnxTensor
@@ -57,13 +59,19 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     private var inputName = "input"
     private var outputName = "output"
 
+    private fun postToMainThread(action: () -> Unit) {
+        Handler(Looper.getMainLooper()).post(action)
+    }
+
     private fun logToDart(level: String, message: String) {
         val full = "[WakeWordDetector] [$level] $message"
         if (level == "ERROR") Log.e(TAG, message) else Log.i(TAG, message)
-        flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            try {
-                MethodChannel(it, "arya.wake_word").invokeMethod("nativeLog", full)
-            } catch (_: Exception) {}
+        postToMainThread {
+            flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                try {
+                    MethodChannel(it, "arya.wake_word").invokeMethod("nativeLog", full)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -331,16 +339,20 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             }
 
             if (sendScoresToDart) {
-                flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                    MethodChannel(it, "arya.wake_word").invokeMethod("inferenceScore", score.toDouble())
+                postToMainThread {
+                    flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                        MethodChannel(it, "arya.wake_word").invokeMethod("inferenceScore", score.toDouble())
+                    }
                 }
             }
 
             if (score > threshold && (now - lastTriggerTime) > DEBOUNCE_MS) {
                 lastTriggerTime = now
                 logToDart("DETECT", "Wake word detected! score=$score")
-                flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                    MethodChannel(it, "arya.wake_word").invokeMethod("wakeWordDetected", null)
+                postToMainThread {
+                    flutterEngine?.dartExecutor?.binaryMessenger?.let {
+                        MethodChannel(it, "arya.wake_word").invokeMethod("wakeWordDetected", null)
+                    }
                 }
             }
         } catch (e: Exception) {
