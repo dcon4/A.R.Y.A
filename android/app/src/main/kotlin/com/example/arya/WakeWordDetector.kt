@@ -311,22 +311,46 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             val tensor = OnnxTensor.createTensor(ortEnv, FloatBuffer.wrap(flatInput), longArrayOf(1, N_FRAMES.toLong(), N_MELS.toLong()))
             val results = ortSession.run(mapOf(inputName to tensor))
 
-            val rawOutput = results.get(outputName)?.get()
+            val outputTensor = results.get(outputName)
             var score = 0f
 
-            if (rawOutput is Array<*>) {
-                val batch = rawOutput[0]
-                if (batch is FloatArray) {
-                    score = batch[0]
-                } else if (batch is Array<*>) {
-                    score = (batch[0] as? Number)?.toFloat() ?: 0f
-                } else if (batch is Number) {
-                    score = batch.toFloat()
+            if (outputTensor is OnnxTensor) {
+                try {
+                    val fb = outputTensor.getFloatBuffer()
+                    if (fb.hasRemaining()) score = fb.get()
+                } catch (e1: Exception) {
+                    try {
+                        val obj = outputTensor.get()
+                        when (obj) {
+                            is Array<*> -> {
+                                val row = obj[0]
+                                if (row is FloatArray) score = row[0]
+                                else if (row is DoubleArray) score = row[0].toFloat()
+                                else if (row is Array<*>) score = (row[0] as? Number)?.toFloat() ?: 0f
+                            }
+                            is FloatArray -> score = obj[0]
+                            is DoubleArray -> score = obj[0].toFloat()
+                            is Number -> score = obj.toFloat()
+                            is java.nio.FloatBuffer -> if (obj.hasRemaining()) score = obj.get()
+                        }
+                    } catch (_: Exception) {}
                 }
-            } else if (rawOutput is FloatArray) {
-                score = rawOutput[0]
-            } else if (rawOutput is Number) {
-                score = rawOutput.toFloat()
+            } else {
+                val rawOutput = outputTensor?.get()
+                if (rawOutput is Array<*>) {
+                    val batch = rawOutput[0]
+                    if (batch is FloatArray) {
+                        score = batch[0]
+                    } else if (batch is Array<*>) {
+                        score = (batch[0] as? Number)?.toFloat() ?: 0f
+                    } else if (batch is Number) {
+                        score = batch.toFloat()
+                    }
+                } else if (rawOutput is FloatArray) {
+                    score = rawOutput[0]
+                } else if (rawOutput is Number) {
+                    score = rawOutput.toFloat()
+                }
             }
 
             tensor.close()
@@ -335,7 +359,8 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             val now = System.currentTimeMillis()
 
             if (sendScoresToDart || maxVal > 0.01f) {
-                logToDart("SCORE", "score=%.6f input_range=[%.4f..%.4f] output_type=%s".format(score, minVal, maxVal, rawOutput?.javaClass?.name ?: "null"))
+                val outputType = outputTensor?.javaClass?.name ?: "null"
+                logToDart("SCORE", "score=%.6f input_range=[%.4f..%.4f] output_type=%s".format(score, minVal, maxVal, outputType))
             }
 
             if (sendScoresToDart) {
