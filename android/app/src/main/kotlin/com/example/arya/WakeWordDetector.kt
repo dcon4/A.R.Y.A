@@ -38,7 +38,8 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     }
 
     private var audioRecord: AudioRecord? = null
-    private var isRunning = false
+    @Volatile
+    var isRunning = false
     private var threshold = 0.5f
     private var lastTriggerTime = 0L
     private var captureThread: Thread? = null
@@ -206,29 +207,39 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
         }
 
         captureThread = Thread {
-            val buffer = ShortArray(HOP_LENGTH * 4)
-            logToDart("INFO", "Capture thread started")
-            var consecutiveEmptyReads = 0
-            while (isRunning) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
-                if (read > 0) {
-                    consecutiveEmptyReads = 0
-                    totalReads++
-                    totalBytesRead += read
-                    val frame = buffer.copyOf(minOf(read, HOP_LENGTH))
-                    processFrame(frame)
-                } else if (read == 0) {
-                    consecutiveEmptyReads++
-                    if (consecutiveEmptyReads > 100) {
-                        logToDart("WARN", "100 consecutive empty reads -- mic may be busy")
-                        consecutiveEmptyReads = 0
+            try {
+                val buffer = ShortArray(HOP_LENGTH * 4)
+                Log.i(TAG, "Capture thread running")
+                logToDart("INFO", "Capture thread started")
+                var consecutiveEmptyReads = 0
+                while (isRunning) {
+                    if (audioRecord == null) {
+                        logToDart("ERROR", "audioRecord became null during capture")
+                        break
                     }
-                } else {
-                    logToDart("ERROR", "AudioRecord.read returned $read")
-                    break
+                    val read = audioRecord!!.read(buffer, 0, buffer.size)
+                    if (read > 0) {
+                        consecutiveEmptyReads = 0
+                        totalReads++
+                        totalBytesRead += read
+                        val frame = buffer.copyOf(minOf(read, HOP_LENGTH))
+                        processFrame(frame)
+                    } else if (read == 0) {
+                        consecutiveEmptyReads++
+                        if (consecutiveEmptyReads > 100) {
+                            logToDart("WARN", "100 consecutive empty reads")
+                            consecutiveEmptyReads = 0
+                        }
+                    } else {
+                        logToDart("ERROR", "AudioRecord.read returned $read")
+                        break
+                    }
                 }
+                logToDart("INFO", "Capture thread exiting (totalReads=$totalReads, bytes=$totalBytesRead)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Capture thread crashed", e)
+                logToDart("ERROR", "Capture thread crashed: ${e.message}")
             }
-            logToDart("INFO", "Capture thread exiting (totalReads=$totalReads, bytes=$totalBytesRead)")
         }
         captureThread?.start()
         logToDart("INFO", "WakeWordDetector started (threshold=$threshold)")
