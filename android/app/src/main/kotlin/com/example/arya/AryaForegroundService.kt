@@ -1,21 +1,18 @@
 package com.example.arya
 
 import android.app.Notification
+import android.app.Notification.MediaStyle
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
-import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat.MediaStyle
-import androidx.media.session.MediaSessionCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
@@ -108,18 +105,7 @@ class AryaForegroundService : Service() {
                     .build()
             )
             session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
-            session.setPlaybackToLocal(AudioManager.STREAM_NOTIFICATION)
             session.isActive = true
-        }
-    }
-
-    private fun getMediaSessionToken(): Any? {
-        return try {
-            mediaSession?.sessionToken?.let { platformToken ->
-                MediaSessionCompat.Token.fromSessionToken(platformToken)
-            }
-        } catch (_: Exception) {
-            null
         }
     }
 
@@ -137,7 +123,7 @@ class AryaForegroundService : Service() {
             "ARYA Background Service",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Keeps ARYA running in the background and listens for Bluetooth media buttons."
+            description = "ARYA background service for Bluetooth and wake word"
             setShowBadge(false)
         }
         val manager = getSystemService(NotificationManager::class.java)
@@ -165,31 +151,23 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val mediaSessionToken = getMediaSessionToken()
-        val style = if (mediaSessionToken != null) {
-            MediaStyle().setMediaSession(mediaSessionToken as MediaSessionCompat.Token)
-        } else null
+        val sessionToken = mediaSession?.sessionToken
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
             .setContentText("Start Mic to speak, or press Bluetooth play/pause.")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(Notification.CATEGORY_TRANSPORT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setLocalOnly(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openPendingIntent)
+            .setStyle(MediaStyle().setMediaSession(sessionToken))
             .addAction(
                 R.drawable.ic_launcher_foreground,
                 "Start Mic",
                 micPendingIntent
             )
-
-        if (style != null) {
-            builder.setStyle(style)
-        }
-        return builder.build()
+            .build()
     }
 
     override fun onDestroy() {
