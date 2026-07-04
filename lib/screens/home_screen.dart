@@ -45,6 +45,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
+    BackgroundService.setOnNewConversationCallback(() {
+      _newConversation();
+      systemSpeak("New conversation started");
+    });
+
     WakeWordService.instance.onWakeWordDetected = () {
       if (speechToText.isNotListening) {
         startListening();

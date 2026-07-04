@@ -70,6 +70,9 @@ class AryaForegroundService : Service() {
             ACTION_START_MIC -> {
                 triggerMic()
             }
+            "com.example.arya.NEW_CONVERSATION" -> {
+                triggerNewConversation()
+            }
         }
         return START_STICKY
     }
@@ -109,10 +112,16 @@ class AryaForegroundService : Service() {
         }
     }
 
+    fun triggerNewConversation() {
+        binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, "arya.mic_trigger").invokeMethod("newConversation", null)
+        }
+    }
+
     private fun triggerMic() {
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             putExtra("start_mic", true)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(launchIntent)
     }
@@ -141,6 +150,16 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val newConvIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = "com.example.arya.NEW_CONVERSATION"
+        }
+        val newConvPendingIntent = PendingIntent.getService(
+            this,
+            3,
+            newConvIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val openIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -166,6 +185,11 @@ class AryaForegroundService : Service() {
                 R.drawable.ic_launcher_foreground,
                 "Start Mic",
                 micPendingIntent
+            )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "New Conversation",
+                newConvPendingIntent
             )
             .build()
     }

@@ -7,6 +7,7 @@ class BackgroundService {
   static bool _isRunning = false;
   static bool _initialized = false;
   static void Function()? _onStartMic;
+  static void Function()? _onNewConversation;
 
   static bool get isRunning => _isRunning;
 
@@ -20,12 +21,18 @@ class BackgroundService {
     _triggerChannel.setMethodCallHandler((call) async {
       if (call.method == 'startListening') {
         _onStartMic?.call();
+      } else if (call.method == 'newConversation') {
+        _onNewConversation?.call();
       }
     });
   }
 
   static void setOnStartMicCallback(void Function() callback) {
     _onStartMic = callback;
+  }
+
+  static void setOnNewConversationCallback(void Function() callback) {
+    _onNewConversation = callback;
   }
 
   static Future<void> start() async {

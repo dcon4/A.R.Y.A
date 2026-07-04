@@ -70,7 +70,6 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
                     }
-                    wakeWordDetector?.sendScoresToDart = false
                     wakeWordDetector?.start(threshold)
                     result.success(true)
                 }

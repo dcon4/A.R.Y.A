@@ -98,12 +98,6 @@ class WakeWordService {
 
   Future<double> runTest({int durationSeconds = 5}) async {
     _testScores.clear();
-    try {
-      await _channel.invokeMethod('setTestMode', {'enabled': true});
-    } catch (e) {
-      _logger.error('WakeWordService', 'Failed to set test mode', e);
-      return -1.0;
-    }
 
     if (!_isRunning) {
       try {
@@ -115,6 +109,14 @@ class WakeWordService {
         _logger.error('WakeWordService', 'Failed to start test', e);
         return -1.0;
       }
+    }
+
+    // Set test mode AFTER start so sendScoresToDart isn't reset
+    try {
+      await _channel.invokeMethod('setTestMode', {'enabled': true});
+    } catch (e) {
+      _logger.error('WakeWordService', 'Failed to set test mode', e);
+      return -1.0;
     }
 
     await Future.delayed(Duration(seconds: durationSeconds));
