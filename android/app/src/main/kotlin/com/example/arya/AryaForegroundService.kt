@@ -23,6 +23,8 @@ class AryaForegroundService : Service() {
         private const val ACTION_START = "com.example.arya.START_FOREGROUND"
         private const val ACTION_STOP = "com.example.arya.STOP_FOREGROUND"
         const val ACTION_START_MIC = "com.example.arya.START_MIC"
+        const val ACTION_TOGGLE_BRAVE_SEARCH = "com.example.arya.TOGGLE_BRAVE_SEARCH"
+        const val ACTION_ROTATE_PROVIDER = "com.example.arya.ROTATE_PROVIDER"
         var binaryMessenger: BinaryMessenger? = null
 
         fun start(context: Context) {
@@ -72,6 +74,16 @@ class AryaForegroundService : Service() {
             }
             "com.example.arya.NEW_CONVERSATION" -> {
                 triggerNewConversation()
+            }
+            ACTION_TOGGLE_BRAVE_SEARCH -> {
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("toggleBraveSearch", null)
+                }
+            }
+            ACTION_ROTATE_PROVIDER -> {
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("rotateProvider", null)
+                }
             }
         }
         return START_STICKY
@@ -161,6 +173,26 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val toggleBraveIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_TOGGLE_BRAVE_SEARCH
+        }
+        val toggleBravePendingIntent = PendingIntent.getService(
+            this,
+            4,
+            toggleBraveIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val rotateProviderIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_ROTATE_PROVIDER
+        }
+        val rotateProviderPendingIntent = PendingIntent.getService(
+            this,
+            5,
+            rotateProviderIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val openIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -175,7 +207,7 @@ class AryaForegroundService : Service() {
 
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
-            .setContentText("Start Mic to speak, or press Bluetooth play/pause.")
+            .setContentText("Start Mic, New Conversation, or change settings.")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_TRANSPORT)
@@ -191,6 +223,16 @@ class AryaForegroundService : Service() {
                 R.drawable.ic_launcher_foreground,
                 "New Conversation",
                 newConvPendingIntent
+            )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Brave Search",
+                toggleBravePendingIntent
+            )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Rotate Provider",
+                rotateProviderPendingIntent
             )
             .build()
     }

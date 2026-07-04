@@ -693,69 +693,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildBluetoothSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 32),
-        const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
-        const SizedBox(height: 16),
-        const Text(
-          "Bluetooth Mic Control",
-          style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cera Pro',
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          "Press the play/pause button on your Bluetooth headset to start or stop the microphone.",
-          style: TextStyle(
-            color: Color.fromRGBO(255, 138, 101, 0.8),
-            fontSize: 14,
-            fontFamily: 'Cera Pro',
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 12),
-        StatefulBuilder(
-          builder: (context, setInnerState) {
-            return FutureBuilder<bool>(
-              future: BackgroundService.getBluetoothEnabled(),
-              builder: (context, snapshot) {
-                final enabled = snapshot.data ?? false;
-                return Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        "Bluetooth headset button control",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Cera Pro',
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Switch(
-                      value: enabled,
-                      onChanged: (val) async {
-                        await BackgroundService.setBluetoothEnabled(val);
-                        setInnerState(() {});
-                      },
-                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildWebSearchToggle() {
     return StatefulBuilder(
       builder: (context, setInnerState) {
@@ -1147,7 +1084,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-            _buildBluetoothSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

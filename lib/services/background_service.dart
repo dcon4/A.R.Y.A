@@ -8,6 +8,8 @@ class BackgroundService {
   static bool _initialized = false;
   static void Function()? _onStartMic;
   static void Function()? _onNewConversation;
+  static void Function()? _onToggleBraveSearch;
+  static void Function()? _onRotateProvider;
 
   static bool get isRunning => _isRunning;
 
@@ -23,6 +25,10 @@ class BackgroundService {
         _onStartMic?.call();
       } else if (call.method == 'newConversation') {
         _onNewConversation?.call();
+      } else if (call.method == 'toggleBraveSearch') {
+        _onToggleBraveSearch?.call();
+      } else if (call.method == 'rotateProvider') {
+        _onRotateProvider?.call();
       }
     });
   }
@@ -33,6 +39,14 @@ class BackgroundService {
 
   static void setOnNewConversationCallback(void Function() callback) {
     _onNewConversation = callback;
+  }
+
+  static void setOnToggleBraveSearchCallback(void Function() callback) {
+    _onToggleBraveSearch = callback;
+  }
+
+  static void setOnRotateProviderCallback(void Function() callback) {
+    _onRotateProvider = callback;
   }
 
   static Future<void> start() async {

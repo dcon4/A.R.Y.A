@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:arya/screens/settings_screen.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:arya/services/api_providers.dart';
 import 'package:arya/services/background_service.dart';
 import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/debug_logger.dart';
@@ -12,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -48,6 +50,26 @@ class _HomeScreenState extends State<HomeScreen> {
     BackgroundService.setOnNewConversationCallback(() {
       _newConversation();
       systemSpeak("New conversation started");
+    });
+
+    BackgroundService.setOnToggleBraveSearchCallback(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getBool('brave_search_enabled') ?? false;
+      await prefs.setBool('brave_search_enabled', !current);
+      systemSpeak(current ? "Brave Search Off" : "Brave Search On");
+    });
+
+    BackgroundService.setOnRotateProviderCallback(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final currentId = prefs.getString('api_provider') ?? 'openrouter';
+      final currentIndex = apiProviders.indexWhere((p) => p.id == currentId);
+      final nextIndex = (currentIndex + 1) % apiProviders.length;
+      final next = apiProviders[nextIndex];
+      await prefs.setString('api_provider', next.id);
+      if (next.defaultModel.isNotEmpty) {
+        await prefs.setString('api_model', next.defaultModel);
+      }
+      systemSpeak(next.name);
     });
 
     WakeWordService.instance.onWakeWordDetected = () {
