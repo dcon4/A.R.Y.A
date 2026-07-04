@@ -277,31 +277,47 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
 
     private fun runInference() {
         try {
-            val input = Array(1) { Array(N_FRAMES) { FloatArray(N_MELS) } }
-            for (t in 0 until N_FRAMES) {
-                val bufIdx = (ringIndex + t) % N_FRAMES
-                for (m in 0 until N_MELS) {
-                    input[0][t][m] = ringBuffer[bufIdx][m]
-                }
-            }
-
             val flatInput = FloatArray(N_FRAMES * N_MELS)
             var idx = 0
             for (t in 0 until N_FRAMES) {
+                val bufIdx = (ringIndex + t) % N_FRAMES
                 for (m in 0 until N_MELS) {
-                    flatInput[idx++] = input[0][t][m]
+                    flatInput[idx++] = ringBuffer[bufIdx][m]
                 }
             }
 
+            val minVal = flatInput.minOrNull() ?: 0f
+            val maxVal = flatInput.maxOrNull() ?: 0f
+
             val tensor = OnnxTensor.createTensor(ortEnv, FloatBuffer.wrap(flatInput), longArrayOf(1, N_FRAMES.toLong(), N_MELS.toLong()))
             val results = ortSession.run(mapOf(inputName to tensor))
-            val output = results.get(outputName)?.get() as? Array<*>
-            val score = output?.get(0)?.let { (it as? Array<*>)?.get(0) as? Float } ?: 0f
+
+            val rawOutput = results.get(outputName)?.get()
+            var score = 0f
+
+            if (rawOutput is Array<*>) {
+                val batch = rawOutput[0]
+                if (batch is FloatArray) {
+                    score = batch[0]
+                } else if (batch is Array<*>) {
+                    score = (batch[0] as? Number)?.toFloat() ?: 0f
+                } else if (batch is Number) {
+                    score = batch.toFloat()
+                }
+            } else if (rawOutput is FloatArray) {
+                score = rawOutput[0]
+            } else if (rawOutput is Number) {
+                score = rawOutput.toFloat()
+            }
 
             tensor.close()
             results.close()
 
             val now = System.currentTimeMillis()
+
+            if (sendScoresToDart || maxVal > 0.01f) {
+                logToDart("SCORE", "score=%.6f input_range=[%.4f..%.4f] output_type=%s".format(score, minVal, maxVal, rawOutput?.javaClass?.name ?: "null"))
+            }
 
             if (sendScoresToDart) {
                 flutterEngine?.dartExecutor?.binaryMessenger?.let {
@@ -315,8 +331,6 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                 flutterEngine?.dartExecutor?.binaryMessenger?.let {
                     MethodChannel(it, "arya.wake_word").invokeMethod("wakeWordDetected", null)
                 }
-            } else if (score > 0.1f) {
-                logToDart("SCORE", "score=$score (threshold=$threshold)")
             }
         } catch (e: Exception) {
             logToDart("ERROR", "Inference error: ${e.message}")
