@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
     private var saveDirectoryResult: MethodChannel.Result? = null
     private var wakeWordDetector: WakeWordDetector? = null
     private var pendingMicIntent = false
+    private var pendingNewConvIntent = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -92,33 +93,39 @@ class MainActivity : FlutterActivity() {
         // Share binary messenger with foreground service for Bluetooth MediaSession
         AryaForegroundService.binaryMessenger = flutterEngine.dartExecutor.binaryMessenger
 
-        // Dispatch any pending mic intent that arrived before the engine was ready
+        // Dispatch any pending intents that arrived before the engine was ready
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
         if (pendingMicIntent) {
             pendingMicIntent = false
-            flutterEngine.dartExecutor.binaryMessenger.let {
-                MethodChannel(it, "arya.mic_trigger").invokeMethod("startListening", null)
-            }
+            MethodChannel(messenger, "arya.mic_trigger").invokeMethod("startListening", null)
+        }
+        if (pendingNewConvIntent) {
+            pendingNewConvIntent = false
+            MethodChannel(messenger, "arya.mic_trigger").invokeMethod("newConversation", null)
         }
     }
 
     override fun onStart() {
         super.onStart()
         if (flutterEngine == null) {
-            if (hasMicIntent(intent)) {
+            if (hasExtra(intent, "start_mic")) {
                 pendingMicIntent = true
             }
+            if (hasExtra(intent, "new_conversation")) {
+                pendingNewConvIntent = true
+            }
         } else {
-            handleMicIntent(intent)
+            handleIntentExtras(intent)
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleMicIntent(intent)
+        handleIntentExtras(intent)
     }
 
-    private fun hasMicIntent(intent: Intent?): Boolean =
-        intent?.getBooleanExtra("start_mic", false) == true
+    private fun hasExtra(intent: Intent?, key: String): Boolean =
+        intent?.getBooleanExtra(key, false) == true
 
     override fun onDestroy() {
         super.onDestroy()
@@ -146,11 +153,13 @@ class MainActivity : FlutterActivity() {
         startActivityForResult(intent, PICK_DIRECTORY_REQUEST)
     }
 
-    private fun handleMicIntent(intent: Intent?) {
+    private fun handleIntentExtras(intent: Intent?) {
+        val messenger = flutterEngine?.dartExecutor?.binaryMessenger ?: return
         if (intent?.getBooleanExtra("start_mic", false) == true) {
-            flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                MethodChannel(it, "arya.mic_trigger").invokeMethod("startListening", null)
-            }
+            MethodChannel(messenger, "arya.mic_trigger").invokeMethod("startListening", null)
+        }
+        if (intent?.getBooleanExtra("new_conversation", false) == true) {
+            MethodChannel(messenger, "arya.mic_trigger").invokeMethod("newConversation", null)
         }
     }
 
