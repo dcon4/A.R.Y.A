@@ -7,12 +7,15 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media.session.MediaSessionCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
@@ -105,7 +108,18 @@ class AryaForegroundService : Service() {
                     .build()
             )
             session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+            session.setPlaybackToLocal(AudioManager.STREAM_NOTIFICATION)
             session.isActive = true
+        }
+    }
+
+    private fun getMediaSessionToken(): Any? {
+        return try {
+            mediaSession?.sessionToken?.let { platformToken ->
+                MediaSessionCompat.Token.fromSessionToken(platformToken)
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -151,13 +165,18 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val mediaSessionToken = getMediaSessionToken()
+        val style = if (mediaSessionToken != null) {
+            MediaStyle().setMediaSession(mediaSessionToken as MediaSessionCompat.Token)
+        } else null
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
             .setContentText("Start Mic to speak, or press Bluetooth play/pause.")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(Notification.CATEGORY_ALARM)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setLocalOnly(false)
             .setContentIntent(openPendingIntent)
@@ -166,7 +185,11 @@ class AryaForegroundService : Service() {
                 "Start Mic",
                 micPendingIntent
             )
-            .build()
+
+        if (style != null) {
+            builder.setStyle(style)
+        }
+        return builder.build()
     }
 
     override fun onDestroy() {
