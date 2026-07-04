@@ -7,12 +7,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat.MediaStyle
-import androidx.media.session.MediaSessionCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
@@ -47,7 +47,7 @@ class AryaForegroundService : Service() {
         }
     }
 
-    private var mediaSession: MediaSessionCompat? = null
+    private var mediaSession: MediaSession? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -75,15 +75,15 @@ class AryaForegroundService : Service() {
     }
 
     private fun setupMediaSession() {
-        mediaSession = MediaSessionCompat(this, "arya_foreground_bluetooth")
+        mediaSession = MediaSession(this, "arya_foreground_bluetooth")
         mediaSession?.let { session ->
-            session.setCallback(object : MediaSessionCompat.Callback() {
+            session.setCallback(object : MediaSession.Callback() {
                 override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
                     val event = mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
                     if (event?.action == KeyEvent.ACTION_DOWN &&
                         event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                     ) {
-                        Log.i("AryaForegroundService", "Bluetooth media button pressed via MediaSessionCompat")
+                        Log.i("AryaForegroundService", "Bluetooth media button pressed via MediaSession")
                         val prefs = applicationContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                         val enabled = prefs.getBoolean("bluetooth_mic_control", false)
                         if (enabled) {
@@ -97,21 +97,16 @@ class AryaForegroundService : Service() {
                     }
                     return super.onMediaButtonEvent(mediaButtonIntent)
                 }
-
-                override fun onPlay() {}
-                override fun onPause() {}
             })
-            session.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS)
-            session.setActive(true)
+            session.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PLAY_PAUSE)
+                    .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0f)
+                    .build()
+            )
+            session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+            session.isActive = true
         }
-    }
-
-    private fun deactivateMediaSession() {
-        try {
-            mediaSession?.setActive(false)
-            mediaSession?.release()
-            mediaSession = null
-        } catch (_: Exception) {}
     }
 
     private fun triggerMic() {
@@ -169,12 +164,13 @@ class AryaForegroundService : Service() {
                 "Start Mic",
                 micPendingIntent
             )
-            .setStyle(MediaStyle().setMediaSession(mediaSession?.sessionToken))
             .build()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        deactivateMediaSession()
+        mediaSession?.isActive = false
+        mediaSession?.release()
+        mediaSession = null
     }
 }
