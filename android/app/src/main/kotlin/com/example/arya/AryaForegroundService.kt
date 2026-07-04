@@ -153,14 +153,16 @@ class AryaForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
-            .setContentText("Bluetooth: press play/pause or Start Mic.")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentText("Start Mic to speak, or press Bluetooth play/pause.")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(Notification.CATEGORY_SERVICE)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setLocalOnly(false)
             .setContentIntent(openPendingIntent)
             .addAction(
-                android.R.drawable.ic_btn_speak_now,
+                R.drawable.ic_launcher_foreground,
                 "Start Mic",
                 micPendingIntent
             )

@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.TensorInfo
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.InputStream
@@ -29,8 +30,8 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
         private const val N_FFT = 512
         private const val HOP_LENGTH = 160
         private const val WIN_LENGTH = 400
-        private const val N_MELS = 64
-        private const val N_FRAMES = 128
+        private var N_MELS = 96
+        private var N_FRAMES = 16
         private const val FMIN = 0.0f
         private const val FMAX = 8000.0f
         private const val DEBOUNCE_MS = 2000L
@@ -80,12 +81,26 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             }
 
             val inputInfo = ortSession.getInputInfo()
-            val inputShape = inputInfo[inputName]?.getInfo()?.toString() ?: "unknown"
-            logToDart("INFO", "Model: input=$inputName ($inputShape), output=$outputName")
+            val tensorInfo = inputInfo[inputName]?.info
+            val shapeStr = tensorInfo?.toString() ?: "unknown"
+
+            // Read actual model shape to set N_FRAMES and N_MELS dynamically
+            try {
+                val shape = (tensorInfo as? ai.onnxruntime.TensorInfo)?.shape
+                if (shape != null && shape.size >= 3) {
+                    N_FRAMES = shape[1].toInt().coerceAtLeast(1)
+                    N_MELS = shape[2].toInt().coerceAtLeast(1)
+                    logToDart("INFO", "Using model shape: frames=$N_FRAMES, mels=$N_MELS")
+                }
+            } catch (_: Exception) {
+                logToDart("WARN", "Could not parse model shape, using defaults frames=$N_FRAMES, mels=$N_MELS")
+            }
+
+            logToDart("INFO", "Model: input=$inputName ($shapeStr), output=$outputName")
 
             computeHannWindow()
             computeMelFilterBank()
-            logToDart("INFO", "WakeWordDetector initialized successfully")
+            logToDart("INFO", "WakeWordDetector initialized successfully (frames=$N_FRAMES, mels=$N_MELS)")
             true
         } catch (e: Exception) {
             logToDart("ERROR", "Failed to initialize: ${e.message}")

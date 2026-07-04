@@ -13,6 +13,7 @@ class MainActivity : FlutterActivity() {
     private val WAKE_WORD_CHANNEL = "arya.wake_word"
     private var saveDirectoryResult: MethodChannel.Result? = null
     private var wakeWordDetector: WakeWordDetector? = null
+    private var pendingMicIntent = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -91,6 +92,25 @@ class MainActivity : FlutterActivity() {
 
         // Share binary messenger with foreground service for Bluetooth MediaSession
         AryaForegroundService.binaryMessenger = flutterEngine.dartExecutor.binaryMessenger
+
+        // Dispatch any pending mic intent that arrived before the engine was ready
+        if (pendingMicIntent) {
+            pendingMicIntent = false
+            flutterEngine.dartExecutor.binaryMessenger.let {
+                MethodChannel(it, "arya.mic_trigger").invokeMethod("startListening", null)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (flutterEngine == null) {
+            if (hasMicIntent(intent)) {
+                pendingMicIntent = true
+            }
+        } else {
+            handleMicIntent(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -98,18 +118,8 @@ class MainActivity : FlutterActivity() {
         handleMicIntent(intent)
     }
 
-    override fun onStart() {
-        super.onStart()
-        handleMicIntent(intent)
-    }
-
-    override fun onPause() {
-        super.onPause()
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
+    private fun hasMicIntent(intent: Intent?): Boolean =
+        intent?.getBooleanExtra("start_mic", false) == true
 
     override fun onDestroy() {
         super.onDestroy()
