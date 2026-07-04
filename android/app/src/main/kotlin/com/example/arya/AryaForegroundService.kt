@@ -102,8 +102,16 @@ class AryaForegroundService : Service() {
                 override fun onPause() {}
             })
             session.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS)
-            session.isActive = true
+            session.setActive(true)
         }
+    }
+
+    private fun deactivateMediaSession() {
+        try {
+            mediaSession?.setActive(false)
+            mediaSession?.release()
+            mediaSession = null
+        } catch (_: Exception) {}
     }
 
     private fun triggerMic() {
@@ -167,8 +175,6 @@ class AryaForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaSession?.isActive = false
-        mediaSession?.release()
-        mediaSession = null
+        deactivateMediaSession()
     }
 }
