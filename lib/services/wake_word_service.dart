@@ -40,6 +40,8 @@ class WakeWordService {
         final score = (call.arguments as num?)?.toDouble() ?? 0.0;
         _testScores.add(score);
         onInferenceScore?.call(score);
+      } else if (call.method == 'nativeLog') {
+        _logger.log('WakeWordDetector', '${call.arguments}');
       }
     });
 

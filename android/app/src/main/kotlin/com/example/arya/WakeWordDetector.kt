@@ -42,6 +42,8 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     private var lastTriggerTime = 0L
     private var captureThread: Thread? = null
     var sendScoresToDart = false
+    private var totalReads = 0
+    private var totalBytesRead = 0L
 
     private lateinit var ortEnv: OrtEnvironment
     private lateinit var ortSession: OrtSession
@@ -52,6 +54,16 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     private var framesCollected = 0
     private var inputName = "input"
     private var outputName = "output"
+
+    private fun logToDart(level: String, message: String) {
+        val full = "[WakeWordDetector] [$level] $message"
+        if (level == "ERROR") Log.e(TAG, message) else Log.i(TAG, message)
+        flutterEngine?.dartExecutor?.binaryMessenger?.let {
+            try {
+                MethodChannel(it, "arya.wake_word").invokeMethod("nativeLog", full)
+            } catch (_: Exception) {}
+        }
+    }
 
     fun initialize(modelStream: InputStream): Boolean {
         return try {
@@ -67,11 +79,16 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                 outputName = ortSession.outputNames.iterator().next()
             }
 
+            val inputInfo = ortSession.getInputInfo()
+            val inputShape = inputInfo[inputName]?.getInfo()?.toString() ?: "unknown"
+            logToDart("INFO", "Model: input=$inputName ($inputShape), output=$outputName")
+
             computeHannWindow()
             computeMelFilterBank()
-            Log.i(TAG, "WakeWordDetector initialized (input=$inputName, output=$outputName)")
+            logToDart("INFO", "WakeWordDetector initialized successfully")
             true
         } catch (e: Exception) {
+            logToDart("ERROR", "Failed to initialize: ${e.message}")
             Log.e(TAG, "Failed to initialize WakeWordDetector", e)
             false
         }
@@ -112,16 +129,22 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
     private fun melToHz(mel: Double): Double = 700.0 * (10.0.pow(mel / 2595.0) - 1.0)
 
     fun start(thresholdValue: Float) {
-        if (isRunning) return
+        if (isRunning) {
+            logToDart("INFO", "Already running, ignoring start")
+            return
+        }
         if (!::ortEnv.isInitialized) {
-            Log.e(TAG, "WakeWordDetector not initialized")
+            logToDart("ERROR", "WakeWordDetector not initialized")
             return
         }
         if (ContextCompat.checkSelfPermission(
-                context ?: return,
+                context ?: run {
+                    logToDart("ERROR", "Context is null")
+                    return
+                },
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "RECORD_AUDIO permission not granted")
+            logToDart("ERROR", "RECORD_AUDIO permission not granted")
             return
         }
 
@@ -129,12 +152,16 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
         isRunning = true
         ringIndex = 0
         framesCollected = 0
+        totalReads = 0
+        totalBytesRead = 0L
 
         val bufferSize = AudioRecord.getMinBufferSize(
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         ).coerceAtLeast(N_FFT * 2)
+
+        logToDart("INFO", "AudioRecord bufferSize=$bufferSize")
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
@@ -144,29 +171,56 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             bufferSize
         )
 
+        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+            logToDart("ERROR", "AudioRecord failed to initialize (state=${audioRecord?.state})")
+            isRunning = false
+            audioRecord?.release()
+            audioRecord = null
+            return
+        }
+
         try {
             audioRecord?.startRecording()
+            logToDart("INFO", "AudioRecord started recording")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start recording", e)
+            logToDart("ERROR", "Failed to start recording: ${e.message}")
             isRunning = false
+            audioRecord?.release()
+            audioRecord = null
             return
         }
 
         captureThread = Thread {
-            val buffer = ShortArray(HOP_LENGTH * 2)
+            val buffer = ShortArray(HOP_LENGTH * 4)
+            logToDart("INFO", "Capture thread started")
+            var consecutiveEmptyReads = 0
             while (isRunning) {
-                val read = audioRecord?.read(buffer, 0, HOP_LENGTH) ?: 0
+                val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
                 if (read > 0) {
-                    val frame = buffer.copyOf(read)
+                    consecutiveEmptyReads = 0
+                    totalReads++
+                    totalBytesRead += read
+                    val frame = buffer.copyOf(minOf(read, HOP_LENGTH))
                     processFrame(frame)
+                } else if (read == 0) {
+                    consecutiveEmptyReads++
+                    if (consecutiveEmptyReads > 100) {
+                        logToDart("WARN", "100 consecutive empty reads -- mic may be busy")
+                        consecutiveEmptyReads = 0
+                    }
+                } else {
+                    logToDart("ERROR", "AudioRecord.read returned $read")
+                    break
                 }
             }
+            logToDart("INFO", "Capture thread exiting (totalReads=$totalReads, bytes=$totalBytesRead)")
         }
         captureThread?.start()
-        Log.i(TAG, "WakeWordDetector started")
+        logToDart("INFO", "WakeWordDetector started (threshold=$threshold)")
     }
 
     fun stop() {
+        logToDart("INFO", "Stopping (totalReads=$totalReads, bytes=$totalBytesRead, framesCollected=$framesCollected)")
         isRunning = false
         captureThread?.join(500)
         try {
@@ -174,7 +228,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
         } catch (_: Exception) {}
         audioRecord?.release()
         audioRecord = null
-        Log.i(TAG, "WakeWordDetector stopped")
+        logToDart("INFO", "WakeWordDetector stopped")
     }
 
     private fun processFrame(samples: ShortArray) {
@@ -242,14 +296,15 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
 
             if (score > threshold && (now - lastTriggerTime) > DEBOUNCE_MS) {
                 lastTriggerTime = now
-                Log.i(TAG, "Wake word detected! score=$score")
+                logToDart("DETECT", "Wake word detected! score=$score")
                 flutterEngine?.dartExecutor?.binaryMessenger?.let {
                     MethodChannel(it, "arya.wake_word").invokeMethod("wakeWordDetected", null)
                 }
-            } else {
-                Log.v(TAG, "Inference score=$score (threshold=$threshold)")
+            } else if (score > 0.1f) {
+                logToDart("SCORE", "score=$score (threshold=$threshold)")
             }
         } catch (e: Exception) {
+            logToDart("ERROR", "Inference error: ${e.message}")
             Log.e(TAG, "Inference error", e)
         }
     }
