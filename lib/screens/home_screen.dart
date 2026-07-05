@@ -470,7 +470,52 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            SizedBox(height: 20),
+            // Background Service toggle — quick access on home screen
+            Container(
+              margin: EdgeInsets.only(top: 8, bottom: 4, left: 20, right: 20),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: MyAppTheme.borderColor.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    "Background Service",
+                    style: TextStyle(
+                      color: MyAppTheme.mainFontColor,
+                      fontSize: 14,
+                      fontFamily: 'Cera Pro',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Spacer(),
+                  Text(
+                    BackgroundService.isRunning ? "Running" : "Stopped",
+                    style: TextStyle(
+                      color: BackgroundService.isRunning
+                          ? Color.fromRGBO(76, 175, 80, 1)
+                          : Colors.grey,
+                      fontSize: 12,
+                      fontFamily: 'Cera Pro',
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Switch(
+                    value: BackgroundService.isRunning,
+                    onChanged: (val) async {
+                      await BackgroundService.setEnabled(val);
+                      setState(() {});
+                    },
+                    activeColor: Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
             // Avatar with fire animation
             Stack(
               children: [

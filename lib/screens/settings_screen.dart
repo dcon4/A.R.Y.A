@@ -965,6 +965,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
+            const Text(
+              "Background Service",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Keeps ARYA running when the screen is locked. 'Start Mic' notification lets RemoteFix trigger voice input.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    BackgroundService.isRunning
+                        ? "Service is running"
+                        : "Service is stopped",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: BackgroundService.isRunning,
+                  onChanged: (val) async {
+                    await BackgroundService.setEnabled(val);
+                    setState(() {});
+                  },
+                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             _buildWakeWordSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
@@ -1036,53 +1083,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 );
               },
-            ),
-            const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
-            const SizedBox(height: 16),
-            const Text(
-              "Background Service",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cera Pro',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Keeps ARYA running when the screen is locked. 'Start Mic' notification lets RemoteFix trigger voice input.",
-              style: TextStyle(
-                color: Color.fromRGBO(255, 138, 101, 0.8),
-                fontSize: 14,
-                fontFamily: 'Cera Pro',
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    BackgroundService.isRunning
-                        ? "Service is running"
-                        : "Service is stopped",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Cera Pro',
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                Switch(
-                  value: BackgroundService.isRunning,
-                  onChanged: (val) async {
-                    await BackgroundService.setEnabled(val);
-                    setState(() {});
-                  },
-                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
-                ),
-              ],
             ),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),

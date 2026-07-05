@@ -311,8 +311,12 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
             val tensor = OnnxTensor.createTensor(ortEnv, FloatBuffer.wrap(flatInput), longArrayOf(1, N_FRAMES.toLong(), N_MELS.toLong()))
             val results = ortSession.run(mapOf(inputName to tensor))
 
-            val outputTensor = results.get(outputName)
+            val outputObj = results.get(outputName)
             var score = 0f
+
+            // Unwrap java.util.Optional if present (ORT 1.20.0 returns Optional for
+            // optional model outputs, e.g. output "39" of the openWakeWord model)
+            val outputTensor = if (outputObj is java.util.Optional<*>) outputObj.orElse(null) else outputObj
 
             if (outputTensor is OnnxTensor) {
                 try {
@@ -336,20 +340,35 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                     } catch (_: Exception) {}
                 }
             } else {
-                val rawOutput = outputTensor?.get()
-                if (rawOutput is Array<*>) {
-                    val batch = rawOutput[0]
-                    if (batch is FloatArray) {
-                        score = batch[0]
-                    } else if (batch is Array<*>) {
-                        score = (batch[0] as? Number)?.toFloat() ?: 0f
-                    } else if (batch is Number) {
-                        score = batch.toFloat()
+                val rawOutput = outputTensor?.let {
+                    if (it is OnnxTensor) {
+                        try {
+                            val fb = it.getFloatBuffer()
+                            if (fb.hasRemaining()) return@let fb.get()
+                        } catch (_: Exception) {}
                     }
-                } else if (rawOutput is FloatArray) {
-                    score = rawOutput[0]
-                } else if (rawOutput is Number) {
-                    score = rawOutput.toFloat()
+                    null
+                }
+                if (rawOutput != null) {
+                    score = rawOutput
+                } else {
+                    val rawGet = outputTensor?.let {
+                        if (it is OnnxTensor) it.get() else it
+                    }
+                    if (rawGet is Array<*>) {
+                        val batch = rawGet[0]
+                        if (batch is FloatArray) {
+                            score = batch[0]
+                        } else if (batch is Array<*>) {
+                            score = (batch[0] as? Number)?.toFloat() ?: 0f
+                        } else if (batch is Number) {
+                            score = batch.toFloat()
+                        }
+                    } else if (rawGet is FloatArray) {
+                        score = rawGet[0]
+                    } else if (rawGet is Number) {
+                        score = rawGet.toFloat()
+                    }
                 }
             }
 

@@ -1,7 +1,6 @@
 package com.example.arya
 
 import android.app.Notification
-import android.app.Notification.MediaStyle
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -203,17 +202,14 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val sessionToken = mediaSession?.sessionToken
-
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
             .setContentText("Start Mic, New Conversation, or change settings.")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openPendingIntent)
-            .setStyle(MediaStyle().setMediaSession(sessionToken))
             .addAction(
                 R.drawable.ic_launcher_foreground,
                 "Start Mic",
