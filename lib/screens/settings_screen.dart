@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _apiKeyController = TextEditingController();
   final TextEditingController _customModelController = TextEditingController();
   final TextEditingController _customBaseUrlController = TextEditingController();
+  final TextEditingController _systemPromptController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -55,9 +56,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final savedModel = prefs.getString('api_model') ?? provider.defaultModel;
     final isCustomModel = !provider.models.any((m) => m.id == savedModel);
     final savedCustomBaseUrl = prefs.getString('api_custom_base_url') ?? '';
+    final savedSystemPrompt = prefs.getString('system_prompt') ?? '';
 
     setState(() {
       _selectedProviderId = savedProviderId;
+      _systemPromptController.text = savedSystemPrompt;
       _apiKeyController.text = savedKey;
       _selectedModelId = isCustomModel ? provider.defaultModel : savedModel;
       _useCustomModel = isCustomModel;
@@ -84,6 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.setString('api_custom_base_url', _customBaseUrlController.text.trim());
     }
 
+    await prefs.setString('system_prompt', _systemPromptController.text.trim());
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -386,6 +390,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSystemPromptSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "System Prompt",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Instructions given to the AI before every conversation. Leave empty for the default prompt.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _systemPromptController,
+          maxLines: 8,
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            hintText: "Enter custom system prompt...",
+            hintStyle: TextStyle(
+              color: Colors.grey[600],
+              fontFamily: 'Cera Pro',
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 16,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -955,6 +1028,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildApiKeyField(),
             _buildCustomBaseUrlField(),
             _buildSaveButton(),
+            const SizedBox(height: 32),
+            _buildSystemPromptSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             _buildModelSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),

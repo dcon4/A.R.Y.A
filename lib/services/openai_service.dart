@@ -3,6 +3,7 @@ import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 String? _cachedApiKey;
 String? _cachedModel;
@@ -64,7 +65,7 @@ Future<bool> hasValidApiKey() async {
 }
 
 class OpenaiService {
-  final String systemPrompt = '''
+  static const String defaultSystemPrompt = '''
 You are ARYA (Adaptive Real-time Yielding Assistant), a helpful and friendly AI voice assistant.
 
 Your characteristics:
@@ -89,6 +90,16 @@ When responding:
 
 Remember: You are ARYA, the user's personal AI assistant.
 ''';
+
+  static Future<String> getSystemPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('system_prompt') ?? defaultSystemPrompt;
+  }
+
+  static Future<void> setSystemPrompt(String prompt) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('system_prompt', prompt);
+  }
 
   final _logger = DebugLogger();
 
@@ -137,8 +148,9 @@ Remember: You are ARYA, the user's personal AI assistant.
         headers['X-Title'] = getSiteName();
       }
 
+      final sysPrompt = await getSystemPrompt();
       final messages = <Map<String, String>>[
-        {'role': 'system', 'content': systemPrompt},
+        {'role': 'system', 'content': sysPrompt},
       ];
       if (history != null) {
         messages.addAll(history);

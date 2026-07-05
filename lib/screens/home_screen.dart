@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:arya/screens/settings_screen.dart';
 import 'package:share_plus/share_plus.dart';
@@ -34,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoading = false;
   bool _micReallyListening = false;
   final List<Map<String, String>> _messageHistory = [];
+  bool _wakeWordPausedForSpeech = false;
+  Timer? _speechTimeout;
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
   @override
@@ -74,12 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     WakeWordService.instance.onWakeWordDetected = () async {
       if (speechToText.isNotListening) {
-        // Pause the wake word detector so it releases the mic,
-        // then start speech recognition (both can't hold the mic at once).
         await WakeWordService.instance.pause();
+        _wakeWordPausedForSpeech = true;
         await startListening();
-        // After the speech-to-text session ends, resume wake word detection.
-        await WakeWordService.instance.resume();
+        // speechToText.listen() returns immediately even though the mic is still
+        // listening.  Set a timeout; if no final speech result arrives within 10
+        // seconds, resume the wake word detector so the user can re-trigger.
+        if (_wakeWordPausedForSpeech) {
+          _speechTimeout = Timer(const Duration(seconds: 10), () {
+            if (_wakeWordPausedForSpeech) {
+              _wakeWordPausedForSpeech = false;
+              WakeWordService.instance.resume();
+            }
+          });
+        }
       }
     };
 
@@ -133,6 +144,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> stopListening() async {
+    _speechTimeout?.cancel();
+    _speechTimeout = null;
     _logger.log('HomeScreen', 'Stopped listening - words detected: ${lastWords.length > 0}');
     await speechToText.stop();
     setState(() {
@@ -143,6 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (lastWords.isNotEmpty) {
       await sendMessageToOpenRouter();
     }
+
+    // If wake word was paused but no speech result was processed (stop was manual), resume.
+    if (_wakeWordPausedForSpeech) {
+      _wakeWordPausedForSpeech = false;
+      await WakeWordService.instance.resume();
+    }
   }
 
   void onSpeechResult(SpeechRecognitionResult result) {
@@ -152,6 +171,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (result.finalResult && lastWords.isNotEmpty) {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
+      _speechTimeout?.cancel();
+      _speechTimeout = null;
       Future.delayed(Duration(milliseconds: 500), () {
         sendMessageToOpenRouter();
       });
@@ -200,6 +221,12 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       await systemSpeak(response);
+    }
+
+    // Resume wake word detection after the conversation cycle completes.
+    if (_wakeWordPausedForSpeech) {
+      _wakeWordPausedForSpeech = false;
+      await WakeWordService.instance.resume();
     }
   }
 
@@ -322,6 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _speechTimeout?.cancel();
     super.dispose();
     speechToText.stop();
     flutterTts.stop();
