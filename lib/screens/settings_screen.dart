@@ -1064,9 +1064,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await tts.setSpeechRate(speechRate);
       await tts.setPitch(pitch);
 
-      availableEngines = await tts.getEngines();
-      availableLanguages = await tts.getLanguages();
-      final allVoices = await tts.getVoices();
+      availableEngines = await tts.getEngines;
+      availableLanguages = await tts.getLanguages;
+      final allVoices = await tts.getVoices;
       availableVoices = allVoices
           .map((v) => Map<String, String>.from(v as Map))
           .toList();
@@ -1348,18 +1348,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
 
-                    if (testMessage != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          testMessage!,
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontSize: 13,
-                            fontFamily: 'Cera Pro',
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -1415,7 +1403,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<List<Map<String, String>>> _reloadVoices(
       FlutterTts tts, String language) async {
-    final allVoices = await tts.getVoices();
+    final allVoices = await tts.getVoices;
     return allVoices
         .map((v) => Map<String, String>.from(v as Map))
         .where((v) => v['locale'] == language)

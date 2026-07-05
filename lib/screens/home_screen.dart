@@ -129,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final voiceName = prefs.getString('tts_voice_name');
     if (voiceName != null && voiceName.isNotEmpty) {
-      final voices = await flutterTts.getVoices();
+      final voices = await flutterTts.getVoices;
       final match = voices.firstWhere(
         (v) => v['name'] == voiceName && v['locale'] == language,
         orElse: () => null,
