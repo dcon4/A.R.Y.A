@@ -66,17 +66,16 @@ class WakeWordService {
     }
   }
 
-  void stop() {
+  Future<void> stop() async {
+    _logger.log('WakeWordService', 'Stopping');
     try {
-      _logger.log('WakeWordService', 'Stopping');
-      _channel.invokeMethod('stop');
+      await _channel.invokeMethod('stop');
     } catch (e) {
       _logger.error('WakeWordService', 'Failed to stop', e);
     }
     _isRunning = false;
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setBool('wake_word_enabled', false);
-    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('wake_word_enabled', false);
     _logger.log('WakeWordService', 'Stopped');
   }
 
@@ -90,6 +89,10 @@ class WakeWordService {
   }
 
   Future<void> resume() async {
+    if (!_isRunning) {
+      _logger.log('WakeWordService', 'Skipping resume — detector was manually stopped');
+      return;
+    }
     _logger.log('WakeWordService', 'Resuming after speech');
     try {
       await _channel.invokeMethod('resume', {

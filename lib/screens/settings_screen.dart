@@ -672,7 +672,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (val) {
                       await ww.start();
                     } else {
-                      ww.stop();
+                      await ww.stop();
                     }
                     setInnerState(() {});
                     setState(() {});
@@ -1037,90 +1037,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showTtsSettingsDialog() {
-    final tts = FlutterTts();
-    String selectedLanguage = 'en-US';
-    String? selectedEngine;
-    String? selectedVoiceName;
-    double speechRate = 0.5;
-    double pitch = 1.0;
-    bool isLoading = true;
-    List<dynamic> availableLanguages = [];
-    List<dynamic> availableEngines = [];
-    List<Map<String, String>> availableVoices = [];
-
-    Future<void> initDialogState() async {
-      final prefs = await SharedPreferences.getInstance();
-      selectedLanguage = prefs.getString('tts_language') ?? 'en-US';
-      selectedEngine = prefs.getString('tts_engine');
-      selectedVoiceName = prefs.getString('tts_voice_name');
-      speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
-      pitch = prefs.getDouble('tts_pitch') ?? 1.0;
-
-      try { await tts.setLanguage(selectedLanguage); } catch (_) {}
-      if (selectedEngine != null) {
-        try { await tts.setEngine(selectedEngine!); } catch (_) {}
-      }
-      try { await tts.setSpeechRate(speechRate); } catch (_) {}
-      try { await tts.setPitch(pitch); } catch (_) {}
-
-      try {
-        final engines = await tts.getEngines;
-        availableEngines = engines is List ? engines : [];
-      } catch (_) { availableEngines = []; }
-
-      try {
-        final langs = await tts.getLanguages;
-        availableLanguages = langs is List ? langs : [];
-      } catch (_) { availableLanguages = []; }
-
-      try {
-        final allVoices = await tts.getVoices;
-        availableVoices = allVoices is List
-            ? (allVoices as List)
-                .map((v) => Map<String, String>.from(v as Map))
-                .toList()
-            : [];
-      } catch (_) { availableVoices = []; }
-
-      if (selectedVoiceName != null) {
-        try {
-          final match = availableVoices.firstWhere(
-            (v) => v['name'] == selectedVoiceName && v['locale'] == selectedLanguage,
-            orElse: () => <String, String>{},
-          );
-          if (match.isNotEmpty) {
-            await tts.setVoice(Map<String, String>.from(match));
-          }
-        } catch (_) {}
-      }
-    }
+  void _showTtsSettingsDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    double speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
+    double pitch = prefs.getDouble('tts_pitch') ?? 1.0;
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            if (isLoading) {
-              initDialogState().then((_) {
-                setDialogState(() {
-                  isLoading = false;
-                });
-              });
-              return const AlertDialog(
-                backgroundColor: Color.fromRGBO(30, 30, 30, 1),
-                content: Center(
-                  child: CircularProgressIndicator(
-                    color: Color.fromRGBO(255, 87, 51, 1),
-                  ),
-                ),
-              );
-            }
-
-            final filteredVoices = availableVoices
-                .where((v) => v['locale'] == selectedLanguage)
-                .toList();
-
             return AlertDialog(
               backgroundColor: const Color.fromRGBO(30, 30, 30, 1),
               title: const Text(
@@ -1131,162 +1057,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: SingleChildScrollView(
+              content: SizedBox(
+                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Engine selector
-                    const Text(
-                      "Engine",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Cera Pro',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (availableEngines.isEmpty)
-                      const Text(
-                        "No alternate engines found.",
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
-                      )
-                    else
-                      ...availableEngines.map((engine) {
-                        final pkg = engine.toString();
-                        return RadioListTile<String>(
-                          title: Text(
-                            pkg.split('.').last,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Cera Pro',
-                              fontSize: 13,
-                            ),
-                          ),
-                          value: pkg,
-                          groupValue: selectedEngine,
-                          onChanged: (val) async {
-                            await tts.setEngine(val!);
-                            setDialogState(() {
-                              selectedEngine = val;
-                              availableVoices = [];
-                              selectedVoiceName = null;
-                            });
-                            _reloadVoices(tts, selectedLanguage)
-                                .then((voices) {
-                              setDialogState(() {
-                                availableVoices = voices;
-                              });
-                            });
-                          },
-                          activeColor: const Color.fromRGBO(255, 87, 51, 1),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        );
-                      }),
-                    const SizedBox(height: 12),
-
-                    // Language selector
-                    const Text(
-                      "Language",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Cera Pro',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    DropdownButton<String>(
-                      value: availableLanguages.contains(selectedLanguage)
-                          ? selectedLanguage
-                          : null,
-                      dropdownColor: const Color.fromRGBO(30, 30, 30, 1),
-                      hint: const Text(
-                        "Select language",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      items: availableLanguages.map((lang) {
-                        return DropdownMenuItem(
-                          value: lang.toString(),
-                          child: Text(
-                            lang.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Cera Pro',
-                              fontSize: 13,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) async {
-                        if (val == null) return;
-                        await tts.setLanguage(val);
-                        setDialogState(() {
-                          selectedLanguage = val;
-                          selectedVoiceName = null;
-                        });
-                        _reloadVoices(tts, val).then((voices) {
-                          setDialogState(() {
-                            availableVoices = voices;
-                          });
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Voice selector
-                    const Text(
-                      "Voice",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Cera Pro',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (filteredVoices.isEmpty)
-                      const Text(
-                        "No voices for this language.",
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
-                      )
-                    else
-                      SizedBox(
-                        height: 120,
-                        child: ListView(
-                          children: filteredVoices.map((voice) {
-                            final name = voice['name'] ?? 'unknown';
-                            return RadioListTile<String>(
-                              title: Text(
-                                name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Cera Pro',
-                                  fontSize: 13,
-                                ),
-                              ),
-                              value: name,
-                              groupValue: selectedVoiceName,
-                              onChanged: (val) async {
-                                await tts.setVoice(
-                                    Map<String, String>.from(voice));
-                                setDialogState(() {
-                                  selectedVoiceName = val;
-                                });
-                              },
-                              activeColor:
-                                  const Color.fromRGBO(255, 87, 51, 1),
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-
-                    // Speech Rate
                     const Text(
                       "Speech Rate",
                       style: TextStyle(
@@ -1306,14 +1082,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const Color.fromRGBO(255, 87, 51, 0.3),
                       label: speechRate.toStringAsFixed(1),
                       onChanged: (val) {
-                        tts.setSpeechRate(val);
                         setDialogState(() {
                           speechRate = val;
                         });
                       },
                     ),
-
-                    // Pitch
+                    const SizedBox(height: 8),
                     const Text(
                       "Pitch",
                       style: TextStyle(
@@ -1333,19 +1107,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const Color.fromRGBO(255, 87, 51, 0.3),
                       label: pitch.toStringAsFixed(1),
                       onChanged: (val) {
-                        tts.setPitch(val);
                         setDialogState(() {
                           pitch = val;
                         });
                       },
                     ),
-
-                    // Test button
+                    const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          tts.speak("Hello. I am ARYA. This is my voice.");
+                          final testTts = FlutterTts();
+                          testTts.setSpeechRate(speechRate);
+                          testTts.setPitch(pitch);
+                          testTts.speak(
+                              "Hello. I am ARYA. This is my voice.");
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
@@ -1361,7 +1137,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -1379,19 +1154,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString('tts_language', selectedLanguage);
-                    if (selectedEngine != null) {
-                      await prefs.setString(
-                          'tts_engine', selectedEngine!);
-                    }
-                    if (selectedVoiceName != null) {
-                      await prefs.setString(
-                          'tts_voice_name', selectedVoiceName!);
-                    }
                     await prefs.setBool('tts_configured', true);
                     await prefs.setDouble('tts_speech_rate', speechRate);
                     await prefs.setDouble('tts_pitch', pitch);
-                    tts.stop();
                     if (dialogContext.mounted) {
                       Navigator.pop(dialogContext);
                     }
@@ -1414,15 +1179,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
-  }
-
-  Future<List<Map<String, String>>> _reloadVoices(
-      FlutterTts tts, String language) async {
-    final allVoices = await tts.getVoices;
-    return allVoices
-        .map((v) => Map<String, String>.from(v as Map))
-        .where((v) => v['locale'] == language)
-        .toList();
   }
 
   @override
