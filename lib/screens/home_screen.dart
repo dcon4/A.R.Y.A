@@ -119,36 +119,49 @@ class _HomeScreenState extends State<HomeScreen> {
     _logger.log('HomeScreen', 'Initializing text to speech');
     final prefs = await SharedPreferences.getInstance();
 
-    final engine = prefs.getString('tts_engine');
-    if (engine != null && engine.isNotEmpty) {
-      await flutterTts.setEngine(engine);
-    }
-
-    final language = prefs.getString('tts_language') ?? 'en-US';
-    await flutterTts.setLanguage(language);
-
-    final voiceName = prefs.getString('tts_voice_name');
-    if (voiceName != null && voiceName.isNotEmpty) {
-      final voices = await flutterTts.getVoices;
-      final match = voices.firstWhere(
-        (v) => v['name'] == voiceName && v['locale'] == language,
-        orElse: () => null,
-      );
-      if (match != null) {
-        await flutterTts.setVoice(Map<String, String>.from(match));
+    // Only apply saved TTS settings if user explicitly configured them.
+    // Otherwise keep the platform default to preserve the original voice.
+    if (prefs.getBool('tts_configured') == true) {
+      final engine = prefs.getString('tts_engine');
+      if (engine != null && engine.isNotEmpty) {
+        try { await flutterTts.setEngine(engine); } catch (_) {}
       }
+
+      final language = prefs.getString('tts_language') ?? 'en-US';
+      try { await flutterTts.setLanguage(language); } catch (_) {}
+
+      final voiceName = prefs.getString('tts_voice_name');
+      if (voiceName != null && voiceName.isNotEmpty) {
+        try {
+          final voices = await flutterTts.getVoices;
+          if (voices is List) {
+            final match = (voices as List).firstWhere(
+              (v) => v is Map && v['name'] == voiceName && v['locale'] == language,
+              orElse: () => null,
+            );
+            if (match != null) {
+              await flutterTts.setVoice(Map<String, String>.from(match as Map));
+            }
+          }
+        } catch (_) {}
+      }
+
+      try { await flutterTts.setSpeechRate(prefs.getDouble('tts_speech_rate') ?? 0.5); } catch (_) {}
+      try { await flutterTts.setPitch(prefs.getDouble('tts_pitch') ?? 1.0); } catch (_) {}
     }
 
-    await flutterTts.setSpeechRate(prefs.getDouble('tts_speech_rate') ?? 0.5);
-    await flutterTts.setPitch(prefs.getDouble('tts_pitch') ?? 1.0);
     await flutterTts.setVolume(1.0);
 
-    // When TTS finishes speaking a response, resume wake word detection
-    // if it was paused for speech.
+    // When TTS finishes speaking, wait 2 seconds before re-arming the
+    // wake word detector so it doesn't hear its own echo and re-trigger.
     flutterTts.setCompletionHandler(() {
       if (_wakeWordPausedForSpeech) {
-        _wakeWordPausedForSpeech = false;
-        WakeWordService.instance.resume();
+        Future.delayed(const Duration(seconds: 2), () {
+          if (_wakeWordPausedForSpeech) {
+            _wakeWordPausedForSpeech = false;
+            WakeWordService.instance.resume();
+          }
+        });
       }
     });
   }
@@ -254,12 +267,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       await systemSpeak(response);
     }
-
-    // Resume wake word detection after the conversation cycle completes.
-    if (_wakeWordPausedForSpeech) {
-      _wakeWordPausedForSpeech = false;
-      await WakeWordService.instance.resume();
-    }
+    // Wake word resume is handled by the TTS completion handler with a
+    // 2-second delay to avoid echo re-triggering.
   }
 
   void _sendTextMessage() {
@@ -661,59 +670,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   SizedBox(height: 12),
-                  // Avatar with fire animation
-                  Stack(
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 200,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: MyAppTheme.mainFontColor.withValues(
-                                  alpha: 0.3,
-                                ),
-                                blurRadius: 30,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Lottie JSON animation behind the avatar
-                              Positioned.fill(
-                                child: Opacity(
-                                  opacity: 0.9,
-                                  child: Lottie.asset(
-                                    'assets/images/Fire.json',
-                                    fit: BoxFit.contain,
-                                    repeat: true,
-                                    animate: true,
-                                  ),
-                                ),
-                              ),
-
-                              // Circular avatar on top
-                              Positioned(
-                                top: 86,
-                                child: CircleAvatar(
-                                  radius: 60,
-                                  backgroundImage: AssetImage(
-                                    'assets/images/arya-final.png',
-                                  ),
-                                  backgroundColor: Colors.transparent,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                  // Avatar — smaller and without the fire animation
+                  Center(
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundImage: AssetImage(
+                        'assets/images/arya-final.png',
                       ),
-                    ],
+                      backgroundColor: Colors.transparent,
+                    ),
                   ),
-                  SizedBox(height: 30),
+                  SizedBox(height: 20),
 
                   // Welcome message or Speech Recognition Display
                   Container(

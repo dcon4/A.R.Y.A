@@ -1057,28 +1057,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
       speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
       pitch = prefs.getDouble('tts_pitch') ?? 1.0;
 
-      await tts.setLanguage(selectedLanguage);
+      try { await tts.setLanguage(selectedLanguage); } catch (_) {}
       if (selectedEngine != null) {
-        await tts.setEngine(selectedEngine!);
+        try { await tts.setEngine(selectedEngine!); } catch (_) {}
       }
-      await tts.setSpeechRate(speechRate);
-      await tts.setPitch(pitch);
+      try { await tts.setSpeechRate(speechRate); } catch (_) {}
+      try { await tts.setPitch(pitch); } catch (_) {}
 
-      availableEngines = await tts.getEngines;
-      availableLanguages = await tts.getLanguages;
-      final allVoices = await tts.getVoices;
-      availableVoices = allVoices
-          .map((v) => Map<String, String>.from(v as Map))
-          .toList();
+      try {
+        final engines = await tts.getEngines;
+        availableEngines = engines is List ? engines : [];
+      } catch (_) { availableEngines = []; }
+
+      try {
+        final langs = await tts.getLanguages;
+        availableLanguages = langs is List ? langs : [];
+      } catch (_) { availableLanguages = []; }
+
+      try {
+        final allVoices = await tts.getVoices;
+        availableVoices = allVoices is List
+            ? (allVoices as List)
+                .map((v) => Map<String, String>.from(v as Map))
+                .toList()
+            : [];
+      } catch (_) { availableVoices = []; }
 
       if (selectedVoiceName != null) {
-        final match = availableVoices.firstWhere(
-          (v) => v['name'] == selectedVoiceName && v['locale'] == selectedLanguage,
-          orElse: () => <String, String>{},
-        );
-        if (match.isNotEmpty) {
-          await tts.setVoice(Map<String, String>.from(match));
-        }
+        try {
+          final match = availableVoices.firstWhere(
+            (v) => v['name'] == selectedVoiceName && v['locale'] == selectedLanguage,
+            orElse: () => <String, String>{},
+          );
+          if (match.isNotEmpty) {
+            await tts.setVoice(Map<String, String>.from(match));
+          }
+        } catch (_) {}
       }
     }
 
@@ -1374,6 +1388,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       await prefs.setString(
                           'tts_voice_name', selectedVoiceName!);
                     }
+                    await prefs.setBool('tts_configured', true);
                     await prefs.setDouble('tts_speech_rate', speechRate);
                     await prefs.setDouble('tts_pitch', pitch);
                     tts.stop();
