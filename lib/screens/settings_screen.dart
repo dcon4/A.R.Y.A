@@ -8,6 +8,7 @@ import 'package:arya/services/save_directory_picker.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/widgets/model_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
@@ -997,6 +998,430 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildTtsSection() {
+    return InkWell(
+      onTap: _showTtsSettingsDialog,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Text-to-Speech",
+                  style: TextStyle(
+                    color: Color.fromRGBO(255, 87, 51, 1),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cera Pro',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Voice, engine, and speech rate settings.",
+                  style: TextStyle(
+                    color: Color.fromRGBO(255, 138, 101, 0.8),
+                    fontSize: 14,
+                    fontFamily: 'Cera Pro',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right,
+            color: Color.fromRGBO(255, 87, 51, 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTtsSettingsDialog() {
+    final tts = FlutterTts();
+    String selectedLanguage = 'en-US';
+    String? selectedEngine;
+    String? selectedVoiceName;
+    double speechRate = 0.5;
+    double pitch = 1.0;
+    bool isLoading = true;
+    List<dynamic> availableLanguages = [];
+    List<dynamic> availableEngines = [];
+    List<Map<String, String>> availableVoices = [];
+
+    Future<void> initDialogState() async {
+      final prefs = await SharedPreferences.getInstance();
+      selectedLanguage = prefs.getString('tts_language') ?? 'en-US';
+      selectedEngine = prefs.getString('tts_engine');
+      selectedVoiceName = prefs.getString('tts_voice_name');
+      speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
+      pitch = prefs.getDouble('tts_pitch') ?? 1.0;
+
+      await tts.setLanguage(selectedLanguage);
+      if (selectedEngine != null) {
+        await tts.setEngine(selectedEngine!);
+      }
+      await tts.setSpeechRate(speechRate);
+      await tts.setPitch(pitch);
+
+      availableEngines = await tts.getEngines();
+      availableLanguages = await tts.getLanguages();
+      final allVoices = await tts.getVoices();
+      availableVoices = allVoices
+          .map((v) => Map<String, String>.from(v as Map))
+          .toList();
+
+      if (selectedVoiceName != null) {
+        final match = availableVoices.firstWhere(
+          (v) => v['name'] == selectedVoiceName && v['locale'] == selectedLanguage,
+          orElse: () => <String, String>{},
+        );
+        if (match.isNotEmpty) {
+          await tts.setVoice(Map<String, String>.from(match));
+        }
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (isLoading) {
+              initDialogState().then((_) {
+                setDialogState(() {
+                  isLoading = false;
+                });
+              });
+              return const AlertDialog(
+                backgroundColor: Color.fromRGBO(30, 30, 30, 1),
+                content: Center(
+                  child: CircularProgressIndicator(
+                    color: Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                ),
+              );
+            }
+
+            final filteredVoices = availableVoices
+                .where((v) => v['locale'] == selectedLanguage)
+                .toList();
+
+            return AlertDialog(
+              backgroundColor: const Color.fromRGBO(30, 30, 30, 1),
+              title: const Text(
+                "Text-to-Speech Settings",
+                style: TextStyle(
+                  color: Color.fromRGBO(255, 87, 51, 1),
+                  fontFamily: 'Cera Pro',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Engine selector
+                    const Text(
+                      "Engine",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (availableEngines.isEmpty)
+                      const Text(
+                        "No alternate engines found.",
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      )
+                    else
+                      ...availableEngines.map((engine) {
+                        final pkg = engine.toString();
+                        return RadioListTile<String>(
+                          title: Text(
+                            pkg.split('.').last,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 13,
+                            ),
+                          ),
+                          value: pkg,
+                          groupValue: selectedEngine,
+                          onChanged: (val) async {
+                            await tts.setEngine(val!);
+                            setDialogState(() {
+                              selectedEngine = val;
+                              availableVoices = [];
+                              selectedVoiceName = null;
+                            });
+                            _reloadVoices(tts, selectedLanguage)
+                                .then((voices) {
+                              setDialogState(() {
+                                availableVoices = voices;
+                              });
+                            });
+                          },
+                          activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        );
+                      }),
+                    const SizedBox(height: 12),
+
+                    // Language selector
+                    const Text(
+                      "Language",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    DropdownButton<String>(
+                      value: availableLanguages.contains(selectedLanguage)
+                          ? selectedLanguage
+                          : null,
+                      dropdownColor: const Color.fromRGBO(30, 30, 30, 1),
+                      hint: const Text(
+                        "Select language",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      items: availableLanguages.map((lang) {
+                        return DropdownMenuItem(
+                          value: lang.toString(),
+                          child: Text(
+                            lang.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 13,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) async {
+                        if (val == null) return;
+                        await tts.setLanguage(val);
+                        setDialogState(() {
+                          selectedLanguage = val;
+                          selectedVoiceName = null;
+                        });
+                        _reloadVoices(tts, val).then((voices) {
+                          setDialogState(() {
+                            availableVoices = voices;
+                          });
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Voice selector
+                    const Text(
+                      "Voice",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (filteredVoices.isEmpty)
+                      const Text(
+                        "No voices for this language.",
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      )
+                    else
+                      SizedBox(
+                        height: 120,
+                        child: ListView(
+                          children: filteredVoices.map((voice) {
+                            final name = voice['name'] ?? 'unknown';
+                            return RadioListTile<String>(
+                              title: Text(
+                                name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Cera Pro',
+                                  fontSize: 13,
+                                ),
+                              ),
+                              value: name,
+                              groupValue: selectedVoiceName,
+                              onChanged: (val) async {
+                                await tts.setVoice(
+                                    Map<String, String>.from(voice));
+                                setDialogState(() {
+                                  selectedVoiceName = val;
+                                });
+                              },
+                              activeColor:
+                                  const Color.fromRGBO(255, 87, 51, 1),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+
+                    // Speech Rate
+                    const Text(
+                      "Speech Rate",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Slider(
+                      value: speechRate,
+                      min: 0.1,
+                      max: 1.0,
+                      divisions: 18,
+                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      inactiveColor:
+                          const Color.fromRGBO(255, 87, 51, 0.3),
+                      label: speechRate.toStringAsFixed(1),
+                      onChanged: (val) {
+                        tts.setSpeechRate(val);
+                        setDialogState(() {
+                          speechRate = val;
+                        });
+                      },
+                    ),
+
+                    // Pitch
+                    const Text(
+                      "Pitch",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Slider(
+                      value: pitch,
+                      min: 0.5,
+                      max: 2.0,
+                      divisions: 15,
+                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      inactiveColor:
+                          const Color.fromRGBO(255, 87, 51, 0.3),
+                      label: pitch.toStringAsFixed(1),
+                      onChanged: (val) {
+                        tts.setPitch(val);
+                        setDialogState(() {
+                          pitch = val;
+                        });
+                      },
+                    ),
+
+                    // Test button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          tts.speak("Hello. I am ARYA. This is my voice.");
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color.fromRGBO(255, 87, 51, 1),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          "Test Voice",
+                          style: TextStyle(fontFamily: 'Cera Pro'),
+                        ),
+                      ),
+                    ),
+
+                    if (testMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          testMessage!,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontSize: 13,
+                            fontFamily: 'Cera Pro',
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontFamily: 'Cera Pro',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('tts_language', selectedLanguage);
+                    if (selectedEngine != null) {
+                      await prefs.setString(
+                          'tts_engine', selectedEngine!);
+                    }
+                    if (selectedVoiceName != null) {
+                      await prefs.setString(
+                          'tts_voice_name', selectedVoiceName!);
+                    }
+                    await prefs.setDouble('tts_speech_rate', speechRate);
+                    await prefs.setDouble('tts_pitch', pitch);
+                    tts.stop();
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    "Save",
+                    style: TextStyle(fontFamily: 'Cera Pro'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, String>>> _reloadVoices(
+      FlutterTts tts, String language) async {
+    final allVoices = await tts.getVoices();
+    return allVoices
+        .map((v) => Map<String, String>.from(v as Map))
+        .where((v) => v['locale'] == language)
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1034,6 +1459,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
             _buildModelSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            _buildTtsSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

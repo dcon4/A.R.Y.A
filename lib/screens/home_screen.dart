@@ -34,6 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? generatedContent;
   bool isLoading = false;
   bool _micReallyListening = false;
+  final TextEditingController _textInputController = TextEditingController();
+  final FocusNode _textFocusNode = FocusNode();
   final List<Map<String, String>> _messageHistory = [];
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
@@ -115,10 +117,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> initTextToSpeech() async {
     _logger.log('HomeScreen', 'Initializing text to speech');
-    await flutterTts.setLanguage("en-US");
-    await flutterTts.setPitch(1.0);
-    await flutterTts.setSpeechRate(0.5);
+    final prefs = await SharedPreferences.getInstance();
+
+    final engine = prefs.getString('tts_engine');
+    if (engine != null && engine.isNotEmpty) {
+      await flutterTts.setEngine(engine);
+    }
+
+    final language = prefs.getString('tts_language') ?? 'en-US';
+    await flutterTts.setLanguage(language);
+
+    final voiceName = prefs.getString('tts_voice_name');
+    if (voiceName != null && voiceName.isNotEmpty) {
+      final voices = await flutterTts.getVoices();
+      final match = voices.firstWhere(
+        (v) => v['name'] == voiceName && v['locale'] == language,
+        orElse: () => null,
+      );
+      if (match != null) {
+        await flutterTts.setVoice(Map<String, String>.from(match));
+      }
+    }
+
+    await flutterTts.setSpeechRate(prefs.getDouble('tts_speech_rate') ?? 0.5);
+    await flutterTts.setPitch(prefs.getDouble('tts_pitch') ?? 1.0);
     await flutterTts.setVolume(1.0);
+
+    // When TTS finishes speaking a response, resume wake word detection
+    // if it was paused for speech.
+    flutterTts.setCompletionHandler(() {
+      if (_wakeWordPausedForSpeech) {
+        _wakeWordPausedForSpeech = false;
+        WakeWordService.instance.resume();
+      }
+    });
   }
 
   Future<void> systemSpeak(String content) async {
@@ -228,6 +260,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _wakeWordPausedForSpeech = false;
       await WakeWordService.instance.resume();
     }
+  }
+
+  void _sendTextMessage() {
+    final text = _textInputController.text.trim();
+    if (text.isEmpty) return;
+
+    _logger.log('HomeScreen', 'Sending typed text: "${text.length > 60 ? text.substring(0, 60) + "..." : text}"');
+    lastWords = text;
+    _textInputController.clear();
+    sendMessageToOpenRouter();
   }
 
   Future<void> _manualSave() async {
@@ -350,9 +392,76 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _speechTimeout?.cancel();
+    _textInputController.dispose();
+    _textFocusNode.dispose();
     super.dispose();
     speechToText.stop();
     flutterTts.stop();
+  }
+
+  Widget _buildTextInputBar() {
+    return Container(
+      padding: EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        border: Border(
+          top: BorderSide(
+            color: MyAppTheme.borderColor.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _textInputController,
+              focusNode: _textFocusNode,
+              maxLines: null,
+              textInputAction: TextInputAction.newline,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Cera Pro',
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Type a message...',
+                hintStyle: TextStyle(
+                  color: Colors.grey[600],
+                  fontFamily: 'Cera Pro',
+                ),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.08),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color.fromRGBO(255, 87, 51, 1),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_upward,
+                color: Colors.white,
+                size: 22,
+              ),
+              onPressed: _sendTextMessage,
+              tooltip: 'Send',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -500,373 +609,380 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Background Service toggle — quick access on home screen
-            Container(
-              margin: EdgeInsets.only(top: 8, bottom: 4, left: 20, right: 20),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: MyAppTheme.borderColor.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
                 children: [
-                  Text(
-                    "Background Service",
-                    style: TextStyle(
-                      color: MyAppTheme.mainFontColor,
-                      fontSize: 14,
-                      fontFamily: 'Cera Pro',
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Spacer(),
-                  Text(
-                    BackgroundService.isRunning ? "Running" : "Stopped",
-                    style: TextStyle(
-                      color: BackgroundService.isRunning
-                          ? Color.fromRGBO(76, 175, 80, 1)
-                          : Colors.grey,
-                      fontSize: 12,
-                      fontFamily: 'Cera Pro',
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  Switch(
-                    value: BackgroundService.isRunning,
-                    onChanged: (val) async {
-                      await BackgroundService.setEnabled(val);
-                      setState(() {});
-                    },
-                    activeColor: Color.fromRGBO(255, 87, 51, 1),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-            // Avatar with fire animation
-            Stack(
-              children: [
-                Center(
-                  child: Container(
-                    width: 200,
-                    height: 200,
+                  // Background Service toggle — quick access on home screen
+                  Container(
+                    margin: EdgeInsets.only(top: 8, bottom: 4, left: 20, right: 20),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: MyAppTheme.borderColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          "Background Service",
+                          style: TextStyle(
+                            color: MyAppTheme.mainFontColor,
+                            fontSize: 14,
+                            fontFamily: 'Cera Pro',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Spacer(),
+                        Text(
+                          BackgroundService.isRunning ? "Running" : "Stopped",
+                          style: TextStyle(
+                            color: BackgroundService.isRunning
+                                ? Color.fromRGBO(76, 175, 80, 1)
+                                : Colors.grey,
+                            fontSize: 12,
+                            fontFamily: 'Cera Pro',
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Switch(
+                          value: BackgroundService.isRunning,
+                          onChanged: (val) async {
+                            await BackgroundService.setEnabled(val);
+                            setState(() {});
+                          },
+                          activeColor: Color.fromRGBO(255, 87, 51, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  // Avatar with fire animation
+                  Stack(
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: MyAppTheme.mainFontColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Lottie JSON animation behind the avatar
+                              Positioned.fill(
+                                child: Opacity(
+                                  opacity: 0.9,
+                                  child: Lottie.asset(
+                                    'assets/images/Fire.json',
+                                    fit: BoxFit.contain,
+                                    repeat: true,
+                                    animate: true,
+                                  ),
+                                ),
+                              ),
+
+                              // Circular avatar on top
+                              Positioned(
+                                top: 86,
+                                child: CircleAvatar(
+                                  radius: 60,
+                                  backgroundImage: AssetImage(
+                                    'assets/images/arya-final.png',
+                                  ),
+                                  backgroundColor: Colors.transparent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 30),
+
+                  // Welcome message or Speech Recognition Display
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    margin: EdgeInsets.symmetric(horizontal: 30),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: _micReallyListening
+                            ? [
+                                MyAppTheme.mainFontColor.withValues(alpha: 0.4),
+                                MyAppTheme.secondSuggestionBoxColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ]
+                            : [
+                                MyAppTheme.firstSuggestionBoxColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                                MyAppTheme.secondSuggestionBoxColor.withValues(
+                                  alpha: 0.2,
+                                ),
+                              ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: _micReallyListening
+                            ? MyAppTheme.mainFontColor
+                            : MyAppTheme.borderColor,
+                        width: _micReallyListening ? 2.0 : 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
                           color: MyAppTheme.mainFontColor.withValues(
-                            alpha: 0.3,
+                            alpha: _micReallyListening ? 0.3 : 0.1,
                           ),
-                          blurRadius: 30,
-                          spreadRadius: 5,
+                          blurRadius: _micReallyListening ? 20 : 10,
+                          spreadRadius: _micReallyListening ? 4 : 2,
+                          offset: Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: Stack(
-                      alignment: Alignment.center,
+                    child: Column(
                       children: [
-                        // Lottie JSON animation behind the avatar
-                        Positioned.fill(
-                          child: Opacity(
-                            opacity: 0.9,
-                            child: Lottie.asset(
-                              'assets/images/Fire.json',
-                              fit: BoxFit.contain,
-                              repeat: true,
-                              animate: true,
-                            ),
-                          ),
-                        ),
-
-                        // Circular avatar on top
-                        Positioned(
-                          top: 86,
-                          child: CircleAvatar(
-                            radius: 60,
-                            backgroundImage: AssetImage(
-                              'assets/images/arya-final.png',
-                            ),
-                            backgroundColor: Colors.transparent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 30),
-
-            // Welcome message or Speech Recognition Display
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              margin: EdgeInsets.symmetric(horizontal: 30),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _micReallyListening
-                      ? [
-                          MyAppTheme.mainFontColor.withValues(alpha: 0.4),
-                          MyAppTheme.secondSuggestionBoxColor.withValues(
-                            alpha: 0.3,
-                          ),
-                        ]
-                      : [
-                          MyAppTheme.firstSuggestionBoxColor.withValues(
-                            alpha: 0.3,
-                          ),
-                          MyAppTheme.secondSuggestionBoxColor.withValues(
-                            alpha: 0.2,
-                          ),
-                        ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(
-                  color: _micReallyListening
-                      ? MyAppTheme.mainFontColor
-                      : MyAppTheme.borderColor,
-                  width: _micReallyListening ? 2.0 : 1.5,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: MyAppTheme.mainFontColor.withValues(
-                      alpha: _micReallyListening ? 0.3 : 0.1,
-                    ),
-                    blurRadius: _micReallyListening ? 20 : 10,
-                    spreadRadius: _micReallyListening ? 4 : 2,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                      if (_micReallyListening && lastWords.isEmpty)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.mic,
-                              color: MyAppTheme.mainFontColor,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              "Wake the mic...",
-                              style: TextStyle(
-                                color: MyAppTheme.mainFontColor,
-                                fontSize: 14,
-                                fontFamily: 'Cera Pro',
-                                fontWeight: FontWeight.bold,
+                            if (_micReallyListening && lastWords.isEmpty)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.mic,
+                                    color: MyAppTheme.mainFontColor,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Wake the mic...",
+                                    style: TextStyle(
+                                      color: MyAppTheme.mainFontColor,
+                                      fontSize: 14,
+                                      fontFamily: 'Cera Pro',
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      if (_micReallyListening && lastWords.isNotEmpty)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.transcribe,
-                              color: MyAppTheme.mainFontColor,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              "Transcribing...",
-                              style: TextStyle(
-                                color: MyAppTheme.mainFontColor,
-                                fontSize: 14,
-                                fontFamily: 'Cera Pro',
-                                fontWeight: FontWeight.bold,
+                            if (_micReallyListening && lastWords.isNotEmpty)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.transcribe,
+                                    color: MyAppTheme.mainFontColor,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Transcribing...",
+                                    style: TextStyle(
+                                      color: MyAppTheme.mainFontColor,
+                                      fontSize: 14,
+                                      fontFamily: 'Cera Pro',
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      if (_micReallyListening) SizedBox(height: 8),
-                      Text(
-                        lastWords.isEmpty
-                            ? "I am ARYA. Wake the mic to speak."
-                            : lastWords,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: MyAppTheme.mainFontColor,
-                      fontSize: 16,
-                      fontFamily: 'Cera Pro',
-                      height: 1.4,
-                      fontWeight: lastWords.isEmpty
-                          ? FontWeight.normal
-                          : FontWeight.w600,
-                    ),
-                  ),
-                  if (isLoading && !_micReallyListening)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: MyAppTheme.mainFontColor,
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Text(
-                            'Processing...',
-                            style: TextStyle(
-                              fontFamily: 'Cera Pro',
-                              fontWeight: FontWeight.w600,
-                              color: MyAppTheme.mainFontColor,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // AI Response Section
-            if (generatedContent != null)
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                margin: EdgeInsets.symmetric(horizontal: 30).copyWith(top: 20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      MyAppTheme.thirdSuggestionBoxColor.withValues(alpha: 0.3),
-                      MyAppTheme.firstSuggestionBoxColor.withValues(alpha: 0.2),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(
-                    color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
-                    width: 1.5,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: MyAppTheme.mainFontColor.withValues(alpha: 0.15),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          color: MyAppTheme.mainFontColor,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "ARYA Response:",
-                            style: TextStyle(
-                              color: MyAppTheme.mainFontColor,
-                              fontSize: 14,
-                              fontFamily: 'Cera Pro',
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.volume_up,
+                            if (_micReallyListening) SizedBox(height: 8),
+                            Text(
+                              lastWords.isEmpty
+                                  ? "I am ARYA. Wake the mic to speak."
+                                  : lastWords,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
                             color: MyAppTheme.mainFontColor,
-                            size: 24,
+                            fontSize: 16,
+                            fontFamily: 'Cera Pro',
+                            height: 1.4,
+                            fontWeight: lastWords.isEmpty
+                                ? FontWeight.normal
+                                : FontWeight.w600,
                           ),
-                          onPressed: () {
-                            systemSpeak(generatedContent!);
-                          },
-                          tooltip: 'Replay response',
+                        ),
+                        if (isLoading && !_micReallyListening)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: MyAppTheme.mainFontColor,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Processing...',
+                                  style: TextStyle(
+                                    fontFamily: 'Cera Pro',
+                                    fontWeight: FontWeight.w600,
+                                    color: MyAppTheme.mainFontColor,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // AI Response Section
+                  if (generatedContent != null)
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      margin: EdgeInsets.symmetric(horizontal: 30).copyWith(top: 20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            MyAppTheme.thirdSuggestionBoxColor.withValues(alpha: 0.3),
+                            MyAppTheme.firstSuggestionBoxColor.withValues(alpha: 0.2),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(
+                          color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: MyAppTheme.mainFontColor.withValues(alpha: 0.15),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                color: MyAppTheme.mainFontColor,
+                                size: 20,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "ARYA Response:",
+                                  style: TextStyle(
+                                    color: MyAppTheme.mainFontColor,
+                                    fontSize: 14,
+                                    fontFamily: 'Cera Pro',
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.volume_up,
+                                  color: MyAppTheme.mainFontColor,
+                                  size: 24,
+                                ),
+                                onPressed: () {
+                                  systemSpeak(generatedContent!);
+                                },
+                                tooltip: 'Replay response',
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            generatedContent!,
+                            style: TextStyle(
+                              color: MyAppTheme.mainFontColor,
+                              fontSize: 15,
+                              fontFamily: 'Cera Pro',
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  SizedBox(height: 30),
+
+                  // Features header
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 30),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: MyAppTheme.mainFontColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          "Features",
+                          style: TextStyle(
+                            color: MyAppTheme.mainFontColor,
+                            fontSize: 20,
+                            fontFamily: 'Cera Pro',
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
-                    Text(
-                      generatedContent!,
-                      style: TextStyle(
-                        color: MyAppTheme.mainFontColor,
-                        fontSize: 15,
-                        fontFamily: 'Cera Pro',
-                        height: 1.5,
+                  ),
+
+                  SizedBox(height: 20),
+
+                  //features list
+                  Column(
+                    children: [
+                      MyFeatureBox(
+                        color: MyAppTheme.firstSuggestionBoxColor,
+                        headerText: 'ChatGPT Integration',
+                        descriptionText:
+                            'Integrated ChatGPT into ARYA for intelligent conversations.',
+                        icon: Icons.chat_bubble_outline,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-            SizedBox(height: 30),
-
-            // Features header
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 30),
-              child: Row(
-                children: [
-                  Container(
-                    width: 4,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: MyAppTheme.mainFontColor,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                      MyFeatureBox(
+                        color: MyAppTheme.secondSuggestionBoxColor,
+                        headerText: 'Smart Voice Assistant',
+                        descriptionText:
+                            'Interact with ARYA using natural language voice commands.',
+                        icon: Icons.mic_outlined,
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 12),
-                  Text(
-                    "Features",
-                    style: TextStyle(
-                      color: MyAppTheme.mainFontColor,
-                      fontSize: 20,
-                      fontFamily: 'Cera Pro',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+
+                  SizedBox(height: 20),
                 ],
               ),
             ),
-
-            SizedBox(height: 20),
-
-            //features list
-            Column(
-              children: [
-                MyFeatureBox(
-                  color: MyAppTheme.firstSuggestionBoxColor,
-                  headerText: 'ChatGPT Integration',
-                  descriptionText:
-                      'Integrated ChatGPT into ARYA for intelligent conversations.',
-                  icon: Icons.chat_bubble_outline,
-                ),
-                MyFeatureBox(
-                  color: MyAppTheme.secondSuggestionBoxColor,
-                  headerText: 'Smart Voice Assistant',
-                  descriptionText:
-                      'Interact with ARYA using natural language voice commands.',
-                  icon: Icons.mic_outlined,
-                ),
-              ],
-            ),
-
-            SizedBox(height: 20),
-          ],
-        ),
+          ),
+          _buildTextInputBar(),
+        ],
       ),
       floatingActionButton: Container(
         decoration: BoxDecoration(
