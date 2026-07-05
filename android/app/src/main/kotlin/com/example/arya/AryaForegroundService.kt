@@ -1,6 +1,7 @@
 package com.example.arya
 
 import android.app.Notification
+import android.app.Notification.MediaStyle
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -60,10 +61,6 @@ class AryaForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                val notification = buildNotification()
-                startForeground(NOTIFICATION_ID, notification)
-            }
             ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -83,6 +80,11 @@ class AryaForegroundService : Service() {
                 binaryMessenger?.let { messenger ->
                     MethodChannel(messenger, "arya.mic_trigger").invokeMethod("rotateProvider", null)
                 }
+            }
+            // ACTION_START, null intent (START_STICKY restart), or unknown action
+            else -> {
+                val notification = buildNotification()
+                startForeground(NOTIFICATION_ID, notification)
             }
         }
         return START_STICKY
@@ -202,14 +204,17 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val sessionToken = mediaSession?.sessionToken
+
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("ARYA")
             .setContentText("Start Mic, New Conversation, or change settings.")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setCategory(Notification.CATEGORY_SERVICE)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openPendingIntent)
+            .setStyle(MediaStyle().setMediaSession(sessionToken))
             .addAction(
                 R.drawable.ic_launcher_foreground,
                 "Start Mic",

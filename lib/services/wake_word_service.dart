@@ -80,6 +80,26 @@ class WakeWordService {
     _logger.log('WakeWordService', 'Stopped');
   }
 
+  Future<void> pause() async {
+    _logger.log('WakeWordService', 'Pausing (releasing mic for speech)');
+    try {
+      await _channel.invokeMethod('pause');
+    } catch (e) {
+      _logger.error('WakeWordService', 'Failed to pause', e);
+    }
+  }
+
+  Future<void> resume() async {
+    _logger.log('WakeWordService', 'Resuming after speech');
+    try {
+      await _channel.invokeMethod('resume', {
+        'threshold': _threshold,
+      });
+    } catch (e) {
+      _logger.error('WakeWordService', 'Failed to resume', e);
+    }
+  }
+
   void setThreshold(double value) {
     _threshold = value;
     SharedPreferences.getInstance().then((prefs) {

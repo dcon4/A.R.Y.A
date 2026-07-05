@@ -79,6 +79,15 @@ class MainActivity : FlutterActivity() {
                     wakeWordDetector?.stop()
                     result.success(true)
                 }
+                "pause" -> {
+                    wakeWordDetector?.pause()
+                    result.success(true)
+                }
+                "resume" -> {
+                    val threshold = (call.argument<Double>("threshold") ?: 0.5).toFloat()
+                    wakeWordDetector?.resume(threshold)
+                    result.success(true)
+                }
                 "setThreshold" -> {
                     result.success(true)
                 }

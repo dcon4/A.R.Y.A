@@ -72,9 +72,14 @@ class _HomeScreenState extends State<HomeScreen> {
       systemSpeak(next.name);
     });
 
-    WakeWordService.instance.onWakeWordDetected = () {
+    WakeWordService.instance.onWakeWordDetected = () async {
       if (speechToText.isNotListening) {
-        startListening();
+        // Pause the wake word detector so it releases the mic,
+        // then start speech recognition (both can't hold the mic at once).
+        await WakeWordService.instance.pause();
+        await startListening();
+        // After the speech-to-text session ends, resume wake word detection.
+        await WakeWordService.instance.resume();
       }
     };
 

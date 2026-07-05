@@ -265,6 +265,96 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
         logToDart("INFO", "WakeWordDetector stopped")
     }
 
+    fun pause() {
+        logToDart("INFO", "Pausing — releasing mic for speech recognition")
+        isRunning = false
+        captureThread?.join(500)
+        try {
+            audioRecord?.stop()
+        } catch (_: Exception) {}
+        audioRecord?.release()
+        audioRecord = null
+    }
+
+    fun resume(thresholdValue: Float) {
+        logToDart("INFO", "Resuming after speech recognition (threshold=$thresholdValue)")
+        this.threshold = thresholdValue
+        startAudioCapture()
+    }
+
+    private fun startAudioCapture() {
+        if (!::ortEnv.isInitialized) {
+            logToDart("ERROR", "Cannot resume — not initialized")
+            return
+        }
+        if (ContextCompat.checkSelfPermission(
+                context ?: return,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED) {
+            logToDart("ERROR", "Cannot resume — RECORD_AUDIO not granted")
+            return
+        }
+
+        isRunning = true
+        ringIndex = 0
+        framesCollected = 0
+        totalReads = 0
+        totalBytesRead = 0L
+
+        val bufferSize = AudioRecord.getMinBufferSize(
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        ).coerceAtLeast(N_FFT * 2)
+
+        audioRecord = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize
+        )
+
+        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+            logToDart("ERROR", "AudioRecord failed to initialize on resume")
+            isRunning = false
+            audioRecord?.release()
+            audioRecord = null
+            return
+        }
+
+        try {
+            audioRecord?.startRecording()
+        } catch (e: Exception) {
+            logToDart("ERROR", "Failed to start recording on resume: ${e.message}")
+            isRunning = false
+            audioRecord?.release()
+            audioRecord = null
+            return
+        }
+
+        captureThread = Thread {
+            try {
+                val buffer = ShortArray(HOP_LENGTH * 4)
+                while (isRunning) {
+                    if (audioRecord == null) break
+                    val read = audioRecord!!.read(buffer, 0, buffer.size)
+                    if (read > 0) {
+                        totalReads++
+                        totalBytesRead += read
+                        val frame = buffer.copyOf(minOf(read, HOP_LENGTH))
+                        processFrame(frame)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Capture thread crashed after resume", e)
+                logToDart("ERROR", "Capture thread crashed after resume: ${e.message}")
+            }
+        }
+        captureThread?.start()
+        logToDart("INFO", "WakeWordDetector resumed")
+    }
+
     private fun processFrame(samples: ShortArray) {
         val frame = zeroPad(samples, N_FFT)
         val windowed = FloatArray(N_FFT)
