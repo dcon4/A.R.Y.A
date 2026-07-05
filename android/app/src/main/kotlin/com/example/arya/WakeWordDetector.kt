@@ -324,7 +324,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                     if (fb.hasRemaining()) score = fb.get()
                 } catch (e1: Exception) {
                     try {
-                        val obj = outputTensor.get()
+                        val obj = outputTensor.getValue()
                         when (obj) {
                             is Array<*> -> {
                                 val row = obj[0]
@@ -353,7 +353,7 @@ class WakeWordDetector(private val flutterEngine: FlutterEngine?, private val co
                     score = rawOutput
                 } else {
                     val rawGet = outputTensor?.let {
-                        if (it is OnnxTensor) it.get() else it
+                        if (it is OnnxTensor) it.getValue() else it
                     }
                     if (rawGet is Array<*>) {
                         val batch = rawGet[0]
