@@ -74,11 +74,17 @@ class MainActivity : FlutterActivity() {
                                 "label" to it.label
                             ) }
                             // Fallback: if engines list is empty, include at least the default engine
-                            val resultList = if (engineList.isEmpty()) {
-                                val def = t.defaultEngine
-                                if (def != null) listOf(mapOf("name" to def, "label" to def.split('.').lastOrNull() ?: def))
-                                else engineList
-                            } else engineList
+val resultList: List<Map<String, String>> = if (engineList.isNotEmpty()) {
+    engineList
+} else {
+    val def = t.defaultEngine
+    if (def != null) {
+        val label = def.split('.').lastOrNull() ?: def
+        listOf(mapOf("name" to def, "label" to label))
+    } else {
+        emptyList()
+    }
+}
                             t.stop()
                             t.shutdown()
                             result.success(resultList)
