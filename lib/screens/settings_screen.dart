@@ -1041,12 +1041,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     double speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
     double pitch = prefs.getDouble('tts_pitch') ?? 1.0;
+    String selectedEngine = prefs.getString('tts_engine') ?? '';
+    String selectedLanguage = prefs.getString('tts_language') ?? '';
+    String selectedVoiceName = prefs.getString('tts_voice_name') ?? '';
+    const channel = MethodChannel('arya.tts');
+
+    // Native-loaded state
+    List<String> engines = [];
+    List<Map<String, String>> voices = [];
+    bool enginesLoading = true;
+    bool voicesLoading = true;
+
+    // Load engines from native side
+    try {
+      final result = await channel.invokeMethod('getEngines');
+      if (result is List) {
+        engines = result.cast<String>();
+      }
+    } catch (_) {}
+    enginesLoading = false;
+
+    // Load voices from native side
+    Future<void> loadVoices(String forEngine) async {
+      voicesLoading = true;
+      voices = [];
+      try {
+        final result = await channel.invokeMethod('getVoices', {'engine': forEngine});
+        if (result is List) {
+          voices = (result as List).map((v) {
+            if (v is Map) {
+              return Map<String, String>.from(v as Map);
+            }
+            return <String, String>{};
+          }).toList();
+        }
+      } catch (_) {}
+      voicesLoading = false;
+    }
+
+    // Initial voice load for saved engine
+    if (selectedEngine.isNotEmpty) {
+      await loadVoices(selectedEngine);
+    } else {
+      voicesLoading = false;
+    }
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final filteredVoices = voices
+                .where((v) =>
+                    v['locale'] == selectedLanguage ||
+                    selectedLanguage.isEmpty)
+                .toList();
+
             return AlertDialog(
               backgroundColor: const Color.fromRGBO(30, 30, 30, 1),
               title: const Text(
@@ -1062,6 +1112,211 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Engine selector
+                    const Text(
+                      "Engine",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (enginesLoading)
+                      const Text(
+                        "Loading...",
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      )
+                    else if (engines.isEmpty)
+                      const Text(
+                        "No engines found.",
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      )
+                    else
+                      DropdownButton<String>(
+                        value: engines.contains(selectedEngine)
+                            ? selectedEngine
+                            : null,
+                        dropdownColor: const Color.fromRGBO(30, 30, 30, 1),
+                        hint: const Text(
+                          "Select engine",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                        items: engines.map((e) {
+                          return DropdownMenuItem(
+                            value: e,
+                            child: Text(
+                              e.split('.').last,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Cera Pro',
+                                fontSize: 13,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) async {
+                          if (val == null) return;
+                          setDialogState(() {
+                            selectedEngine = val;
+                            selectedLanguage = '';
+                            selectedVoiceName = '';
+                          });
+                          await loadVoices(val);
+                          setDialogState(() {});
+                          // Auto-select first locale from voices
+                          if (voices.isNotEmpty) {
+                            final locale = voices.first['locale'] ?? '';
+                            setDialogState(() {
+                              selectedLanguage = locale;
+                            });
+                            // Auto-select first voice for that locale
+                            final firstVoice = voices.firstWhere(
+                              (v) => v['locale'] == locale,
+                              orElse: () => <String, String>{},
+                            );
+                            if (firstVoice.isNotEmpty) {
+                              setDialogState(() {
+                                selectedVoiceName =
+                                    firstVoice['name'] ?? '';
+                              });
+                            }
+                          }
+                        },
+                      ),
+                    const SizedBox(height: 12),
+
+                    // Language selector
+                    if (selectedEngine.isNotEmpty) ...[
+                      const Text(
+                        "Language",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Cera Pro',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (voicesLoading)
+                        const Text(
+                          "Loading...",
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        )
+                      else if (voices.isEmpty)
+                        const Text(
+                          "No voices available.",
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        )
+                      else
+                        DropdownButton<String>(
+                          value: voices
+                                  .map((v) => v['locale'] ?? '')
+                                  .toSet()
+                                  .contains(selectedLanguage)
+                              ? selectedLanguage
+                              : null,
+                          dropdownColor:
+                              const Color.fromRGBO(30, 30, 30, 1),
+                          hint: const Text(
+                            "Select language",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          items: voices
+                              .map((v) => v['locale'] ?? '')
+                              .toSet()
+                              .map((locale) {
+                            return DropdownMenuItem(
+                              value: locale,
+                              child: Text(
+                                locale,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Cera Pro',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val == null) return;
+                            setDialogState(() {
+                              selectedLanguage = val;
+                              selectedVoiceName = '';
+                            });
+                            // Auto-select first voice for this locale
+                            final match = voices.firstWhere(
+                              (v) => v['locale'] == val,
+                              orElse: () => <String, String>{},
+                            );
+                            if (match.isNotEmpty) {
+                              setDialogState(() {
+                                selectedVoiceName = match['name'] ?? '';
+                              });
+                            }
+                          },
+                        ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Voice selector
+                    if (selectedLanguage.isNotEmpty) ...[
+                      const Text(
+                        "Voice",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Cera Pro',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (voicesLoading)
+                        const Text(
+                          "Loading...",
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        )
+                      else if (filteredVoices.isEmpty)
+                        const Text(
+                          "No voices for this language.",
+                          style: TextStyle(
+                              color: Colors.grey, fontSize: 13),
+                        )
+                      else
+                        SizedBox(
+                          height: 100,
+                          child: ListView(
+                            children: filteredVoices.map((voice) {
+                              final name = voice['name'] ?? 'unknown';
+                              return RadioListTile<String>(
+                                title: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Cera Pro',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                value: name,
+                                groupValue: selectedVoiceName,
+                                onChanged: (val) {
+                                  setDialogState(() {
+                                    selectedVoiceName = val;
+                                  });
+                                },
+                                activeColor: const Color
+                                    .fromRGBO(255, 87, 51, 1),
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Speech Rate
                     const Text(
                       "Speech Rate",
                       style: TextStyle(
@@ -1087,6 +1342,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
+
+                    // Pitch
                     const Text(
                       "Pitch",
                       style: TextStyle(
@@ -1112,11 +1369,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // Test button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
                           final testTts = FlutterTts();
+                          if (selectedEngine.isNotEmpty) {
+                            testTts.setEngine(selectedEngine);
+                          }
+                          if (selectedLanguage.isNotEmpty) {
+                            testTts.setLanguage(selectedLanguage);
+                          }
+                          if (selectedVoiceName.isNotEmpty) {
+                            final match = voices.firstWhere(
+                              (v) => v['name'] == selectedVoiceName,
+                              orElse: () => <String, String>{},
+                            );
+                            if (match.isNotEmpty) {
+                              testTts.setVoice(
+                                  Map<String, String>.from(match));
+                            }
+                          }
                           testTts.setSpeechRate(speechRate);
                           testTts.setPitch(pitch);
                           testTts.speak(
@@ -1154,7 +1429,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool('tts_configured', true);
-                    await prefs.setDouble('tts_speech_rate', speechRate);
+                    await prefs.setString('tts_engine', selectedEngine);
+                    await prefs.setString(
+                        'tts_language', selectedLanguage);
+                    await prefs.setString(
+                        'tts_voice_name', selectedVoiceName);
+                    await prefs.setDouble(
+                        'tts_speech_rate', speechRate);
                     await prefs.setDouble('tts_pitch', pitch);
                     if (dialogContext.mounted) {
                       Navigator.pop(dialogContext);

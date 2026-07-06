@@ -2,12 +2,14 @@ package com.example.arya
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "arya.mic"
@@ -63,18 +65,47 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TTS_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
-                "openSystemTtsSettings" -> {
+                "getEngines" -> {
                     try {
-                        startActivity(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        result.success(true)
-                    } catch (_: Exception) {
-                        try {
-                            startActivity(Intent(Settings.ACTION_LOCALE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            result.success(true)
-                        } catch (_: Exception) {
-                            startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            result.success(true)
+                        val intent = Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE)
+                        val resolveInfos = packageManager.queryIntentServices(intent, 0)
+                        val engines = resolveInfos.map { it.serviceInfo.packageName }
+                        result.success(engines)
+                    } catch (e: Exception) {
+                        result.error("TTS_ERROR", e.message, null)
+                    }
+                }
+                "getVoices" -> {
+                    try {
+                        val engine = call.argument<String>("engine")
+                        val latch = CountDownLatch(1)
+                        var ttsReady = false
+                        val tts = if (engine?.isNotEmpty() == true) {
+                            TextToSpeech(this, { status ->
+                                ttsReady = status == TextToSpeech.SUCCESS
+                                latch.countDown()
+                            }, engine)
+                        } else {
+                            TextToSpeech(this, { status ->
+                                ttsReady = status == TextToSpeech.SUCCESS
+                                latch.countDown()
+                            })
                         }
+                        latch.await(3, TimeUnit.SECONDS)
+                        val voices = mutableListOf<Map<String, String>>()
+                        if (ttsReady) {
+                            for (voice in tts.voices ?: emptySet()) {
+                                voices.add(mapOf(
+                                    "name" to (voice.name ?: ""),
+                                    "locale" to (voice.locale?.toLanguageTag() ?: "")
+                                ))
+                            }
+                        }
+                        tts.stop()
+                        tts.shutdown()
+                        result.success(voices)
+                    } catch (e: Exception) {
+                        result.error("TTS_ERROR", e.message, null)
                     }
                 }
                 else -> result.notImplemented()
