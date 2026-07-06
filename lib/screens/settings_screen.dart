@@ -1047,19 +1047,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     const channel = MethodChannel('arya.tts');
 
     // Native-loaded state
-    List<String> engines = [];
+    List<Map<String, String>> engines = [];
     List<Map<String, String>> voices = [];
     bool enginesLoading = true;
     bool voicesLoading = true;
 
-    // Load engines from native side
+    // Load engines from native side (returns maps with name+label)
     try {
       final result = await channel.invokeMethod('getEngines');
       if (result is List) {
-        engines = result.cast<String>();
+        engines = (result as List).map((e) {
+          if (e is Map) return Map<String, String>.from(e as Map);
+          return <String, String>{};
+        }).toList();
       }
     } catch (_) {}
     enginesLoading = false;
+
+    // Pre-select default engine if none saved
+    if (selectedEngine.isEmpty) {
+      try {
+        final defaultEngine = await channel.invokeMethod('getDefaultEngine');
+        if (defaultEngine is String && defaultEngine.isNotEmpty) {
+          selectedEngine = defaultEngine;
+        }
+      } catch (_) {}
+    }
 
     // Load voices from native side
     Future<void> loadVoices(String forEngine) async {
@@ -1079,7 +1092,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       voicesLoading = false;
     }
 
-    // Initial voice load for saved engine
+    // Initial voice load for saved or default engine
     if (selectedEngine.isNotEmpty) {
       await loadVoices(selectedEngine);
     } else {
@@ -1135,7 +1148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )
                     else
                       DropdownButton<String>(
-                        value: engines.contains(selectedEngine)
+                        value: engines.any((e) => e['name'] == selectedEngine)
                             ? selectedEngine
                             : null,
                         dropdownColor: const Color.fromRGBO(30, 30, 30, 1),
@@ -1145,9 +1158,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         items: engines.map((e) {
                           return DropdownMenuItem(
-                            value: e,
+                            value: e['name'] ?? '',
                             child: Text(
-                              e.split('.').last,
+                              e['label'] ?? e['name'] ?? '',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontFamily: 'Cera Pro',

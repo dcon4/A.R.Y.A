@@ -20,6 +20,8 @@ class MainActivity : FlutterActivity() {
     private var wakeWordDetector: WakeWordDetector? = null
     private var pendingMicIntent = false
     private var pendingNewConvIntent = false
+    private var queryTts: TextToSpeech? = null
+    private var queryTtsReady = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -67,10 +69,26 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "getEngines" -> {
                     try {
-                        val intent = Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE)
-                        val resolveInfos = packageManager.queryIntentServices(intent, 0)
-                        val engines = resolveInfos.map { it.serviceInfo.packageName }
-                        result.success(engines)
+                        initQueryTts()
+                        if (!queryTtsReady) {
+                            result.success(emptyList<Map<String, String>>())
+                            return@setMethodCallHandler
+                        }
+                        val engines = queryTts!!.engines?.sortedBy { it.label } ?: emptyList()
+                        val engineList = engines.map { mapOf(
+                            "name" to it.name,
+                            "label" to it.label
+                        ) }
+                        result.success(engineList)
+                    } catch (e: Exception) {
+                        result.error("TTS_ERROR", e.message, null)
+                    }
+                }
+                "getDefaultEngine" -> {
+                    try {
+                        initQueryTts()
+                        val engineName = queryTts?.defaultEngine
+                        result.success(engineName)
                     } catch (e: Exception) {
                         result.error("TTS_ERROR", e.message, null)
                     }
@@ -191,9 +209,23 @@ class MainActivity : FlutterActivity() {
     private fun hasExtra(intent: Intent?, key: String): Boolean =
         intent?.getBooleanExtra(key, false) == true
 
+    private fun initQueryTts() {
+        if (queryTtsReady) return
+        val latch = CountDownLatch(1)
+        queryTts = TextToSpeech(this, { status ->
+            if (status == TextToSpeech.SUCCESS) queryTtsReady = true
+            latch.countDown()
+        })
+        latch.await(3, TimeUnit.SECONDS)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         wakeWordDetector?.destroy()
+        queryTts?.stop()
+        queryTts?.shutdown()
+        queryTts = null
+        queryTtsReady = false
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
