@@ -72,7 +72,9 @@ class AryaForegroundService : Service() {
                 stopSelf()
             }
             ACTION_START_MIC -> {
-                triggerMic()
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("startListening", null)
+                } ?: triggerMic()
             }
             "com.example.arya.NEW_CONVERSATION" -> {
                 triggerNewConversation()
@@ -248,8 +250,8 @@ class AryaForegroundService : Service() {
             )
             .addAction(
                 R.drawable.ic_launcher_foreground,
-                "Brave Search",
-                toggleBravePendingIntent
+                "Announce Mode",
+                rotateAnnouncePendingIntent
             )
             .addAction(
                 R.drawable.ic_launcher_foreground,
@@ -258,8 +260,8 @@ class AryaForegroundService : Service() {
             )
             .addAction(
                 R.drawable.ic_launcher_foreground,
-                "Announce Mode",
-                rotateAnnouncePendingIntent
+                "Brave Search",
+                toggleBravePendingIntent
             )
             .build()
     }

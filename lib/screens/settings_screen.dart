@@ -28,6 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
+  int _announceMode = 0;
   String _selectedModelId = '';
   bool _useCustomModel = false;
   List<providers.ApiModel> _currentModels = [];
@@ -155,6 +156,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) {
+        setState(() {
+          _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
+        });
+      }
+    });
   }
 
   @override
@@ -1587,59 +1600,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            StatefulBuilder(
-              builder: (context, setInnerState) {
-                final prefsFuture = SharedPreferences.getInstance();
-                return FutureBuilder<SharedPreferences>(
-                  future: prefsFuture,
-                  builder: (context, snapshot) {
-                    final prefs = snapshot.data;
-                    final mode = prefs?.getInt('mic_announcement_mode') ?? 0;
-                    return Column(
-                      children: [
-                        _announceRadio(
-                          prefs: prefs,
-                          value: 0,
-                          title: "Silent",
-                          subtitle: "No announcement",
-                          groupValue: mode,
-                          onChanged: (v) async {
-                            if (v != null) {
-                              await prefs?.setInt('mic_announcement_mode', v);
-                              setInnerState(() {});
-                            }
-                          },
-                        ),
-                        _announceRadio(
-                          prefs: prefs,
-                          value: 1,
-                          title: "Say 'Listening'",
-                          subtitle: "Short verbal cue",
-                          groupValue: mode,
-                          onChanged: (v) async {
-                            if (v != null) {
-                              await prefs?.setInt('mic_announcement_mode', v);
-                              setInnerState(() {});
-                            }
-                          },
-                        ),
-                        _announceRadio(
-                          prefs: prefs,
-                          value: 2,
-                          title: "Provider + Model",
-                          subtitle: "e.g. 'OpenRouter, GPT Mini' plus Brave status",
-                          groupValue: mode,
-                          onChanged: (v) async {
-                            if (v != null) {
-                              await prefs?.setInt('mic_announcement_mode', v);
-                              setInnerState(() {});
-                            }
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
+            _announceRadio(
+              value: 0,
+              title: "Silent",
+              subtitle: "No announcement",
+              groupValue: _announceMode,
+              onChanged: (v) async {
+                if (v == null) return;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('mic_announcement_mode', v);
+                if (mounted) setState(() => _announceMode = v);
+              },
+            ),
+            _announceRadio(
+              value: 1,
+              title: "Say 'Listening'",
+              subtitle: "Short verbal cue",
+              groupValue: _announceMode,
+              onChanged: (v) async {
+                if (v == null) return;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('mic_announcement_mode', v);
+                if (mounted) setState(() => _announceMode = v);
+              },
+            ),
+            _announceRadio(
+              value: 2,
+              title: "Provider + Model",
+              subtitle: "e.g. 'OpenRouter, GPT Mini' plus Brave status",
+              groupValue: _announceMode,
+              onChanged: (v) async {
+                if (v == null) return;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('mic_announcement_mode', v);
+                if (mounted) setState(() => _announceMode = v);
               },
             ),
             const SizedBox(height: 32),
@@ -1792,7 +1786,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _announceRadio({
-    required SharedPreferences? prefs,
     required int value,
     required String title,
     required String subtitle,
