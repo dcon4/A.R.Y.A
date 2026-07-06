@@ -2,6 +2,8 @@ package com.example.arya
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
@@ -62,10 +64,18 @@ class MainActivity : FlutterActivity() {
         }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TTS_CHANNEL).setMethodCallHandler { call, result ->
+            val handler = Handler(Looper.getMainLooper())
             when (call.method) {
                 "getEngines" -> {
+                    var timedOut = false
+                    val timeoutRunnable = Runnable {
+                        if (!timedOut) { timedOut = true; result.success(emptyList<Map<String, String>>()) }
+                    }
+                    handler.postDelayed(timeoutRunnable, 5000)
                     var tempTts: TextToSpeech? = null
                     tempTts = TextToSpeech(this, { status ->
+                        if (timedOut) return@TextToSpeech
+                        timedOut = true; handler.removeCallbacks(timeoutRunnable)
                         val t = tempTts ?: return@TextToSpeech
                         if (status == TextToSpeech.SUCCESS) {
                             val engines = (t.engines ?: emptyList()).sortedBy { it.label }
@@ -73,20 +83,18 @@ class MainActivity : FlutterActivity() {
                                 "name" to it.name,
                                 "label" to it.label
                             ) }
-                            // Fallback: if engines list is empty, include at least the default engine
-val resultList: List<Map<String, String>> = if (engineList.isNotEmpty()) {
-    engineList
-} else {
-    val def = t.defaultEngine
-    if (def != null) {
-        val label = def.split('.').lastOrNull() ?: def
-        listOf(mapOf("name" to def, "label" to label))
-    } else {
-        emptyList()
-    }
-}
-                            t.stop()
-                            t.shutdown()
+                            val resultList: List<Map<String, String>> = if (engineList.isNotEmpty()) {
+                                engineList
+                            } else {
+                                val def = t.defaultEngine
+                                if (def != null) {
+                                    val label = def.split('.').lastOrNull() ?: def
+                                    listOf(mapOf("name" to def, "label" to label))
+                                } else {
+                                    emptyList()
+                                }
+                            }
+                            t.stop(); t.shutdown()
                             result.success(resultList)
                         } else {
                             t.shutdown()
@@ -95,19 +103,32 @@ val resultList: List<Map<String, String>> = if (engineList.isNotEmpty()) {
                     })
                 }
                 "getDefaultEngine" -> {
+                    var timedOut = false
+                    val timeoutRunnable = Runnable {
+                        if (!timedOut) { timedOut = true; result.success(null) }
+                    }
+                    handler.postDelayed(timeoutRunnable, 5000)
                     var tempTts: TextToSpeech? = null
                     tempTts = TextToSpeech(this, { status ->
+                        if (timedOut) return@TextToSpeech
+                        timedOut = true; handler.removeCallbacks(timeoutRunnable)
                         val t = tempTts ?: return@TextToSpeech
                         val engineName = if (status == TextToSpeech.SUCCESS) t.defaultEngine else null
-                        t.stop()
-                        t.shutdown()
+                        t.stop(); t.shutdown()
                         result.success(engineName)
                     })
                 }
                 "getVoices" -> {
                     val engine = call.argument<String>("engine")
+                    var timedOut = false
+                    val timeoutRunnable = Runnable {
+                        if (!timedOut) { timedOut = true; result.success(emptyList<Map<String, String>>()) }
+                    }
+                    handler.postDelayed(timeoutRunnable, 5000)
                     var tempTts: TextToSpeech? = null
                     val listener = TextToSpeech.OnInitListener { status ->
+                        if (timedOut) return@OnInitListener
+                        timedOut = true; handler.removeCallbacks(timeoutRunnable)
                         val t = tempTts ?: return@OnInitListener
                         val voices = if (status == TextToSpeech.SUCCESS) {
                             (t.voices ?: emptySet()).map { voice ->
@@ -117,8 +138,7 @@ val resultList: List<Map<String, String>> = if (engineList.isNotEmpty()) {
                                 )
                             }
                         } else emptyList<Map<String, String>>()
-                        t.stop()
-                        t.shutdown()
+                        t.stop(); t.shutdown()
                         result.success(voices)
                     }
                     tempTts = if (engine?.isNotEmpty() == true) {
