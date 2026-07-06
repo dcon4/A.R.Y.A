@@ -669,18 +669,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  SizedBox(height: 12),
-                  // Avatar — smaller and without the fire animation
+                  SizedBox(height: 8),
+                  // Small Android-style icon
                   Center(
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundImage: AssetImage(
-                        'assets/images/arya-final.png',
-                      ),
-                      backgroundColor: Colors.transparent,
+                    child: Icon(
+                      Icons.android,
+                      size: 48,
+                      color: const Color.fromRGBO(255, 87, 51, 1),
                     ),
                   ),
-                  SizedBox(height: 20),
+                  SizedBox(height: 12),
 
                   // Welcome message or Speech Recognition Display
                   Container(
