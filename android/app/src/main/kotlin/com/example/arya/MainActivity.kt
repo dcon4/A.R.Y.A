@@ -82,8 +82,9 @@ class MainActivity : FlutterActivity() {
                             } else {
                                 val def = t.defaultEngine
                                 if (def != null) {
-                                    listOf(mapOf("name" to def, "label" to def.split('.').lastOrNull() ?: def))
-                                } else emptyList()
+                                    val label: String = def.split('.').lastOrNull() ?: def
+                                    listOf(mapOf("name" to def, "label" to label))
+                                } else emptyList<Map<String, String>>()
                             }
                             result.success(r)
                         } else {
