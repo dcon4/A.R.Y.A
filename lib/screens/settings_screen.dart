@@ -69,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _customModelController.text = isCustomModel ? savedModel : '';
       _customBaseUrlController.text = savedCustomBaseUrl;
       _currentModels = provider.models;
+      _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
     });
   }
 
@@ -156,18 +157,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    SharedPreferences.getInstance().then((prefs) {
-      if (mounted) {
-        setState(() {
-          _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
-        });
-      }
-    });
   }
 
   @override
