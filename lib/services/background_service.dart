@@ -10,6 +10,7 @@ class BackgroundService {
   static void Function()? _onNewConversation;
   static void Function()? _onToggleBraveSearch;
   static void Function()? _onRotateProvider;
+  static void Function()? _onRotateAnnounceMode;
 
   static bool get isRunning => _isRunning;
 
@@ -29,6 +30,8 @@ class BackgroundService {
         _onToggleBraveSearch?.call();
       } else if (call.method == 'rotateProvider') {
         _onRotateProvider?.call();
+      } else if (call.method == 'rotateAnnounceMode') {
+        _onRotateAnnounceMode?.call();
       }
     });
   }
@@ -47,6 +50,10 @@ class BackgroundService {
 
   static void setOnRotateProviderCallback(void Function() callback) {
     _onRotateProvider = callback;
+  }
+
+  static void setOnRotateAnnounceModeCallback(void Function() callback) {
+    _onRotateAnnounceMode = callback;
   }
 
   static Future<void> start() async {

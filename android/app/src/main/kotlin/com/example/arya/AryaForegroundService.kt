@@ -11,6 +11,7 @@ import android.content.Intent
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import android.view.KeyEvent
 import io.flutter.plugin.common.BinaryMessenger
@@ -25,6 +26,7 @@ class AryaForegroundService : Service() {
         const val ACTION_START_MIC = "com.example.arya.START_MIC"
         const val ACTION_TOGGLE_BRAVE_SEARCH = "com.example.arya.TOGGLE_BRAVE_SEARCH"
         const val ACTION_ROTATE_PROVIDER = "com.example.arya.ROTATE_PROVIDER"
+        const val ACTION_ROTATE_ANNOUNCE_MODE = "com.example.arya.ROTATE_ANNOUNCE_MODE"
         var binaryMessenger: BinaryMessenger? = null
 
         fun start(context: Context) {
@@ -50,6 +52,7 @@ class AryaForegroundService : Service() {
     }
 
     private var mediaSession: MediaSession? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -57,6 +60,9 @@ class AryaForegroundService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "arya:wake_lock")
+        wakeLock?.acquire()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -79,6 +85,11 @@ class AryaForegroundService : Service() {
             ACTION_ROTATE_PROVIDER -> {
                 binaryMessenger?.let { messenger ->
                     MethodChannel(messenger, "arya.mic_trigger").invokeMethod("rotateProvider", null)
+                }
+            }
+            ACTION_ROTATE_ANNOUNCE_MODE -> {
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("rotateAnnounceMode", null)
                 }
             }
             // ACTION_START, null intent (START_STICKY restart), or unknown action
@@ -194,6 +205,16 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val rotateAnnounceIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_ROTATE_ANNOUNCE_MODE
+        }
+        val rotateAnnouncePendingIntent = PendingIntent.getService(
+            this,
+            6,
+            rotateAnnounceIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val openIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -235,6 +256,11 @@ class AryaForegroundService : Service() {
                 "Rotate Provider",
                 rotateProviderPendingIntent
             )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Announce Mode",
+                rotateAnnouncePendingIntent
+            )
             .build()
     }
 
@@ -243,5 +269,7 @@ class AryaForegroundService : Service() {
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null
+        wakeLock?.release()
+        wakeLock = null
     }
 }

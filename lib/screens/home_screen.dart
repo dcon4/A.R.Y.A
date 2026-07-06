@@ -77,6 +77,15 @@ class _HomeScreenState extends State<HomeScreen> {
       systemSpeak(next.name);
     });
 
+    BackgroundService.setOnRotateAnnounceModeCallback(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt('mic_announcement_mode') ?? 0;
+      final next = (current + 1) % 3;
+      await prefs.setInt('mic_announcement_mode', next);
+      final labels = ["Silent", "Listening", "Provider + Model"];
+      systemSpeak("Announce ${labels[next]}");
+    });
+
     WakeWordService.instance.onWakeWordDetected = () async {
       if (speechToText.isNotListening) {
         await WakeWordService.instance.pause();
@@ -171,12 +180,36 @@ class _HomeScreenState extends State<HomeScreen> {
     await flutterTts.speak(content);
   }
 
+  void _speakProviderAnnouncement(SharedPreferences prefs) {
+    final currentId = prefs.getString('api_provider') ?? 'openrouter';
+    final provider = apiProviders.firstWhere(
+      (p) => p.id == currentId,
+      orElse: () => apiProviders.first,
+    );
+    final model = prefs.getString('api_model') ?? provider.defaultModel;
+    var text = "${provider.name}, $model";
+    final braveOn = prefs.getBool('brave_search_enabled') ?? false;
+    if (braveOn) {
+      text += ", Brave Search On";
+    }
+    flutterTts.speak(text);
+  }
+
   Future<void> startListening() async {
     _logger.log('HomeScreen', 'Starting voice listening');
     lastWords = '';
     setState(() {
       _micReallyListening = true;
     });
+
+    final prefs = await SharedPreferences.getInstance();
+    final announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
+    if (announceMode == 1) {
+      flutterTts.speak("Listening");
+    } else if (announceMode == 2) {
+      _speakProviderAnnouncement(prefs);
+    }
+
     await speechToText.listen(
       onResult: onSpeechResult,
       listenFor: Duration(seconds: 30),
@@ -378,7 +411,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _newConversation() {
+  Future<void> _newConversation() async {
+    try {
+      await conversationService.autoSave();
+    } catch (_) {
+      // Silently handle auto-save errors
+    }
     setState(() {
       _messageHistory.clear();
       generatedContent = null;

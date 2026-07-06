@@ -1567,6 +1567,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
+            const Text(
+              "Mic Announcement",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "What ARYA says when the microphone starts listening.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            StatefulBuilder(
+              builder: (context, setInnerState) {
+                final prefsFuture = SharedPreferences.getInstance();
+                return FutureBuilder<SharedPreferences>(
+                  future: prefsFuture,
+                  builder: (context, snapshot) {
+                    final prefs = snapshot.data;
+                    final mode = prefs?.getInt('mic_announcement_mode') ?? 0;
+                    return Column(
+                      children: [
+                        _announceRadio(
+                          prefs: prefs,
+                          value: 0,
+                          title: "Silent",
+                          subtitle: "No announcement",
+                          groupValue: mode,
+                          onChanged: (v) async {
+                            await prefs?.setInt('mic_announcement_mode', v);
+                            setInnerState(() {});
+                          },
+                        ),
+                        _announceRadio(
+                          prefs: prefs,
+                          value: 1,
+                          title: "Say 'Listening'",
+                          subtitle: "Short verbal cue",
+                          groupValue: mode,
+                          onChanged: (v) async {
+                            await prefs?.setInt('mic_announcement_mode', v);
+                            setInnerState(() {});
+                          },
+                        ),
+                        _announceRadio(
+                          prefs: prefs,
+                          value: 2,
+                          title: "Provider + Model",
+                          subtitle: "e.g. 'OpenRouter, GPT Mini' plus Brave status",
+                          groupValue: mode,
+                          onChanged: (v) async {
+                            await prefs?.setInt('mic_announcement_mode', v);
+                            setInnerState(() {});
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             _buildWakeWordSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
@@ -1711,5 +1783,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
     }
+  }
+
+  Widget _announceRadio({
+    required SharedPreferences? prefs,
+    required int value,
+    required String title,
+    required String subtitle,
+    required int groupValue,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          children: [
+            Radio<int>(
+              value: value,
+              groupValue: groupValue,
+              onChanged: onChanged,
+              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontFamily: 'Cera Pro',
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
