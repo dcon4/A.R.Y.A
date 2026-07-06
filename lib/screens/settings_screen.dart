@@ -1604,8 +1604,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: "No announcement",
                           groupValue: mode,
                           onChanged: (v) async {
-                            await prefs?.setInt('mic_announcement_mode', v);
-                            setInnerState(() {});
+                            if (v != null) {
+                              await prefs?.setInt('mic_announcement_mode', v);
+                              setInnerState(() {});
+                            }
                           },
                         ),
                         _announceRadio(
@@ -1615,8 +1617,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: "Short verbal cue",
                           groupValue: mode,
                           onChanged: (v) async {
-                            await prefs?.setInt('mic_announcement_mode', v);
-                            setInnerState(() {});
+                            if (v != null) {
+                              await prefs?.setInt('mic_announcement_mode', v);
+                              setInnerState(() {});
+                            }
                           },
                         ),
                         _announceRadio(
@@ -1626,8 +1630,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: "e.g. 'OpenRouter, GPT Mini' plus Brave status",
                           groupValue: mode,
                           onChanged: (v) async {
-                            await prefs?.setInt('mic_announcement_mode', v);
-                            setInnerState(() {});
+                            if (v != null) {
+                              await prefs?.setInt('mic_announcement_mode', v);
+                              setInnerState(() {});
+                            }
                           },
                         ),
                       ],
