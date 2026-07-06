@@ -1302,7 +1302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 groupValue: selectedVoiceName,
                                 onChanged: (val) {
                                   setDialogState(() {
-                                    selectedVoiceName = val;
+                                    if (val != null) selectedVoiceName = val;
                                   });
                                 },
                                 activeColor: const Color
