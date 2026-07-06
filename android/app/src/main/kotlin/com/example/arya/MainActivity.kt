@@ -8,8 +8,6 @@ import androidx.documentfile.provider.DocumentFile
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "arya.mic"
@@ -20,8 +18,6 @@ class MainActivity : FlutterActivity() {
     private var wakeWordDetector: WakeWordDetector? = null
     private var pendingMicIntent = false
     private var pendingNewConvIntent = false
-    private var queryTts: TextToSpeech? = null
-    private var queryTtsReady = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -68,62 +64,61 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TTS_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getEngines" -> {
-                    try {
-                        initQueryTts()
-                        if (!queryTtsReady) {
+                    var tempTts: TextToSpeech? = null
+                    tempTts = TextToSpeech(this, { status ->
+                        val t = tempTts ?: return@TextToSpeech
+                        if (status == TextToSpeech.SUCCESS) {
+                            val engines = (t.engines ?: emptyList()).sortedBy { it.label }
+                            val engineList = engines.map { mapOf(
+                                "name" to it.name,
+                                "label" to it.label
+                            ) }
+                            // Fallback: if engines list is empty, include at least the default engine
+                            val resultList = if (engineList.isEmpty()) {
+                                val def = t.defaultEngine
+                                if (def != null) listOf(mapOf("name" to def, "label" to def.split('.').lastOrNull() ?: def))
+                                else engineList
+                            } else engineList
+                            t.stop()
+                            t.shutdown()
+                            result.success(resultList)
+                        } else {
+                            t.shutdown()
                             result.success(emptyList<Map<String, String>>())
-                            return@setMethodCallHandler
                         }
-                        val engines = queryTts!!.engines?.sortedBy { it.label } ?: emptyList()
-                        val engineList = engines.map { mapOf(
-                            "name" to it.name,
-                            "label" to it.label
-                        ) }
-                        result.success(engineList)
-                    } catch (e: Exception) {
-                        result.error("TTS_ERROR", e.message, null)
-                    }
+                    })
                 }
                 "getDefaultEngine" -> {
-                    try {
-                        initQueryTts()
-                        val engineName = queryTts?.defaultEngine
+                    var tempTts: TextToSpeech? = null
+                    tempTts = TextToSpeech(this, { status ->
+                        val t = tempTts ?: return@TextToSpeech
+                        val engineName = if (status == TextToSpeech.SUCCESS) t.defaultEngine else null
+                        t.stop()
+                        t.shutdown()
                         result.success(engineName)
-                    } catch (e: Exception) {
-                        result.error("TTS_ERROR", e.message, null)
-                    }
+                    })
                 }
                 "getVoices" -> {
-                    try {
-                        val engine = call.argument<String>("engine")
-                        val latch = CountDownLatch(1)
-                        var ttsReady = false
-                        val tts = if (engine?.isNotEmpty() == true) {
-                            TextToSpeech(this, { status ->
-                                ttsReady = status == TextToSpeech.SUCCESS
-                                latch.countDown()
-                            }, engine)
-                        } else {
-                            TextToSpeech(this, { status ->
-                                ttsReady = status == TextToSpeech.SUCCESS
-                                latch.countDown()
-                            })
-                        }
-                        latch.await(3, TimeUnit.SECONDS)
-                        val voices = mutableListOf<Map<String, String>>()
-                        if (ttsReady) {
-                            for (voice in tts.voices ?: emptySet()) {
-                                voices.add(mapOf(
+                    val engine = call.argument<String>("engine")
+                    var tempTts: TextToSpeech? = null
+                    val listener = TextToSpeech.OnInitListener { status ->
+                        val t = tempTts ?: return@OnInitListener
+                        val voices = if (status == TextToSpeech.SUCCESS) {
+                            (t.voices ?: emptySet()).map { voice ->
+                                mapOf(
                                     "name" to (voice.name ?: ""),
                                     "locale" to (voice.locale?.toLanguageTag() ?: "")
-                                ))
+                                )
                             }
-                        }
-                        tts.stop()
-                        tts.shutdown()
+                        } else emptyList<Map<String, String>>()
+                        t.stop()
+                        t.shutdown()
                         result.success(voices)
-                    } catch (e: Exception) {
-                        result.error("TTS_ERROR", e.message, null)
+                    }
+                    tempTts = if (engine?.isNotEmpty() == true) {
+                        TextToSpeech(this, listener, engine)
+                    } else {
+                        TextToSpeech(this, listener)
                     }
                 }
                 else -> result.notImplemented()
@@ -209,23 +204,9 @@ class MainActivity : FlutterActivity() {
     private fun hasExtra(intent: Intent?, key: String): Boolean =
         intent?.getBooleanExtra(key, false) == true
 
-    private fun initQueryTts() {
-        if (queryTtsReady) return
-        val latch = CountDownLatch(1)
-        queryTts = TextToSpeech(this, { status ->
-            if (status == TextToSpeech.SUCCESS) queryTtsReady = true
-            latch.countDown()
-        })
-        latch.await(3, TimeUnit.SECONDS)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         wakeWordDetector?.destroy()
-        queryTts?.stop()
-        queryTts?.shutdown()
-        queryTts = null
-        queryTtsReady = false
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
