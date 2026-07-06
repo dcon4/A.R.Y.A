@@ -1074,27 +1074,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } catch (_) {}
     }
 
-    // Load voices from native side
-    Future<void> loadVoices(String forEngine) async {
-      voicesLoading = true;
-      voices = [];
+    // Load voices from native side (pure data fetch)
+    Future<List<Map<String, String>>> loadVoices(String forEngine) async {
       try {
         final result = await channel.invokeMethod('getVoices', {'engine': forEngine});
         if (result is List) {
-          voices = (result as List).map((v) {
-            if (v is Map) {
-              return Map<String, String>.from(v as Map);
-            }
+          return (result as List).map((v) {
+            if (v is Map) return Map<String, String>.from(v as Map);
             return <String, String>{};
           }).toList();
         }
       } catch (_) {}
-      voicesLoading = false;
+      return [];
     }
 
     // Initial voice load for saved or default engine
     if (selectedEngine.isNotEmpty) {
-      await loadVoices(selectedEngine);
+      voices = await loadVoices(selectedEngine);
+      voicesLoading = false;
     } else {
       voicesLoading = false;
     }
@@ -1148,6 +1145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )
                     else
                       DropdownButton<String>(
+                        isExpanded: true,
                         value: engines.any((e) => e['name'] == selectedEngine)
                             ? selectedEngine
                             : null,
@@ -1166,6 +1164,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 fontFamily: 'Cera Pro',
                                 fontSize: 13,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           );
                         }).toList(),
@@ -1175,26 +1174,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             selectedEngine = val;
                             selectedLanguage = '';
                             selectedVoiceName = '';
+                            voicesLoading = true;
+                            voices = [];
                           });
-                          await loadVoices(val);
-                          setDialogState(() {});
-                          // Auto-select first locale from voices
-                          if (voices.isNotEmpty) {
-                            final locale = voices.first['locale'] ?? '';
+                          final newVoices = await loadVoices(val);
+                          if (dialogContext.mounted) {
                             setDialogState(() {
-                              selectedLanguage = locale;
-                            });
-                            // Auto-select first voice for that locale
-                            final firstVoice = voices.firstWhere(
-                              (v) => v['locale'] == locale,
-                              orElse: () => <String, String>{},
-                            );
-                            if (firstVoice.isNotEmpty) {
-                              setDialogState(() {
+                              voices = newVoices;
+                              voicesLoading = false;
+                              if (voices.isNotEmpty) {
+                                selectedLanguage =
+                                    voices.first['locale'] ?? '';
                                 selectedVoiceName =
-                                    firstVoice['name'] ?? '';
-                              });
-                            }
+                                    voices.first['name'] ?? '';
+                              }
+                            });
                           }
                         },
                       ),
@@ -1224,6 +1218,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         )
                       else
                         DropdownButton<String>(
+                          isExpanded: true,
                           value: voices
                                   .map((v) => v['locale'] ?? '')
                                   .toSet()
@@ -1249,6 +1244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   fontFamily: 'Cera Pro',
                                   fontSize: 13,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             );
                           }).toList(),
