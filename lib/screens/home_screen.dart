@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final prefs = await SharedPreferences.getInstance();
       final current = prefs.getBool('brave_search_enabled') ?? false;
       await prefs.setBool('brave_search_enabled', !current);
-      systemSpeak(current ? "Brave Search Off" : "Brave Search On");
+      systemSpeak(current ? "You have turned off Brave Search" : "You have turned on Brave Search");
     });
 
     BackgroundService.setOnRotateProviderCallback(() async {

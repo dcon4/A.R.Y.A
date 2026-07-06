@@ -1041,7 +1041,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     double speechRate = prefs.getDouble('tts_speech_rate') ?? 0.5;
     double pitch = prefs.getDouble('tts_pitch') ?? 1.0;
-    const platform = MethodChannel('arya.tts');
 
     showDialog(
       context: context,
@@ -1063,47 +1062,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Engine, Language, and Voice",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Cera Pro',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Configured in your device's system TTS settings.",
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          platform.invokeMethod('openSystemTtsSettings');
-                        },
-                        icon: const Icon(Icons.settings, size: 18),
-                        label: const Text(
-                          "Open system TTS settings",
-                          style: TextStyle(fontFamily: 'Cera Pro'),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              const Color.fromRGBO(255, 87, 51, 1),
-                          side: const BorderSide(
-                            color: Color.fromRGBO(255, 87, 51, 1),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Speech Rate
                     const Text(
                       "Speech Rate",
                       style: TextStyle(
@@ -1129,8 +1087,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
-
-                    // Pitch
                     const Text(
                       "Pitch",
                       style: TextStyle(
@@ -1156,8 +1112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-
-                    // Test button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
