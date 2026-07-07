@@ -39,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Map<String, String>> _messageHistory = [];
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
+  Completer<void>? _announceCompleter;
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
   @override
@@ -163,16 +164,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // When TTS finishes speaking, wait 2 seconds before re-arming the
     // wake word detector so it doesn't hear its own echo and re-trigger.
-    flutterTts.setCompletionHandler(() {
-      if (_wakeWordPausedForSpeech) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (_wakeWordPausedForSpeech) {
-            _wakeWordPausedForSpeech = false;
-            WakeWordService.instance.resume();
-          }
-        });
-      }
-    });
+    flutterTts.setCompletionHandler(_onTtsCompletion);
+  }
+
+  void _onTtsCompletion() {
+    // If an announcement completer is pending, complete it first.
+    if (_announceCompleter != null && !_announceCompleter!.isCompleted) {
+      _announceCompleter!.complete();
+      return;
+    }
+    if (_wakeWordPausedForSpeech) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (_wakeWordPausedForSpeech) {
+          _wakeWordPausedForSpeech = false;
+          WakeWordService.instance.resume();
+        }
+      });
+    }
   }
 
   Future<void> systemSpeak(String content) async {
@@ -180,7 +188,14 @@ class _HomeScreenState extends State<HomeScreen> {
     await flutterTts.speak(content);
   }
 
-  void _speakProviderAnnouncement(SharedPreferences prefs) {
+  Future<void> _speakAndWait(String text) async {
+    _announceCompleter = Completer<void>();
+    await flutterTts.speak(text);
+    await _announceCompleter!.future.timeout(const Duration(seconds: 10));
+    _announceCompleter = null;
+  }
+
+  Future<void> _speakProviderAnnouncement(SharedPreferences prefs) async {
     final currentId = prefs.getString('api_provider') ?? 'openrouter';
     final provider = apiProviders.firstWhere(
       (p) => p.id == currentId,
@@ -192,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (braveOn) {
       text += ", Brave Search On";
     }
-    flutterTts.speak(text);
+    await _speakAndWait(text);
   }
 
   Future<void> startListening() async {
@@ -205,15 +220,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
     if (announceMode == 1) {
-      flutterTts.speak("Listening");
+      await _speakAndWait("Listening");
     } else if (announceMode == 2) {
-      _speakProviderAnnouncement(prefs);
+      await _speakProviderAnnouncement(prefs);
     }
+
+    final listenSec = prefs.getInt('listening_duration_seconds') ?? 30;
+    final pauseSec = prefs.getInt('pause_duration_seconds') ?? 3;
 
     await speechToText.listen(
       onResult: onSpeechResult,
-      listenFor: Duration(seconds: 30),
-      pauseFor: Duration(seconds: 3),
+      listenFor: Duration(seconds: listenSec),
+      pauseFor: Duration(seconds: pauseSec),
     );
     // Speech timed out or was stopped — reset state
     setState(() {

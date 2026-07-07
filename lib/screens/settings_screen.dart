@@ -29,6 +29,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
   int _announceMode = 0;
+  int _listeningDuration = 30;
+  int _pauseDuration = 3;
   String _selectedModelId = '';
   bool _useCustomModel = false;
   List<providers.ApiModel> _currentModels = [];
@@ -70,6 +72,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _customBaseUrlController.text = savedCustomBaseUrl;
       _currentModels = provider.models;
       _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
+      _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 30;
+      _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 3;
     });
   }
 
@@ -1623,6 +1627,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setInt('mic_announcement_mode', v);
                 if (mounted) setState(() => _announceMode = v);
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              "Listening Duration",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Max time mic stays open: ${_listeningDuration}s",
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            Slider(
+              value: _listeningDuration.toDouble(),
+              min: 5,
+              max: 120,
+              divisions: 23,
+              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+              inactiveColor: const Color.fromRGBO(255, 87, 51, 0.3),
+              label: "${_listeningDuration}s",
+              onChanged: (v) async {
+                final val = v.round();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('listening_duration_seconds', val);
+                if (mounted) setState(() => _listeningDuration = val);
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Pause Duration",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Silence before auto-stop: ${_pauseDuration}s",
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            Slider(
+              value: _pauseDuration.toDouble(),
+              min: 1,
+              max: 30,
+              divisions: 29,
+              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+              inactiveColor: const Color.fromRGBO(255, 87, 51, 0.3),
+              label: "${_pauseDuration}s",
+              onChanged: (v) async {
+                final val = v.round();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('pause_duration_seconds', val);
+                if (mounted) setState(() => _pauseDuration = val);
               },
             ),
             const SizedBox(height: 32),
