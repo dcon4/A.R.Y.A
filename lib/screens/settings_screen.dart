@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'package:arya/models/memory_entry.dart';
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
+import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
 import 'package:arya/services/wake_word_service.dart';
@@ -31,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _announceMode = 0;
   int _listeningDuration = 30;
   int _pauseDuration = 3;
+  bool _autoRouteEnabled = false;
+  int _memoryCount = 0;
   String _selectedModelId = '';
   bool _useCustomModel = false;
   List<providers.ApiModel> _currentModels = [];
@@ -74,6 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
       _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 30;
       _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 3;
+      _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
     });
   }
 
@@ -630,6 +635,262 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildModelRoutingSection() {
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Model Routing",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "ARYA automatically picks the best model based on your question. When off, always uses your default model. You can still switch providers manually.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _autoRouteEnabled
+                        ? "Auto-route is on"
+                        : "Auto-route is off",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: _autoRouteEnabled,
+                  onChanged: (val) async {
+                    await providers.setAutoRouteEnabled(val);
+                    if (mounted) setState(() => _autoRouteEnabled = val);
+                    setInnerState(() {});
+                  },
+                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                ),
+              ],
+            ),
+            if (_autoRouteEnabled) ...[
+              const SizedBox(height: 12),
+              _routingCategoryRow("Quick", "quick", "what is, who is, when, weather"),
+              _routingCategoryRow("Reasoning", "reasoning", "why, explain, compare, analyze"),
+              _routingCategoryRow("Creative", "creative", "write, story, poem, describe"),
+              _routingCategoryRow("Coding", "coding", "code, function, bug, python, api"),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _routingCategoryRow(String label, String category, String examples) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  examples,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontFamily: 'Cera Pro',
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 36,
+              child: FutureBuilder<String>(
+                future: providers.getRoutingModel(category),
+                builder: (context, snapshot) {
+                  final current = snapshot.data ?? '';
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(255, 255, 255, 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        current.isNotEmpty ? current : '(default)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Cera Pro',
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemorySection() {
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Memory",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 87, 51, 1),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "ARYA remembers facts, preferences, and learnings across conversations. Say 'remember I like pizza' or 'what do you remember?'",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<int>(
+              future: MemoryService.instance.load().then((_) => MemoryService.instance.count),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                return Text(
+                  "$count / 1000 memories used",
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontFamily: 'Cera Pro',
+                    fontSize: 14,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await MemoryService.instance.load();
+                        final all = MemoryService.instance.entries;
+                        if (all.isEmpty) {
+                          _showSnack(context, 'No memories to show');
+                          return;
+                        }
+                        final text = all.map((e) => e.content).join('. ');
+                        _showSnack(context, text.length > 200
+                            ? '${text.substring(0, 200)}...'
+                            : text);
+                      },
+                      icon: const Icon(
+                        Icons.menu_book,
+                        size: 16,
+                        color: Color.fromRGBO(255, 87, 51, 1),
+                      ),
+                      label: const Text(
+                        "Read",
+                        style: TextStyle(
+                          color: Color.fromRGBO(255, 87, 51, 1),
+                          fontFamily: 'Cera Pro',
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await MemoryService.instance.clearAll();
+                        setInnerState(() {});
+                        _showSnack(context, 'All memories cleared');
+                      },
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: Color.fromRGBO(255, 87, 51, 1),
+                      ),
+                      label: const Text(
+                        "Clear",
+                        style: TextStyle(
+                          color: Color.fromRGBO(255, 87, 51, 1),
+                          fontFamily: 'Cera Pro',
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1516,6 +1777,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
+            _buildModelRoutingSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
             _buildTtsSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
@@ -1523,6 +1788,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildWebSearchToggle(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            _buildMemorySection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

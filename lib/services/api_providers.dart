@@ -121,6 +121,82 @@ final List<ApiProvider> apiProviders = [
   ),
 ];
 
+// --- Routing config keys ---
+
+const _routingQuickProvider = 'routing_quick_provider_id';
+const _routingQuickModel = 'routing_quick_model';
+const _routingReasoningProvider = 'routing_reasoning_provider_id';
+const _routingReasoningModel = 'routing_reasoning_model';
+const _routingCreativeProvider = 'routing_creative_provider_id';
+const _routingCreativeModel = 'routing_creative_model';
+const _routingCodingProvider = 'routing_coding_provider_id';
+const _routingCodingModel = 'routing_coding_model';
+
+String _routingPrefProvider(String category) =>
+    'routing_${category}_provider_id';
+String _routingPrefModel(String category) =>
+    'routing_${category}_model';
+
+Future<String> getRoutingProviderId(String category) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(_routingPrefProvider(category)) ?? '';
+}
+
+Future<String> getRoutingModel(String category) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(_routingPrefModel(category)) ?? '';
+}
+
+Future<void> setRouting(String category, String providerId, String model) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_routingPrefProvider(category), providerId);
+  await prefs.setString(_routingPrefModel(category), model);
+}
+
+Future<bool> getAutoRouteEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('auto_route_enabled') ?? false;
+}
+
+Future<void> setAutoRouteEnabled(bool val) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('auto_route_enabled', val);
+}
+
+Future<String> getSelectedProviderId() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(_prefsProvider) ?? 'openrouter';
+}
+
+Future<String> getApiKeyForProvider(String providerId) async {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(provider.prefKey) ?? '';
+}
+
+Future<String> getBaseUrlForProvider(String providerId) async {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  if (provider.id == 'custom') {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('api_custom_base_url') ?? '';
+  }
+  return provider.baseUrl;
+}
+
+bool getRequiresRefererForProvider(String providerId) {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  return provider.requiresReferer;
+}
+
 // --- Preference accessors ---
 
 Future<ApiProvider> getSelectedProvider() async {

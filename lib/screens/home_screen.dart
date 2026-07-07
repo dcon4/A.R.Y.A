@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:arya/models/memory_entry.dart';
 import 'package:arya/screens/settings_screen.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:arya/services/api_providers.dart';
 import 'package:arya/services/background_service.dart';
 import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/debug_logger.dart';
+import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
   Completer<void>? _announceCompleter;
+  String _lastAiResponse = '';
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
   @override
@@ -188,6 +191,96 @@ class _HomeScreenState extends State<HomeScreen> {
     await flutterTts.speak(content);
   }
 
+  // --- Voice commands ---
+
+  String? _detectVoiceCommand(String text) {
+    final lower = text.toLowerCase().trim();
+    if (lower.startsWith('remember ')) return 'remember';
+    if (lower == 'remember that') return 'remember_last';
+    if (lower.startsWith('forget ')) return 'forget';
+    if (lower == 'what do you remember' || lower == 'what do you remember about me' || lower == 'list memories') return 'recall';
+    if (lower == 'clear my memories' || lower == 'forget everything') return 'clear_memories';
+    return null;
+  }
+
+  Future<bool> _handleVoiceCommand(String text) async {
+    final cmd = _detectVoiceCommand(text);
+    if (cmd == null) return false;
+
+    final lower = text.toLowerCase().trim();
+    await MemoryService.instance.load();
+
+    switch (cmd) {
+      case 'remember':
+        final content = text.substring('remember '.length).trim();
+        if (content.isNotEmpty) {
+          await MemoryService.instance.addEntry(content);
+          await systemSpeak('Saved');
+        }
+        break;
+      case 'remember_last':
+        if (_lastAiResponse.isNotEmpty) {
+          await MemoryService.instance.addEntry(_lastAiResponse);
+          await systemSpeak('Saved');
+        }
+        break;
+      case 'forget':
+        final query = text.substring('forget '.length).trim();
+        if (query.isNotEmpty) {
+          final count = await MemoryService.instance.forgetByContent(query);
+          await systemSpeak(count > 0 ? 'Forgotten $count memories' : 'Nothing found to forget');
+        }
+        break;
+      case 'recall':
+        final all = MemoryService.instance.entries;
+        if (all.isEmpty) {
+          await systemSpeak('No memories yet');
+        } else {
+          final top = all.take(3).map((e) => e.content).join('. ');
+          await systemSpeak('I remember: $top');
+        }
+        break;
+      case 'clear_memories':
+        await MemoryService.instance.clearAll();
+        await systemSpeak('All memories cleared');
+        break;
+    }
+    return true;
+  }
+
+  // --- Model routing ---
+
+  String _classifyQuery(String query) {
+    final lower = query.toLowerCase();
+    final coding = RegExp(r'\b(code|function|bug|debug|python|javascript|dart|java|swift|typescript'
+        r'|implement|algorithm|error|fix|compile|syntax|api|class|method|variable)\b');
+    final quick = RegExp(r'\b(what is|who is|when|where|how many|how much|define|weather'
+        r'|time|date|temperature|capital|population|meaning|synonym)\b');
+    final creative = RegExp(r'\b(write|story|poem|describe|create|imagine|tell me about'
+        r'|suggest|idea|draft|compose|generate|essay|letter|email)\b');
+
+    if (coding.hasMatch(lower)) return 'coding';
+    if (quick.hasMatch(lower)) return 'quick';
+    if (creative.hasMatch(lower)) return 'creative';
+    return 'reasoning';
+  }
+
+  Future<({String providerId, String model})> _resolveRoute(String query) async {
+    final prefs = await SharedPreferences.getInstance();
+    final autoRoute = prefs.getBool('auto_route_enabled') ?? false;
+    if (!autoRoute) {
+      final pid = await getSelectedProviderId();
+      final m = await getModel();
+      return (providerId: pid, model: m);
+    }
+    final category = _classifyQuery(query);
+    final pid = await getRoutingProviderId(category);
+    final m = await getRoutingModel(category);
+    final resolvedPid = pid.isNotEmpty ? pid : await getSelectedProviderId();
+    final resolvedModel = m.isNotEmpty ? m : (await getModel());
+    return (providerId: resolvedPid, model: resolvedModel);
+  }
+
   Future<void> _speakAndWait(String text) async {
     _announceCompleter = Completer<void>();
     await flutterTts.speak(text);
@@ -280,15 +373,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
 
+    // Check for voice commands first
+    if (await _handleVoiceCommand(lastWords)) {
+      setState(() {
+        isLoading = false;
+      });
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
-    final model = await getModel();
-    _logger.log('HomeScreen', 'Using model: $model');
+    // Recall relevant memories
+    await MemoryService.instance.load();
+    final relevantMemories = MemoryService.instance.search(lastWords);
+    for (final m in relevantMemories) {
+      MemoryService.instance.incrementHitCount(m.id);
+    }
+
+    // Determine route (provider + model)
+    final route = await _resolveRoute(lastWords);
+    _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
+
     final response = await openaiService.chatGPTAPI(
       lastWords,
       history: _messageHistory.isNotEmpty ? _messageHistory : null,
+      providerId: route.providerId,
+      overrideModel: route.model,
+      memories: relevantMemories.isNotEmpty ? relevantMemories : null,
     );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
@@ -300,13 +413,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Log the conversation entry
     if (response != null && response.isNotEmpty) {
+      _lastAiResponse = response;
       _messageHistory.add({'role': 'user', 'content': lastWords});
       _messageHistory.add({'role': 'assistant', 'content': response});
 
       conversationService.addEntry(ConversationEntry(
         userQuery: lastWords,
         aiResponse: response,
-        model: model,
+        model: route.model,
       ));
 
       // Auto-save if enabled

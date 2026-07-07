@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:arya/models/memory_entry.dart';
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
+import 'package:arya/services/memory_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,17 +105,37 @@ Remember: You are ARYA, the user's personal AI assistant.
 
   final _logger = DebugLogger();
 
-  Future<String?> chatGPTAPI(String prompt, {List<Map<String, String>>? history}) async {
+  Future<String?> chatGPTAPI(
+    String prompt, {
+    List<Map<String, String>>? history,
+    String? providerId,
+    String? overrideModel,
+    List<MemoryEntry>? memories,
+  }) async {
     try {
-      final apiKey = await getApiKey();
-      if (apiKey.isEmpty) {
+      // Resolve provider: use override or default
+      String resolvedProviderId = providerId ?? await providers.getSelectedProviderId();
+      String resolvedApiKey;
+      String resolvedBaseUrl;
+      bool resolvedRequiresReferer;
+
+      if (providerId != null) {
+        resolvedApiKey = await providers.getApiKeyForProvider(providerId);
+        resolvedBaseUrl = await providers.getBaseUrlForProvider(providerId);
+        resolvedRequiresReferer = providers.getRequiresRefererForProvider(providerId);
+      } else {
+        resolvedApiKey = await getApiKey();
+        resolvedBaseUrl = await getBaseUrlCached();
+        resolvedRequiresReferer = await getRequiresRefererCached();
+      }
+
+      if (resolvedApiKey.isEmpty) {
         _logger.log('OpenAIService', 'API call blocked - no API key set');
         return 'Please add your API key in Settings first.';
       }
 
-      var model = await getModel();
-      final baseUrl = await getBaseUrlCached();
-      if (baseUrl.isEmpty) {
+      var model = overrideModel ?? await getModel();
+      if (resolvedBaseUrl.isEmpty) {
         _logger.log('OpenAIService', 'API call blocked - no base URL set');
         return 'Please set a base URL for your custom provider in Settings.';
       }
@@ -136,14 +158,13 @@ Remember: You are ARYA, the user's personal AI assistant.
         model = '$model:online';
       }
 
-      final requiresReferer = await getRequiresRefererCached();
-      _logger.log('OpenAIService', 'Sending request to $baseUrl model=$model');
+      _logger.log('OpenAIService', 'Sending request to $resolvedBaseUrl model=$model');
 
       final headers = <String, String>{
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
+        'Authorization': 'Bearer $resolvedApiKey',
       };
-      if (requiresReferer) {
+      if (resolvedRequiresReferer) {
         headers['HTTP-Referer'] = getSiteUrl();
         headers['X-Title'] = getSiteName();
       }
@@ -152,6 +173,13 @@ Remember: You are ARYA, the user's personal AI assistant.
       final messages = <Map<String, String>>[
         {'role': 'system', 'content': sysPrompt},
       ];
+      // Inject relevant memories
+      if (memories != null && memories.isNotEmpty) {
+        final memoryText = MemoryService.instance.formatForPrompt(memories);
+        if (memoryText.isNotEmpty) {
+          messages.add({'role': 'system', 'content': memoryText});
+        }
+      }
       if (history != null) {
         messages.addAll(history);
       }
@@ -162,7 +190,7 @@ Remember: You are ARYA, the user's personal AI assistant.
       messages.add({'role': 'user', 'content': prompt});
 
       final response = await http.post(
-        Uri.parse('$baseUrl/chat/completions'),
+        Uri.parse('$resolvedBaseUrl/chat/completions'),
         headers: headers,
         body: jsonEncode({
           'model': model,
