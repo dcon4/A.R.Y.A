@@ -176,11 +176,10 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val newConvIntent = Intent(this, MainActivity::class.java).apply {
-            putExtra("new_conversation", true)
-            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        val newConvIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = "com.example.arya.NEW_CONVERSATION"
         }
-        val newConvPendingIntent = PendingIntent.getActivity(
+        val newConvPendingIntent = PendingIntent.getService(
             this,
             3,
             newConvIntent,

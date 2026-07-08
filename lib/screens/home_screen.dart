@@ -168,6 +168,21 @@ class _HomeScreenState extends State<HomeScreen> {
     // When TTS finishes speaking, wait 2 seconds before re-arming the
     // wake word detector so it doesn't hear its own echo and re-trigger.
     flutterTts.setCompletionHandler(_onTtsCompletion);
+
+    // Warm the TTS engine so the first announcement on bluetooth is not
+    // truncated (the engine initializes lazily and cuts off the first
+    // phoneme unless primed).
+    await _warmTtsEngine();
+  }
+
+  Future<void> _warmTtsEngine() async {
+    try {
+      // Speak silently to prime the TTS engine's audio pipeline.
+      await flutterTts.setVolume(0.0);
+      await flutterTts.speak("warmup");
+      await Future.delayed(const Duration(milliseconds: 400));
+      await flutterTts.setVolume(1.0);
+    } catch (_) {}
   }
 
   void _onTtsCompletion() {

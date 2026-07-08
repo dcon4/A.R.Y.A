@@ -7,6 +7,7 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
+import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/widgets/model_selector.dart';
 import 'package:flutter/material.dart';
@@ -892,6 +893,280 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
+  }
+
+  Widget _buildSettingsBackupSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Settings Backup",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Export all settings (API keys, models, routing, TTS, etc.) to an encrypted file. Import on another device to avoid re-entering everything.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 40,
+                child: OutlinedButton.icon(
+                  onPressed: _exportEncryptedSettings,
+                  icon: const Icon(
+                    Icons.file_upload_outlined,
+                    size: 16,
+                    color: Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                  label: const Text(
+                    "Export",
+                    style: TextStyle(
+                      color: Color.fromRGBO(255, 87, 51, 1),
+                      fontFamily: 'Cera Pro',
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 40,
+                child: OutlinedButton.icon(
+                  onPressed: _importEncryptedSettings,
+                  icon: const Icon(
+                    Icons.file_download_outlined,
+                    size: 16,
+                    color: Color.fromRGBO(255, 87, 51, 1),
+                  ),
+                  label: const Text(
+                    "Import",
+                    style: TextStyle(
+                      color: Color.fromRGBO(255, 87, 51, 1),
+                      fontFamily: 'Cera Pro',
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _exportEncryptedSettings() async {
+    final passphraseController = TextEditingController();
+    final confirmController = TextEditingController();
+    final passphrase = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text(
+          'Encrypt Settings',
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontFamily: 'Cera Pro',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter a passphrase to encrypt your settings file. You will need this passphrase to import on another device.',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'Cera Pro',
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passphraseController,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Passphrase',
+                border: OutlineInputBorder(),
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Confirm passphrase',
+                border: OutlineInputBorder(),
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (passphraseController.text.isEmpty) {
+                _showSnack(ctx, 'Passphrase cannot be empty');
+                return;
+              }
+              if (passphraseController.text != confirmController.text) {
+                _showSnack(ctx, 'Passphrases do not match');
+                return;
+              }
+              Navigator.pop(ctx, passphraseController.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Export',
+              style: TextStyle(fontFamily: 'Cera Pro'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (passphrase == null) return;
+    try {
+      _showSnack(context, 'Exporting settings...');
+      final ok = await SettingsService.exportToFile(passphrase);
+      if (ok) {
+        _showSnack(context, 'Settings exported successfully');
+      } else {
+        _showSnack(context, 'Export cancelled or failed');
+      }
+    } catch (e) {
+      _showSnack(context, 'Export failed: $e');
+    }
+  }
+
+  Future<void> _importEncryptedSettings() async {
+    final passphraseController = TextEditingController();
+    final passphrase = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text(
+          'Decrypt Settings',
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontFamily: 'Cera Pro',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter the passphrase used when the settings were exported.',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'Cera Pro',
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passphraseController,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Passphrase',
+                border: OutlineInputBorder(),
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (passphraseController.text.isEmpty) {
+                _showSnack(ctx, 'Passphrase cannot be empty');
+                return;
+              }
+              Navigator.pop(ctx, passphraseController.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Import',
+              style: TextStyle(fontFamily: 'Cera Pro'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (passphrase == null) return;
+    try {
+      _showSnack(context, 'Importing settings...');
+      final settings = await SettingsService.importFromFile(passphrase);
+      if (settings == null) {
+        _showSnack(context, 'Import cancelled');
+        return;
+      }
+      await SettingsService.applyAllSettings(settings);
+      _showSnack(context, 'Settings imported successfully. Please restart ARYA.');
+    } catch (e) {
+      _showSnack(context, 'Import failed: Wrong passphrase or corrupt file');
+    }
   }
 
   Widget _buildWakeWordSection() {
@@ -1968,6 +2243,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
             _buildWakeWordSection(),
+            const SizedBox(height: 32),
+            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const SizedBox(height: 16),
+            _buildSettingsBackupSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),

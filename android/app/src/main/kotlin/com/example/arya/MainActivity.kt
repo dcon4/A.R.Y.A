@@ -17,6 +17,9 @@ class MainActivity : FlutterActivity() {
     private val WAKE_WORD_CHANNEL = "arya.wake_word"
     private val TTS_CHANNEL = "arya.tts"
     private var saveDirectoryResult: MethodChannel.Result? = null
+    private var saveSettingsFileResult: MethodChannel.Result? = null
+    private var openSettingsFileResult: MethodChannel.Result? = null
+    private var pendingSettingsContent: String? = null
     private var wakeWordDetector: WakeWordDetector? = null
     private var pendingMicIntent = false
     private var pendingNewConvIntent = false
@@ -60,6 +63,15 @@ class MainActivity : FlutterActivity() {
                     } else {
                         result.error("INVALID_ARGS", "uri, fileName, and content are required", null)
                     }
+                }
+                "saveSettingsFile" -> {
+                    pendingSettingsContent = call.argument<String>("content") ?: ""
+                    saveSettingsFileResult = result
+                    saveSettingsFile()
+                }
+                "openSettingsFile" -> {
+                    openSettingsFileResult = result
+                    openSettingsFile()
                 }
                 else -> result.notImplemented()
             }
@@ -244,15 +256,49 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_DIRECTORY_REQUEST) {
-            if (resultCode == RESULT_OK && data?.data != null) {
-                val uri = data.data!!
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                saveDirectoryResult?.success(uri.toString())
-            } else {
-                saveDirectoryResult?.success(null)
+        when (requestCode) {
+            PICK_DIRECTORY_REQUEST -> {
+                if (resultCode == RESULT_OK && data?.data != null) {
+                    val uri = data.data!!
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    saveDirectoryResult?.success(uri.toString())
+                } else {
+                    saveDirectoryResult?.success(null)
+                }
+                saveDirectoryResult = null
             }
-            saveDirectoryResult = null
+            SAVE_SETTINGS_FILE_REQUEST -> {
+                if (resultCode == RESULT_OK && data?.data != null) {
+                    try {
+                        val content = pendingSettingsContent ?: ""
+                        contentResolver.openOutputStream(data.data!!)?.use { os ->
+                            os.write(content.toByteArray(Charsets.UTF_8))
+                        }
+                        saveSettingsFileResult?.success("ok")
+                    } catch (e: Exception) {
+                        saveSettingsFileResult?.error("WRITE_FAILED", e.message, null)
+                    }
+                } else {
+                    saveSettingsFileResult?.success(null)
+                }
+                saveSettingsFileResult = null
+                pendingSettingsContent = null
+            }
+            OPEN_SETTINGS_FILE_REQUEST -> {
+                if (resultCode == RESULT_OK && data?.data != null) {
+                    try {
+                        val content = contentResolver.openInputStream(data.data!!)?.use { stream ->
+                            stream.reader(Charsets.UTF_8).readText()
+                        } ?: ""
+                        openSettingsFileResult?.success(content)
+                    } catch (e: Exception) {
+                        openSettingsFileResult?.error("READ_FAILED", e.message, null)
+                    }
+                } else {
+                    openSettingsFileResult?.success(null)
+                }
+                openSettingsFileResult = null
+            }
         }
     }
 
@@ -273,6 +319,23 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun saveSettingsFile() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "arya-settings.arya")
+        }
+        startActivityForResult(intent, SAVE_SETTINGS_FILE_REQUEST)
+    }
+
+    private fun openSettingsFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        startActivityForResult(intent, OPEN_SETTINGS_FILE_REQUEST)
+    }
+
     private fun writeFileToUri(uriString: String, fileName: String, content: String) {
         val treeUri = Uri.parse(uriString)
         val documentFile = DocumentFile.fromTreeUri(this, treeUri)
@@ -287,5 +350,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val PICK_DIRECTORY_REQUEST = 9001
+        private const val SAVE_SETTINGS_FILE_REQUEST = 9002
+        private const val OPEN_SETTINGS_FILE_REQUEST = 9003
     }
 }
