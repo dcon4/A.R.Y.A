@@ -306,6 +306,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> startListening() async {
     _logger.log('HomeScreen', 'Starting voice listening');
     lastWords = '';
+
+    // Stop any previous session before starting a new one to prevent
+    // speechToText from getting stuck after repeated use.
+    if (speechToText.isListening) {
+      await speechToText.stop();
+    }
+    if (!speechToText.isAvailable) {
+      await speechToText.initialize();
+    }
+
     setState(() {
       _micReallyListening = true;
     });
@@ -402,6 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
       providerId: route.providerId,
       overrideModel: route.model,
       memories: relevantMemories.isNotEmpty ? relevantMemories : null,
+      maxTokens: 500,
     );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
@@ -430,7 +441,10 @@ class _HomeScreenState extends State<HomeScreen> {
         // Silently handle auto-save errors
       }
 
-      await systemSpeak(response);
+      // Fire-and-forget TTS for AI responses to prevent hang on long text.
+      // The completion handler still fires when TTS finishes, which resumes
+      // the wake word detector normally (guarded by _wakeWordPausedForSpeech).
+      systemSpeak(response);
     }
     // Wake word resume is handled by the TTS completion handler with a
     // 2-second delay to avoid echo re-triggering.

@@ -111,6 +111,7 @@ Remember: You are ARYA, the user's personal AI assistant.
     String? providerId,
     String? overrideModel,
     List<MemoryEntry>? memories,
+    int? maxTokens,
   }) async {
     try {
       // Resolve provider: use override or default
@@ -195,6 +196,7 @@ Remember: You are ARYA, the user's personal AI assistant.
         body: jsonEncode({
           'model': model,
           'messages': messages,
+          if (maxTokens != null) 'max_tokens': maxTokens,
         }),
       );
 

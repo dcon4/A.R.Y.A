@@ -128,20 +128,28 @@ class ConversationService {
     if (_entries.isEmpty) return '';
 
     if (_currentFilePath != null) {
-      // Check if we can append - only works for local files, not SAF
-      if (!_currentFilePath!.contains('/')) {
-        // SAF URI was used, can't append
-        return '';
-      }
-      if (File(_currentFilePath!).existsSync()) {
+      // Try to append to existing local file
+      if (_currentFilePath!.contains('/') && File(_currentFilePath!).existsSync()) {
         final latest = _entries.last;
         return appendToFile(_currentFilePath!, latest);
       }
+      // SAF URI or missing file: rewrite the whole conversation
     }
 
     final firstQuery = _entries.first.userQuery;
     final subject = _sanitizeSubject(firstQuery);
-    return saveToFile(subject: subject, timestamp: _entries.first.timestamp);
+    final result = await saveToFile(subject: subject, timestamp: _entries.first.timestamp);
+
+    // Ensure _currentFilePath always has the local fallback path so
+    // subsequent appends work even if SAF was used for the initial write.
+    if (_currentFilePath != null && !_currentFilePath!.contains('/')) {
+      final dir = await getSaveDir();
+      final fileName = buildFileName(subject, _entries.first.timestamp);
+      final localPath = '$dir/$fileName';
+      _currentFilePath = localPath;
+    }
+
+    return result;
   }
 
   Future<String> appendToFile(String filePath, ConversationEntry entry) async {
