@@ -28,6 +28,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            // Only build for arm64-v8a (Samsung A53 and most modern Android devices).
+            // This drops armeabi-v7a, x86, and x86_64 native libs, saving ~75MB per APK.
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -42,7 +47,7 @@ android {
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.media:media:1.7.0")
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-mobile:1.20.0")
 }
 
 flutter {
