@@ -29,8 +29,6 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {
-            // Only build for arm64-v8a (Samsung A53 and most modern Android devices).
-            // This drops armeabi-v7a, x86, and x86_64 native libs, saving ~75MB per APK.
             abiFilters += listOf("arm64-v8a")
         }
     }
@@ -43,6 +41,8 @@ android {
             exclude("lib/armeabi-v7a/**")
             exclude("lib/x86/**")
             exclude("lib/x86_64/**")
+            // Vulkan validation layer is a debug-only artifact, not needed at runtime.
+            exclude("lib/arm64-v8a/libVkLayer_khronos_validation.so")
         }
     }
 
