@@ -35,6 +35,17 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // Only include arm64-v8a native libs (Samsung A53). Exclude all other ABIs.
+            // This removes libflutter.so and libonnxruntime.so for armeabi-v7a, x86,
+            // and x86_64, saving ~70MB from the debug APK.
+            exclude("lib/armeabi-v7a/**")
+            exclude("lib/x86/**")
+            exclude("lib/x86_64/**")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
