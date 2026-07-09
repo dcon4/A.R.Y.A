@@ -47,7 +47,7 @@ android {
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.media:media:1.7.0")
-    implementation("com.microsoft.onnxruntime:onnxruntime-mobile:1.20.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 }
 
 flutter {
