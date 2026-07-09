@@ -1081,10 +1081,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showSnack(context, 'Export cancelled or failed');
       }
     } catch (e) {
-      _showSnack(context, 'Export failed: $e');
+      DebugLogger().error('SettingsScreen', 'Export failed', e);
+      _showSnack(context, 'Export failed. Check debug log.');
     }
   }
-
+ 
   Future<void> _importEncryptedSettings() async {
     final passphraseController = TextEditingController();
     final passphrase = await showDialog<String>(
@@ -1165,7 +1166,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await SettingsService.applyAllSettings(settings);
       _showSnack(context, 'Settings imported successfully. Please restart ARYA.');
     } catch (e) {
-      _showSnack(context, 'Import failed: Wrong passphrase or corrupt file');
+      DebugLogger().error('SettingsScreen', 'Import failed', e);
+      _showSnack(context, 'Import failed. Check debug log.');
     }
   }
 

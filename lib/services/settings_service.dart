@@ -112,17 +112,18 @@ class SettingsService {
   }
 
   static Future<bool> exportToFile(String passphrase) async {
-    DebugLogger().verbose('SettingsService', 'exportToFile: collecting settings');
-    final settings = await collectAllSettings();
-    DebugLogger().verbose('SettingsService', 'exportToFile: collected ${settings.length} settings');
-    final json = const JsonEncoder.withIndent(null).convert(settings);
-    DebugLogger().verbose('SettingsService', 'exportToFile: JSON length=${json.length}');
-    final encrypted = _encrypt(json, passphrase);
-    final payload = const JsonEncoder.withIndent(null).convert({
-      'version': _version,
-      'data': encrypted,
-    });
     try {
+      DebugLogger().verbose('SettingsService', 'exportToFile: collecting settings');
+      final settings = await collectAllSettings();
+      DebugLogger().verbose('SettingsService', 'exportToFile: collected ${settings.length} settings');
+      final json = const JsonEncoder.withIndent(null).convert(settings);
+      DebugLogger().verbose('SettingsService', 'exportToFile: JSON length=${json.length}');
+      final encrypted = _encrypt(json, passphrase);
+      final payload = const JsonEncoder.withIndent(null).convert({
+        'version': _version,
+        'data': encrypted,
+      });
+      DebugLogger().verbose('SettingsService', 'exportToFile: invoking SAF save');
       final result = await _channel.invokeMethod<String>('saveSettingsFile', {
         'content': payload,
         'mimeType': 'application/json',
@@ -132,8 +133,8 @@ class SettingsService {
       DebugLogger().verbose('SettingsService', 'exportToFile: result=$ok channelResult=$result');
       return ok;
     } catch (e) {
-      DebugLogger().error('SettingsService', 'exportToFile channel error', e);
-      return false;
+      DebugLogger().error('SettingsService', 'exportToFile error', e);
+      rethrow;
     }
   }
 
