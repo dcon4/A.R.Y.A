@@ -80,16 +80,26 @@ class SettingsService {
     final all = <String, dynamic>{};
     for (final key in prefs.getKeys()) {
       if (key.startsWith('flutter.')) continue;
-      final s = prefs.getString(key);
-      if (s != null) { all[key] = s; continue; }
-      final b = prefs.getBool(key);
-      if (b != null) { all[key] = b; continue; }
-      final i = prefs.getInt(key);
-      if (i != null) { all[key] = i; continue; }
-      final d = prefs.getDouble(key);
-      if (d != null) { all[key] = d; continue; }
-      final sl = prefs.getStringList(key);
-      if (sl != null) { all[key] = sl; }
+      try {
+        final s = prefs.getString(key);
+        if (s != null) { all[key] = s; continue; }
+      } catch (_) {}
+      try {
+        final b = prefs.getBool(key);
+        if (b != null) { all[key] = b; continue; }
+      } catch (_) {}
+      try {
+        final i = prefs.getInt(key);
+        if (i != null) { all[key] = i; continue; }
+      } catch (_) {}
+      try {
+        final d = prefs.getDouble(key);
+        if (d != null) { all[key] = d; continue; }
+      } catch (_) {}
+      try {
+        final sl = prefs.getStringList(key);
+        if (sl != null) { all[key] = sl; }
+      } catch (_) {}
     }
     return all;
   }
