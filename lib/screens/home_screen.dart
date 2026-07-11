@@ -331,6 +331,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await speechToText.initialize();
     }
 
+    // Stop any ongoing TTS so it doesn't get interrupted mid-sentence
+    // by the announcement speech or by a new response later.
+    await flutterTts.stop();
+
     setState(() {
       _micReallyListening = true;
     });
@@ -427,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
       providerId: route.providerId,
       overrideModel: route.model,
       memories: relevantMemories.isNotEmpty ? relevantMemories : null,
-      maxTokens: 500,
+      maxTokens: 1000,
     );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
