@@ -1163,6 +1163,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showSnack(context, 'Import cancelled');
         return;
       }
+      if (settings.isEmpty) {
+        _showSnack(context, 'File contains no settings. Nothing to import.');
+        return;
+      }
       await SettingsService.applyAllSettings(settings);
       _showSnack(context, 'Settings imported successfully. Please restart ARYA.');
     } catch (e) {

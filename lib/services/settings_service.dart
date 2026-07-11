@@ -106,19 +106,31 @@ class SettingsService {
 
   static Future<void> applyAllSettings(Map<String, dynamic> settings) async {
     final prefs = await SharedPreferences.getInstance();
+    var count = 0;
+    var skipped = 0;
     for (final entry in settings.entries) {
       final key = entry.key;
       final val = entry.value;
       if (val is String) {
         await prefs.setString(key, val);
+        count++;
       } else if (val is bool) {
         await prefs.setBool(key, val);
+        count++;
       } else if (val is int) {
         await prefs.setInt(key, val);
+        count++;
       } else if (val is double) {
         await prefs.setDouble(key, val);
+        count++;
+      } else if (val is List<String>) {
+        await prefs.setStringList(key, val);
+        count++;
+      } else {
+        skipped++;
       }
     }
+    DebugLogger().verbose('SettingsService', 'applyAllSettings: applied=$count skipped=$skipped');
   }
 
   static Future<bool> exportToFile(String passphrase) async {
