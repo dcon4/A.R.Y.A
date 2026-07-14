@@ -42,6 +42,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
   Completer<void>? _announceCompleter;
+  static const int _maxTtsChunkSize = 3500;
+  List<String> _responseChunks = [];
+  int _responseChunkIndex = 0;
   String _lastAiResponse = '';
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
 
@@ -191,6 +194,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _announceCompleter!.complete();
       return;
     }
+    // Speak the next chunk of a long response, if any.
+    if (_responseChunkIndex < _responseChunks.length - 1) {
+      _responseChunkIndex++;
+      flutterTts.speak(_responseChunks[_responseChunkIndex]);
+      return;
+    }
+    _clearResponseChunks();
     if (_wakeWordPausedForSpeech) {
       Future.delayed(const Duration(seconds: 2), () {
         if (_wakeWordPausedForSpeech) {
@@ -203,7 +213,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> systemSpeak(String content) async {
     _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
-    await flutterTts.speak(content);
+    if (content.length <= _maxTtsChunkSize) {
+      _clearResponseChunks();
+      await flutterTts.speak(content);
+      return;
+    }
+    _responseChunks = _splitAtSentences(content, _maxTtsChunkSize);
+    _responseChunkIndex = 0;
+    _logger.verbose('HomeScreen', 'Chunking response into ${_responseChunks.length} parts');
+    await flutterTts.speak(_responseChunks[0]);
+  }
+
+  void _clearResponseChunks() {
+    _responseChunks = [];
+    _responseChunkIndex = 0;
+  }
+
+  List<String> _splitAtSentences(String text, int maxChunk) {
+    if (text.length <= maxChunk) return [text];
+    final sentences = text.split(RegExp(r'(?<=[.!?])\s+'));
+    final chunks = <String>[];
+    var current = StringBuffer();
+    for (final sentence in sentences) {
+      if (current.length + sentence.length > maxChunk && current.isNotEmpty) {
+        chunks.add(current.toString().trim());
+        current = StringBuffer();
+      }
+      if (sentence.length > maxChunk) {
+        for (var i = 0; i < sentence.length; i += maxChunk) {
+          final end = (i + maxChunk < sentence.length) ? i + maxChunk : sentence.length;
+          chunks.add(sentence.substring(i, end).trim());
+        }
+        continue;
+      }
+      current.write(sentence);
+      current.write(' ');
+    }
+    if (current.isNotEmpty) {
+      chunks.add(current.toString().trim());
+    }
+    return chunks;
   }
 
   // --- Voice commands ---
@@ -333,6 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Stop any ongoing TTS so it doesn't get interrupted mid-sentence
     // by the announcement speech or by a new response later.
+    _clearResponseChunks();
     await flutterTts.stop();
 
     setState(() {
@@ -431,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
       providerId: route.providerId,
       overrideModel: route.model,
       memories: relevantMemories.isNotEmpty ? relevantMemories : null,
-      maxTokens: 1000,
+      maxTokens: 2000,
     );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
@@ -588,6 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
       lastWords = '';
     });
     conversationService.clear();
+    _clearResponseChunks();
     _showSnackBar('New conversation started');
   }
 
