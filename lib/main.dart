@@ -8,6 +8,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DebugLogger().initialize();
   await BackgroundService.initialize();
+  // If the service was enabled but Android killed the notification (e.g. after
+  // granting notification permission), restart it so the notification reappears.
+  if (BackgroundService.isRunning) {
+    await BackgroundService.start();
+  }
   await WakeWordService.instance.initialize();
   runApp(const MyApp());
 }
