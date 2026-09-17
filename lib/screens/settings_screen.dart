@@ -63,7 +63,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final savedKey = prefs.getString(provider.prefKey) ?? '';
     final savedModel = prefs.getString('api_model') ?? provider.defaultModel;
-    final isCustomModel = !provider.models.any((m) => m.id == savedModel);
+    final savedUseCustom = prefs.getBool('use_custom_model') ?? false;
+    // Fallback: if use_custom_model wasn't saved, infer from hardcoded list
+    final isCustomModel = savedUseCustom || !provider.models.any((m) => m.id == savedModel);
     final savedCustomBaseUrl = prefs.getString('api_custom_base_url') ?? '';
     final savedSystemPrompt = prefs.getString('system_prompt') ?? '';
 
@@ -95,6 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (model.isNotEmpty) {
       await prefs.setString('api_model', model);
     }
+    await prefs.setBool('use_custom_model', _useCustomModel);
 
     if (provider.id == 'custom') {
       await prefs.setString('api_custom_base_url', _customBaseUrlController.text.trim());
