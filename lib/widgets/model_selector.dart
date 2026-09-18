@@ -154,7 +154,7 @@ class _ModelSelectorState extends State<ModelSelector> {
             const Text(
               'Available Models',
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -164,7 +164,7 @@ class _ModelSelectorState extends State<ModelSelector> {
               IconButton(
                 icon: const Icon(
                   Icons.refresh,
-                  color: Color.fromRGBO(255, 87, 51, 1),
+                  color: MyAppTheme.mainFontColor,
                   size: 20,
                 ),
                 onPressed: _fetchModels,
@@ -190,19 +190,19 @@ class _ModelSelectorState extends State<ModelSelector> {
             ),
             prefixIcon: const Icon(
               Icons.search,
-              color: Color.fromRGBO(255, 87, 51, 0.7),
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.7),
               size: 20,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(
-                color: Color.fromRGBO(255, 87, 51, 0.5),
+                color: MyAppTheme.borderColor,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               ),
             ),
             contentPadding: const EdgeInsets.symmetric(
@@ -215,10 +215,10 @@ class _ModelSelectorState extends State<ModelSelector> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color.fromRGBO(255, 87, 51, 0.05),
+            color: MyAppTheme.mainFontColor.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color.fromRGBO(255, 87, 51, 0.2),
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
             ),
           ),
           child: Column(
@@ -252,12 +252,12 @@ class _ModelSelectorState extends State<ModelSelector> {
                   Switch(
                     value: _showFreeOnly,
                     onChanged: (_) => _toggleFreeFilter(),
-                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    activeColor: const MyAppTheme.mainFontColor,
                   ),
                 ],
               ),
               const Divider(
-                color: Color.fromRGBO(255, 87, 51, 0.2),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
                 height: 12,
               ),
               Row(
@@ -289,7 +289,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                   Switch(
                     value: _showWebSearchOnly,
                     onChanged: (_) => _toggleWebSearchFilter(),
-                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    activeColor: const MyAppTheme.mainFontColor,
                   ),
                 ],
               ),
@@ -303,7 +303,7 @@ class _ModelSelectorState extends State<ModelSelector> {
             child: Center(
               child: CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  Color.fromRGBO(255, 87, 51, 1),
+                  MyAppTheme.mainFontColor,
                 ),
               ),
             ),
@@ -335,7 +335,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                 color: const Color.fromRGBO(255, 255, 255, 0.05),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color.fromRGBO(255, 87, 51, 0.2),
+                  color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
                 ),
               ),
               child: const Text(
@@ -368,12 +368,12 @@ class _ModelSelectorState extends State<ModelSelector> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color.fromRGBO(255, 87, 51, 0.2)
+                            ? MyAppTheme.mainFontColor.withValues(alpha: 0.2)
                             : const Color.fromRGBO(255, 255, 255, 0.05),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
-                              ? const Color.fromRGBO(255, 87, 51, 1)
+                              ? const MyAppTheme.mainFontColor
                               : const Color.fromRGBO(255, 255, 255, 0.1),
                         ),
                       ),
@@ -383,7 +383,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                             isSelected
                                 ? Icons.radio_button_checked
                                 : Icons.radio_button_off,
-                            color: const Color.fromRGBO(255, 87, 51, 1),
+                            color: const MyAppTheme.mainFontColor,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -443,16 +443,16 @@ class _ModelSelectorState extends State<ModelSelector> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color.fromRGBO(255, 87, 51, 0.2),
+                                color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: const Color.fromRGBO(255, 87, 51, 0.5),
+                                  color: const MyAppTheme.borderColor,
                                 ),
                               ),
                               child: const Text(
                                 'VISION',
                                 style: TextStyle(
-                                  color: Color.fromRGBO(255, 87, 51, 1),
+                                  color: MyAppTheme.mainFontColor,
                                   fontFamily: 'Cera Pro',
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,

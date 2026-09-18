@@ -627,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.grey[900],
         title: const Text(
           'Save Conversation',
-          style: TextStyle(color: Color.fromRGBO(255, 87, 51, 1)),
+          style: TextStyle(color: MyAppTheme.mainFontColor),
         ),
         content: TextField(
           controller: subjectController,
@@ -638,12 +638,12 @@ class _HomeScreenState extends State<HomeScreen> {
             hintStyle: TextStyle(color: Colors.grey[500]),
             enabledBorder: OutlineInputBorder(
               borderSide: BorderSide(
-                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderSide: const BorderSide(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
               ),
             ),
           ),
@@ -660,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.pop(ctx, subjectController.text),
             child: const Text(
               'Save',
-              style: TextStyle(color: Color.fromRGBO(255, 87, 51, 1)),
+              style: TextStyle(color: MyAppTheme.mainFontColor),
             ),
           ),
         ],
@@ -729,7 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+        backgroundColor: const MyAppTheme.mainFontColor,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -747,7 +747,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTextInputBar() {
     return Container(
-      padding: EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 8),
+      padding: EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 24),
       decoration: BoxDecoration(
         color: Colors.grey[900],
         border: Border(
@@ -759,6 +759,34 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Mic button
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _micReallyListening
+                  ? MyAppTheme.mainFontColor
+                  : MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+            child: IconButton(
+              icon: Icon(
+                _micReallyListening ? Icons.mic : Icons.mic_none,
+                color: Colors.white,
+                size: 22,
+              ),
+              onPressed: () async {
+                if (await speechToText.hasPermission &&
+                    speechToText.isNotListening) {
+                  await startListening();
+                } else if (speechToText.isListening) {
+                  await stopListening();
+                } else {
+                  initSpeechToText();
+                }
+              },
+              tooltip: 'Microphone',
+            ),
+          ),
+          const SizedBox(width: 4),
           Expanded(
             child: TextField(
               controller: _textInputController,
@@ -793,7 +821,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
             ),
             child: IconButton(
               icon: const Icon(
@@ -821,7 +849,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             DrawerHeader(
               decoration: const BoxDecoration(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,7 +887,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.settings, color: Color.fromRGBO(255, 87, 51, 1)),
+              leading: const Icon(Icons.settings, color: MyAppTheme.mainFontColor),
               title: const Text(
                 "Settings",
                 style: TextStyle(color: Colors.white, fontFamily: 'Cera Pro'),
@@ -895,7 +923,7 @@ class _HomeScreenState extends State<HomeScreen> {
               iconSize: 45,
               icon: const Icon(
                 Icons.menu,
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 size: 28,
               ),
               onPressed: () {
@@ -910,7 +938,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(
               Icons.bug_report,
-              color: Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
               size: 28,
             ),
             onPressed: _shareLog,
@@ -919,7 +947,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(
               Icons.save_alt,
-              color: Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
               size: 28,
             ),
             onPressed: _manualSave,
@@ -928,7 +956,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(
               Icons.add_comment,
-              color: Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
               size: 28,
             ),
             onPressed: _newConversation,
@@ -937,7 +965,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(
               Icons.settings,
-              color: Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
               size: 28,
             ),
             onPressed: () {
@@ -996,7 +1024,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             await BackgroundService.setEnabled(val);
                             setState(() {});
                           },
-                          activeColor: Color.fromRGBO(255, 87, 51, 1),
+                          activeColor: MyAppTheme.mainFontColor,
                         ),
                       ],
                     ),
@@ -1248,7 +1276,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: TextStyle(fontFamily: 'Cera Pro'),
                               ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Color.fromRGBO(255, 87, 51, 0.3),
+                                backgroundColor: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                                 foregroundColor: MyAppTheme.mainFontColor,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -1269,38 +1297,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           _buildTextInputBar(),
         ],
-      ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: MyAppTheme.mainFontColor.withValues(alpha: 0.4),
-              blurRadius: 15,
-              spreadRadius: 3,
-            ),
-          ],
-        ),
-        child: FloatingActionButton(
-          onPressed: () async {
-            debugPrint("Floating Action Button Pressed");
-            if (await speechToText.hasPermission &&
-                speechToText.isNotListening) {
-              await startListening();
-            } else if (speechToText.isListening) {
-              await stopListening();
-            } else {
-              initSpeechToText();
-            }
-          },
-          backgroundColor: MyAppTheme.mainFontColor,
-          elevation: 0,
-          child: const Icon(
-            Icons.keyboard_voice,
-            color: MyAppTheme.whiteColor,
-            size: 28,
-          ),
-        ),
       ),
     );
   }

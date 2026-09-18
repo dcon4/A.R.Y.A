@@ -211,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Text(
           "AI Provider",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -234,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: const Color.fromRGBO(255, 255, 255, 0.08),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
             ),
           ),
           child: DropdownButtonHideUnderline(
@@ -269,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(
           "${_selectedProvider.name} API Key",
           style: const TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -305,19 +305,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(
-                color: Color.fromRGBO(255, 87, 51, 0.5),
+                color: MyAppTheme.borderColor,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 width: 2,
               ),
             ),
@@ -327,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 IconButton(
                   icon: Icon(
                     _obscureKey ? Icons.visibility_off : Icons.visibility,
-                    color: const Color.fromRGBO(255, 87, 51, 0.7),
+                    color: MyAppTheme.mainFontColor.withValues(alpha: 0.7),
                   ),
                   onPressed: () {
                     setState(() {
@@ -338,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 IconButton(
                   icon: const Icon(
                     Icons.paste,
-                    color: Color.fromRGBO(255, 87, 51, 0.7),
+                    color: MyAppTheme.mainFontColor.withValues(alpha: 0.7),
                   ),
                   onPressed: () async {
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -380,25 +380,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           labelText: "Base URL",
           labelStyle: const TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontFamily: 'Cera Pro',
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(
-              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide(
-              color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(
-              color: Color.fromRGBO(255, 87, 51, 1),
+              color: MyAppTheme.mainFontColor,
               width: 2,
             ),
           ),
@@ -418,7 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Text(
           "System Prompt",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -454,19 +454,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 width: 2,
               ),
             ),
@@ -490,7 +490,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: ElevatedButton(
             onPressed: _saveSettings,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              backgroundColor: const MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -539,12 +539,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 32),
-        const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+        const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
         const SizedBox(height: 16),
         const Text(
           "Model",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -591,7 +591,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _useCustomModel
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
-                  color: const Color.fromRGBO(255, 87, 51, 1),
+                  color: const MyAppTheme.mainFontColor,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
@@ -630,7 +630,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide(
-                    color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.3),
+                    color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                   ),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
@@ -653,7 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text(
               "Model Routing",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -691,7 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (mounted) setState(() => _autoRouteEnabled = val);
                     setInnerState(() {});
                   },
-                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                  activeColor: const MyAppTheme.mainFontColor,
                 ),
               ],
             ),
@@ -784,7 +784,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text(
               "Memory",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -837,19 +837,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: const Icon(
                         Icons.menu_book,
                         size: 16,
-                        color: Color.fromRGBO(255, 87, 51, 1),
+                        color: MyAppTheme.mainFontColor,
                       ),
                       label: const Text(
                         "Read",
                         style: TextStyle(
-                          color: Color.fromRGBO(255, 87, 51, 1),
+                          color: MyAppTheme.mainFontColor,
                           fontFamily: 'Cera Pro',
                           fontSize: 13,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                          color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                          color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -871,19 +871,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: const Icon(
                         Icons.delete_outline,
                         size: 16,
-                        color: Color.fromRGBO(255, 87, 51, 1),
+                        color: MyAppTheme.mainFontColor,
                       ),
                       label: const Text(
                         "Clear",
                         style: TextStyle(
-                          color: Color.fromRGBO(255, 87, 51, 1),
+                          color: MyAppTheme.mainFontColor,
                           fontFamily: 'Cera Pro',
                           fontSize: 13,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                          color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                          color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -907,7 +907,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Text(
           "Settings Backup",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -934,19 +934,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(
                     Icons.file_upload_outlined,
                     size: 16,
-                    color: Color.fromRGBO(255, 87, 51, 1),
+                    color: MyAppTheme.mainFontColor,
                   ),
                   label: const Text(
                     "Export",
                     style: TextStyle(
-                      color: Color.fromRGBO(255, 87, 51, 1),
+                      color: MyAppTheme.mainFontColor,
                       fontFamily: 'Cera Pro',
                       fontSize: 13,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
-                      color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                      color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -964,19 +964,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(
                     Icons.file_download_outlined,
                     size: 16,
-                    color: Color.fromRGBO(255, 87, 51, 1),
+                    color: MyAppTheme.mainFontColor,
                   ),
                   label: const Text(
                     "Import",
                     style: TextStyle(
-                      color: Color.fromRGBO(255, 87, 51, 1),
+                      color: MyAppTheme.mainFontColor,
                       fontFamily: 'Cera Pro',
                       fontSize: 13,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
-                      color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                      color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -1001,7 +1001,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text(
           'Encrypt Settings',
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontFamily: 'Cera Pro',
             fontWeight: FontWeight.bold,
           ),
@@ -1065,7 +1065,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.pop(ctx, passphraseController.text);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              backgroundColor: const MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
             ),
             child: const Text(
@@ -1100,7 +1100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text(
           'Decrypt Settings',
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontFamily: 'Cera Pro',
             fontWeight: FontWeight.bold,
           ),
@@ -1149,7 +1149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.pop(ctx, passphraseController.text);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+              backgroundColor: const MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
             ),
             child: const Text(
@@ -1190,7 +1190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text(
               "Wake Word Detection",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -1230,7 +1230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setInnerState(() {});
                     setState(() {});
                   },
-                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                  activeColor: const MyAppTheme.mainFontColor,
                 ),
               ],
             ),
@@ -1251,7 +1251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     min: 0.1,
                     max: 0.9,
                     divisions: 8,
-                    activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                    activeColor: const MyAppTheme.mainFontColor,
                     inactiveColor: const Color.fromRGBO(255, 255, 255, 0.2),
                     label: ww.threshold.toStringAsFixed(1),
                     onChanged: (val) {
@@ -1277,7 +1277,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text("Testing wake word detection for 5 seconds. Say 'hey rhasspy'..."),
-                    backgroundColor: Color.fromRGBO(255, 87, 51, 1),
+                    backgroundColor: MyAppTheme.mainFontColor,
                     duration: Duration(seconds: 5),
                   ),
                 );
@@ -1310,7 +1310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: const Icon(Icons.science_outlined, size: 18),
               label: const Text("Test Wake Word"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                backgroundColor: const MyAppTheme.mainFontColor,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -1329,7 +1329,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text(
               "Web Search",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -1368,7 +1368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await providers.setWebSearchEnabled(val);
                         setInnerState(() {});
                       },
-                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      activeColor: const MyAppTheme.mainFontColor,
                     );
                   },
                 ),
@@ -1391,7 +1391,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text(
               "Brave Search",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -1430,7 +1430,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await BraveSearchService.setEnabled(val);
                         setInnerState(() {});
                       },
-                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      activeColor: const MyAppTheme.mainFontColor,
                     );
                   },
                 ),
@@ -1475,7 +1475,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                            backgroundColor: const MyAppTheme.mainFontColor,
                             foregroundColor: Colors.white,
                           ),
                           child: Text(braveSaved ? "Saved!" : "Save Brave Key"),
@@ -1517,7 +1517,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: const Color.fromRGBO(255, 87, 51, 1),
+              color: const MyAppTheme.mainFontColor,
               size: 20,
             ),
             const SizedBox(width: 12),
@@ -1558,7 +1558,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Text(
           "Smart Free",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -1596,7 +1596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await prefs.setBool('smart_free_enabled', val);
                 if (mounted) setState(() => _smartFreeEnabled = val);
               },
-              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+              activeColor: const MyAppTheme.mainFontColor,
             ),
           ],
         ),
@@ -1616,7 +1616,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Text(
                   "Text-to-Speech",
                   style: TextStyle(
-                    color: Color.fromRGBO(255, 87, 51, 1),
+                    color: MyAppTheme.mainFontColor,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Cera Pro',
@@ -1636,7 +1636,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Icon(
             Icons.chevron_right,
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
           ),
         ],
       ),
@@ -1718,7 +1718,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text(
                 "Text-to-Speech Settings",
                 style: TextStyle(
-                  color: Color.fromRGBO(255, 87, 51, 1),
+                  color: MyAppTheme.mainFontColor,
                   fontFamily: 'Cera Pro',
                   fontWeight: FontWeight.bold,
                 ),
@@ -1920,8 +1920,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     if (val != null) selectedVoiceName = val;
                                   });
                                 },
-                                activeColor: const Color
-                                    .fromRGBO(255, 87, 51, 1),
+                                activeColor: MyAppTheme.mainFontColor,
                                 contentPadding: EdgeInsets.zero,
                                 dense: true,
                               );
@@ -1946,9 +1945,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       min: 0.1,
                       max: 1.0,
                       divisions: 18,
-                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      activeColor: const MyAppTheme.mainFontColor,
                       inactiveColor:
-                          const Color.fromRGBO(255, 87, 51, 0.3),
+                          MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                       label: speechRate.toStringAsFixed(1),
                       onChanged: (val) {
                         setDialogState(() {
@@ -1973,9 +1972,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       min: 0.5,
                       max: 2.0,
                       divisions: 15,
-                      activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                      activeColor: const MyAppTheme.mainFontColor,
                       inactiveColor:
-                          const Color.fromRGBO(255, 87, 51, 0.3),
+                          MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                       label: pitch.toStringAsFixed(1),
                       onChanged: (val) {
                         setDialogState(() {
@@ -2014,7 +2013,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                              const Color.fromRGBO(255, 87, 51, 1),
+                              const MyAppTheme.mainFontColor,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -2057,7 +2056,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromRGBO(255, 87, 51, 1),
+                    backgroundColor: const MyAppTheme.mainFontColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -2084,13 +2083,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color.fromRGBO(255, 87, 51, 1)),
+          icon: const Icon(Icons.arrow_back, color: MyAppTheme.mainFontColor),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           "Settings",
           style: TextStyle(
-            color: Color.fromRGBO(255, 87, 51, 1),
+            color: MyAppTheme.mainFontColor,
             fontSize: 22,
             fontWeight: FontWeight.bold,
             fontFamily: 'Cera Pro',
@@ -2110,35 +2109,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             _buildSystemPromptSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildModelSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildModelRoutingSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSmartFreeSection(),
             _buildTtsSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildWebSearchToggle(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildMemorySection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Background Service",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -2175,17 +2174,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await BackgroundService.setEnabled(val);
                     setState(() {});
                   },
-                  activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                  activeColor: const MyAppTheme.mainFontColor,
                 ),
               ],
             ),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Mic Announcement",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -2261,8 +2260,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               min: 5,
               max: 120,
               divisions: 23,
-              activeColor: const Color.fromRGBO(255, 87, 51, 1),
-              inactiveColor: const Color.fromRGBO(255, 87, 51, 0.3),
+              activeColor: const MyAppTheme.mainFontColor,
+              inactiveColor: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               label: "${_listeningDuration}s",
               onChanged: (v) async {
                 final val = v.round();
@@ -2294,8 +2293,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               min: 1,
               max: 30,
               divisions: 29,
-              activeColor: const Color.fromRGBO(255, 87, 51, 1),
-              inactiveColor: const Color.fromRGBO(255, 87, 51, 0.3),
+              activeColor: const MyAppTheme.mainFontColor,
+              inactiveColor: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               label: "${_pauseDuration}s",
               onChanged: (v) async {
                 final val = v.round();
@@ -2305,20 +2304,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildWakeWordSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSettingsBackupSection(),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Debug Logging",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -2348,7 +2347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             logger.setVerboseEnabled(val);
                             setInnerState(() {});
                           },
-                          activeColor: const Color.fromRGBO(255, 87, 51, 1),
+                          activeColor: const MyAppTheme.mainFontColor,
                         ),
                       ],
                     ),
@@ -2360,18 +2359,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onPressed: () => _shareLog(context),
                         icon: const Icon(
                           Icons.bug_report,
-                          color: Color.fromRGBO(255, 87, 51, 1),
+                          color: MyAppTheme.mainFontColor,
                         ),
                         label: const Text(
                           "Share Log",
                           style: TextStyle(
-                            color: Color.fromRGBO(255, 87, 51, 1),
+                            color: MyAppTheme.mainFontColor,
                             fontFamily: 'Cera Pro',
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(
-                            color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                            color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -2384,12 +2383,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             const SizedBox(height: 32),
-            const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
+            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Save Location",
               style: TextStyle(
-                color: Color.fromRGBO(255, 87, 51, 1),
+                color: MyAppTheme.mainFontColor,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Cera Pro',
@@ -2413,18 +2412,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: _pickFolder,
                 icon: const Icon(
                   Icons.folder_open,
-                  color: Color.fromRGBO(255, 87, 51, 1),
+                  color: MyAppTheme.mainFontColor,
                 ),
                 label: const Text(
                   "Pick Folder",
                   style: TextStyle(
-                    color: Color.fromRGBO(255, 87, 51, 1),
+                    color: MyAppTheme.mainFontColor,
                     fontFamily: 'Cera Pro',
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(
-                    color: const Color.fromRGBO(255, 87, 51, 1).withValues(alpha: 0.5),
+                    color: MyAppTheme.mainFontColor.withValues(alpha: 0.5),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -2474,7 +2473,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: value,
               groupValue: groupValue,
               onChanged: onChanged,
-              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+              activeColor: const MyAppTheme.mainFontColor,
             ),
             Expanded(
               child: Column(
