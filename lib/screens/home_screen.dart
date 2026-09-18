@@ -471,46 +471,55 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> sendMessageToOpenRouter() async {
     if (lastWords.isEmpty) return;
 
-    _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
+    try {
+      _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
 
-    // Check for voice commands first
-    if (await _handleVoiceCommand(lastWords)) {
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    // Smart Free: classify query and optionally confirm before answering
-    final prefs = await SharedPreferences.getInstance();
-    final smartFree = prefs.getBool('smart_free_enabled') ?? false;
-    if (smartFree) {
-      final classifier = QueryClassifier.instance;
-      final classification = await classifier.classify(
-        lastWords,
-        smartFreeEnabled: true,
-      );
-
-      if (classification.needsConfirmation) {
-        final summary = classifier.buildSummary(classification, lastWords);
-        _logger.log('HomeScreen', 'Smart Free: confirming query (${classification.category}, research=${classification.isResearch})');
+      // Check for voice commands first
+      if (await _handleVoiceCommand(lastWords)) {
         setState(() {
-          _pendingClassification = classification;
-          _pendingQuery = lastWords;
-          _isConfirming = true;
-          generatedContent = summary;
           isLoading = false;
         });
-        systemSpeak(summary);
         return;
       }
 
-      // No confirmation needed — proceed with classification hints
-      await _sendQueryToAI(lastWords, classification: classification);
-      return;
-    }
+      // Smart Free: classify query and optionally confirm before answering
+      final prefs = await SharedPreferences.getInstance();
+      final smartFree = prefs.getBool('smart_free_enabled') ?? false;
+      if (smartFree) {
+        final classifier = QueryClassifier.instance;
+        final classification = await classifier.classify(
+          lastWords,
+          smartFreeEnabled: true,
+        );
 
-    await _sendQueryToAI(lastWords);
+        if (classification.needsConfirmation) {
+          final summary = classifier.buildSummary(classification, lastWords);
+          _logger.log('HomeScreen', 'Smart Free: confirming query (${classification.category}, research=${classification.isResearch})');
+          setState(() {
+            _pendingClassification = classification;
+            _pendingQuery = lastWords;
+            _isConfirming = true;
+            generatedContent = summary;
+            isLoading = false;
+          });
+          systemSpeak(summary);
+          return;
+        }
+
+        // No confirmation needed — proceed with classification hints
+        await _sendQueryToAI(lastWords, classification: classification);
+        return;
+      }
+
+      await _sendQueryToAI(lastWords);
+    } catch (e, st) {
+      _logger.error('HomeScreen', 'sendMessageToOpenRouter failed', e);
+      _logger.error('HomeScreen', 'Stack trace: $st');
+      setState(() {
+        generatedContent = 'Error: $e';
+        isLoading = false;
+      });
+    }
   }
 
   Future<void> _confirmQuery() async {
@@ -537,66 +546,71 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sendQueryToAI(String query, {QueryClassification? classification}) async {
-    setState(() {
-      isLoading = true;
-    });
+    try {
+      setState(() {
+        isLoading = true;
+      });
 
-    // Recall relevant memories
-    await MemoryService.instance.load();
-    final relevantMemories = MemoryService.instance.search(query);
-    for (final m in relevantMemories) {
-      MemoryService.instance.incrementHitCount(m.id);
-    }
-
-    // Determine route (provider + model)
-    final route = await _resolveRoute(query);
-    _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
-
-    final isResearch = classification?.isResearch ?? false;
-
-    final response = await openaiService.chatGPTAPI(
-      query,
-      history: _messageHistory.isNotEmpty ? _messageHistory : null,
-      providerId: route.providerId,
-      overrideModel: route.model,
-      memories: relevantMemories.isNotEmpty ? relevantMemories : null,
-      maxTokens: 2000,
-      isResearch: isResearch,
-    );
-
-    _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
-
-    setState(() {
-      generatedContent = response;
-      isLoading = false;
-    });
-
-    // Log the conversation entry
-    if (response != null && response.isNotEmpty) {
-      _lastAiResponse = response;
-      _messageHistory.add({'role': 'user', 'content': query});
-      _messageHistory.add({'role': 'assistant', 'content': response});
-
-      conversationService.addEntry(ConversationEntry(
-        userQuery: query,
-        aiResponse: response,
-        model: route.model,
-      ));
-
-      // Auto-save if enabled
-      try {
-        await conversationService.autoSave();
-      } catch (_) {
-        // Silently handle auto-save errors
+      // Recall relevant memories
+      await MemoryService.instance.load();
+      final relevantMemories = MemoryService.instance.search(query);
+      for (final m in relevantMemories) {
+        MemoryService.instance.incrementHitCount(m.id);
       }
 
-      // Fire-and-forget TTS for AI responses to prevent hang on long text.
-      // The completion handler still fires when TTS finishes, which resumes
-      // the wake word detector normally (guarded by _wakeWordPausedForSpeech).
-      systemSpeak(response);
+      // Determine route (provider + model)
+      final route = await _resolveRoute(query);
+      _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
+
+      final isResearch = classification?.isResearch ?? false;
+
+      final response = await openaiService.chatGPTAPI(
+        query,
+        history: _messageHistory.isNotEmpty ? _messageHistory : null,
+        providerId: route.providerId,
+        overrideModel: route.model,
+        memories: relevantMemories.isNotEmpty ? relevantMemories : null,
+        maxTokens: 2000,
+        isResearch: isResearch,
+      );
+
+      _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
+
+      setState(() {
+        generatedContent = response;
+        isLoading = false;
+      });
+
+      // Log the conversation entry
+      if (response != null && response.isNotEmpty) {
+        _lastAiResponse = response;
+        _messageHistory.add({'role': 'user', 'content': query});
+        _messageHistory.add({'role': 'assistant', 'content': response});
+
+        conversationService.addEntry(ConversationEntry(
+          userQuery: query,
+          aiResponse: response,
+          model: route.model,
+        ));
+
+        // Auto-save if enabled
+        try {
+          await conversationService.autoSave();
+        } catch (_) {
+          // Silently handle auto-save errors
+        }
+
+        // Fire-and-forget TTS for AI responses to prevent hang on long text.
+        systemSpeak(response);
+      }
+    } catch (e, st) {
+      _logger.error('HomeScreen', '_sendQueryToAI failed', e);
+      _logger.error('HomeScreen', 'Stack trace: $st');
+      setState(() {
+        generatedContent = 'Error: $e';
+        isLoading = false;
+      });
     }
-    // Wake word resume is handled by the TTS completion handler with a
-    // 2-second delay to avoid echo re-triggering.
   }
 
   void _sendTextMessage() {
