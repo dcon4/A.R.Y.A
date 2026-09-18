@@ -76,9 +76,9 @@ class QueryClassifier {
 
   static final _topicPatterns = {
     'science': RegExp(r'\b(science|scientific|physics|chemistry|biology|lab(?:oratory)?|experiment|hypothesis|theory|quantum|neuro|genetic|dna|rna|evolution|climate|astro(?:nomy|physics))\b'),
-    'technology': RegExp(r'\b(tech(?:nology)?|comput(?:er|ing)|software|hardware|ai|artificial intelligence|machine learning|neural|programming|code|algorithm|database|cloud|cyber|blockchain|crypto|robot))\b'),
+    'technology': RegExp(r'\b(tech(?:nology)?|comput(?:er|ing)|software|hardware|ai|artificial intelligence|machine learning|neural|programming|code|algorithm|database|cloud|cyber|blockchain|crypto|robot)\b'),
     'medicine': RegExp(r'\b(med(?:ical|icine|ication)|health|disease|symptom|diagnos|treatment|therap|surgery|vaccine|clinical|patient|doctor|pharmaceutical|drug)\b'),
-    'politics': RegExp(r'\b(politic|government|policy|election|democrat|republican|congress|parliament|legislat|regulat|vote|campaign|partisan|ideolog))\b'),
+    'politics': RegExp(r'\b(politic|government|policy|election|democrat|republican|congress|parliament|legislat|regulat|vote|campaign|partisan|ideolog)\b'),
     'economics': RegExp(r'\b(econom|financ|market|trade|gdp|inflation|recession|invest(?:ment|ing)|stock|bond|fiscal|monetary|budget|tax(?:ation)?)\b'),
     'philosophy': RegExp(r'\b(philosoph|moral|ethic|consciousness|existential|epistemolog|metaphysic|ontology|logic|reasoning|argument)\b'),
     'history': RegExp(r'\b(histor|ancient|medieval|century|war|revolution|empire|dynasty|civiliz|colonial|industrial)\b'),
