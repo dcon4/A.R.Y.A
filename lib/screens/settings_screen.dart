@@ -491,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: ElevatedButton(
             onPressed: _saveSettings,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const MyAppTheme.mainFontColor,
+              backgroundColor: MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -540,7 +540,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 32),
-        const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+        Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
         const SizedBox(height: 16),
         const Text(
           "Model",
@@ -592,7 +592,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _useCustomModel
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
-                  color: const MyAppTheme.mainFontColor,
+                  color: MyAppTheme.mainFontColor,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
@@ -692,7 +692,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (mounted) setState(() => _autoRouteEnabled = val);
                     setInnerState(() {});
                   },
-                  activeColor: const MyAppTheme.mainFontColor,
+                  activeColor: MyAppTheme.mainFontColor,
                 ),
               ],
             ),
@@ -1066,7 +1066,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.pop(ctx, passphraseController.text);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const MyAppTheme.mainFontColor,
+              backgroundColor: MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
             ),
             child: const Text(
@@ -1150,7 +1150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.pop(ctx, passphraseController.text);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const MyAppTheme.mainFontColor,
+              backgroundColor: MyAppTheme.mainFontColor,
               foregroundColor: Colors.white,
             ),
             child: const Text(
@@ -1231,7 +1231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setInnerState(() {});
                     setState(() {});
                   },
-                  activeColor: const MyAppTheme.mainFontColor,
+                  activeColor: MyAppTheme.mainFontColor,
                 ),
               ],
             ),
@@ -1252,7 +1252,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     min: 0.1,
                     max: 0.9,
                     divisions: 8,
-                    activeColor: const MyAppTheme.mainFontColor,
+                    activeColor: MyAppTheme.mainFontColor,
                     inactiveColor: const Color.fromRGBO(255, 255, 255, 0.2),
                     label: ww.threshold.toStringAsFixed(1),
                     onChanged: (val) {
@@ -1311,7 +1311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: const Icon(Icons.science_outlined, size: 18),
               label: const Text("Test Wake Word"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const MyAppTheme.mainFontColor,
+                backgroundColor: MyAppTheme.mainFontColor,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -1369,7 +1369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await providers.setWebSearchEnabled(val);
                         setInnerState(() {});
                       },
-                      activeColor: const MyAppTheme.mainFontColor,
+                      activeColor: MyAppTheme.mainFontColor,
                     );
                   },
                 ),
@@ -1431,7 +1431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await BraveSearchService.setEnabled(val);
                         setInnerState(() {});
                       },
-                      activeColor: const MyAppTheme.mainFontColor,
+                      activeColor: MyAppTheme.mainFontColor,
                     );
                   },
                 ),
@@ -1476,7 +1476,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const MyAppTheme.mainFontColor,
+                            backgroundColor: MyAppTheme.mainFontColor,
                             foregroundColor: Colors.white,
                           ),
                           child: Text(braveSaved ? "Saved!" : "Save Brave Key"),
@@ -1518,7 +1518,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: const MyAppTheme.mainFontColor,
+              color: MyAppTheme.mainFontColor,
               size: 20,
             ),
             const SizedBox(width: 12),
@@ -1597,7 +1597,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await prefs.setBool('smart_free_enabled', val);
                 if (mounted) setState(() => _smartFreeEnabled = val);
               },
-              activeColor: const MyAppTheme.mainFontColor,
+              activeColor: MyAppTheme.mainFontColor,
             ),
           ],
         ),
@@ -1946,7 +1946,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       min: 0.1,
                       max: 1.0,
                       divisions: 18,
-                      activeColor: const MyAppTheme.mainFontColor,
+                      activeColor: MyAppTheme.mainFontColor,
                       inactiveColor:
                           MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                       label: speechRate.toStringAsFixed(1),
@@ -1973,7 +1973,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       min: 0.5,
                       max: 2.0,
                       divisions: 15,
-                      activeColor: const MyAppTheme.mainFontColor,
+                      activeColor: MyAppTheme.mainFontColor,
                       inactiveColor:
                           MyAppTheme.mainFontColor.withValues(alpha: 0.3),
                       label: pitch.toStringAsFixed(1),
@@ -2014,7 +2014,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                              const MyAppTheme.mainFontColor,
+                              MyAppTheme.mainFontColor,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -2057,7 +2057,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const MyAppTheme.mainFontColor,
+                    backgroundColor: MyAppTheme.mainFontColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -2110,30 +2110,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             _buildSystemPromptSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildModelSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildModelRoutingSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSmartFreeSection(),
             _buildTtsSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildWebSearchToggle(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildMemorySection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Background Service",
@@ -2175,12 +2175,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await BackgroundService.setEnabled(val);
                     setState(() {});
                   },
-                  activeColor: const MyAppTheme.mainFontColor,
+                  activeColor: MyAppTheme.mainFontColor,
                 ),
               ],
             ),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Mic Announcement",
@@ -2261,7 +2261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               min: 5,
               max: 120,
               divisions: 23,
-              activeColor: const MyAppTheme.mainFontColor,
+              activeColor: MyAppTheme.mainFontColor,
               inactiveColor: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               label: "${_listeningDuration}s",
               onChanged: (v) async {
@@ -2294,7 +2294,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               min: 1,
               max: 30,
               divisions: 29,
-              activeColor: const MyAppTheme.mainFontColor,
+              activeColor: MyAppTheme.mainFontColor,
               inactiveColor: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
               label: "${_pauseDuration}s",
               onChanged: (v) async {
@@ -2305,15 +2305,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildWakeWordSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSettingsBackupSection(),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Debug Logging",
@@ -2348,7 +2348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             logger.setVerboseEnabled(val);
                             setInnerState(() {});
                           },
-                          activeColor: const MyAppTheme.mainFontColor,
+                          activeColor: MyAppTheme.mainFontColor,
                         ),
                       ],
                     ),
@@ -2384,7 +2384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             const SizedBox(height: 32),
-            const Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "Save Location",
@@ -2474,7 +2474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: value,
               groupValue: groupValue,
               onChanged: onChanged,
-              activeColor: const MyAppTheme.mainFontColor,
+              activeColor: MyAppTheme.mainFontColor,
             ),
             Expanded(
               child: Column(

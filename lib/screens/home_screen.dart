@@ -729,7 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const MyAppTheme.mainFontColor,
+        backgroundColor: MyAppTheme.mainFontColor,
         behavior: SnackBarBehavior.floating,
       ),
     );

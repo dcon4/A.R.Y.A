@@ -253,7 +253,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                   Switch(
                     value: _showFreeOnly,
                     onChanged: (_) => _toggleFreeFilter(),
-                    activeColor: const MyAppTheme.mainFontColor,
+                    activeColor: MyAppTheme.mainFontColor,
                   ),
                 ],
               ),
@@ -290,7 +290,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                   Switch(
                     value: _showWebSearchOnly,
                     onChanged: (_) => _toggleWebSearchFilter(),
-                    activeColor: const MyAppTheme.mainFontColor,
+                    activeColor: MyAppTheme.mainFontColor,
                   ),
                 ],
               ),
@@ -374,7 +374,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
-                              ? const MyAppTheme.mainFontColor
+                              ? MyAppTheme.mainFontColor
                               : const Color.fromRGBO(255, 255, 255, 0.1),
                         ),
                       ),
@@ -384,7 +384,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                             isSelected
                                 ? Icons.radio_button_checked
                                 : Icons.radio_button_off,
-                            color: const MyAppTheme.mainFontColor,
+                            color: MyAppTheme.mainFontColor,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -447,7 +447,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                                 color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: const MyAppTheme.borderColor,
+                                  color: MyAppTheme.borderColor,
                                 ),
                               ),
                               child: const Text(
