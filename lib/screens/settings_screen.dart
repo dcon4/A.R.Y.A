@@ -81,8 +81,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _customBaseUrlController.text = savedCustomBaseUrl;
       _currentModels = provider.models;
       _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
-      _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 30;
-      _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 3;
+      _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 60;
+      _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 12;
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
     });

@@ -49,6 +49,8 @@ class _HomeScreenState extends State<HomeScreen> {
   QueryClassification? _pendingClassification;
   String _pendingQuery = '';
   bool _isConfirming = false;
+  String _previousUserQuery = '';
+  String _previousAiResponse = '';
 
   @override
   void initState() {
@@ -399,8 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
       await _speakProviderAnnouncement(prefs);
     }
 
-    final listenSec = prefs.getInt('listening_duration_seconds') ?? 30;
-    final pauseSec = prefs.getInt('pause_duration_seconds') ?? 3;
+    final listenSec = prefs.getInt('listening_duration_seconds') ?? 60;
+    final pauseSec = prefs.getInt('pause_duration_seconds') ?? 12;
 
     await speechToText.listen(
       onResult: onSpeechResult,
@@ -460,6 +462,37 @@ class _HomeScreenState extends State<HomeScreen> {
         _isConfirming = false;
         _pendingClassification = null;
         _pendingQuery = '';
+      }
+
+      // Context-aware follow-up: check if this might be a misheard query
+      if (_previousUserQuery.isNotEmpty && !_isConfirming) {
+        final lower = lastWords.toLowerCase().trim();
+        final wordCount = lower.split(RegExp(r'\s+')).length;
+
+        // Short queries are almost always follow-ups ("why?", "how?", "tell me more")
+        final isShort = wordCount <= 4;
+
+        // Check if query contains pronouns or reference words linking to prior context
+        final hasPronoun = RegExp(r'\b(it|that|this|they|them|those|these|he|she|him|her|its)\b').hasMatch(lower);
+
+        // Check if query contains question marks (questions about prior topic)
+        final hasQuestionMark = lower.contains('?');
+
+        // Check for shared keywords with previous AI response
+        final responseWords = _previousAiResponse.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length > 4).toSet();
+        final queryWords = lower.split(RegExp(r'\s+')).where((w) => w.length > 4).toSet();
+        final sharedKeywords = responseWords.intersection(queryWords);
+        final hasSharedContext = sharedKeywords.length >= 2;
+
+        // If none of the above, this might be a misheard transcription — ask for clarification
+        if (!isShort && !hasPronoun && !hasQuestionMark && !hasSharedContext) {
+          _logger.log('HomeScreen', 'Context check: possibly misheard (no link to prior context)');
+          setState(() {
+            generatedContent = "I think you might be starting a new topic. Did you mean to ask about something different, or would you like to continue the previous conversation?";
+          });
+          systemSpeak("I think you might be starting a new topic. Did you mean to ask about something different, or would you like to continue the previous conversation?");
+          return;
+        }
       }
 
       Future.delayed(Duration(milliseconds: 500), () {
@@ -584,6 +617,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // Log the conversation entry
       if (response != null && response.isNotEmpty) {
         _lastAiResponse = response;
+        _previousUserQuery = query;
+        _previousAiResponse = response;
         _messageHistory.add({'role': 'user', 'content': query});
         _messageHistory.add({'role': 'assistant', 'content': response});
 
@@ -733,6 +768,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _isConfirming = false;
       _pendingClassification = null;
       _pendingQuery = '';
+      _previousUserQuery = '';
+      _previousAiResponse = '';
     });
     conversationService.clear();
     _clearResponseChunks();
