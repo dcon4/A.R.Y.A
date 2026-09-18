@@ -9,6 +9,7 @@ import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
 import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
+import 'package:arya/theme/app_theme.dart';
 import 'package:arya/widgets/model_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';

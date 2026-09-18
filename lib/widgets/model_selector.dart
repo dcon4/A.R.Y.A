@@ -1,6 +1,7 @@
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/model_fetcher_service.dart';
+import 'package:arya/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
