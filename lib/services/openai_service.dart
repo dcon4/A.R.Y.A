@@ -93,9 +93,25 @@ When responding:
 Remember: You are ARYA, the user's personal AI assistant.
 ''';
 
-  static Future<String> getSystemPrompt() async {
+  static const String _researchPromptExtension = '''
+
+ADDITIONAL INSTRUCTIONS FOR RESEARCH QUESTIONS:
+When the user asks a research question, you must present a balanced view:
+1. First state the accepted/mainstream view with its key evidence.
+2. Then present the minority, dissenting, or alternative view with its key evidence.
+3. Clearly label which is which (e.g. "The mainstream view is..." vs "A dissenting perspective argues...").
+4. Do NOT uncritically accept the status quo. Actively look for and present credible minority or contrarian viewpoints.
+5. If the evidence is genuinely one-sided, say so honestly rather than manufacturing a false balance.
+6. End with a brief summary of where the debate stands and what remains uncertain.
+''';
+
+  static Future<String> getSystemPrompt({bool isResearch = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('system_prompt') ?? defaultSystemPrompt;
+    final base = prefs.getString('system_prompt') ?? defaultSystemPrompt;
+    if (isResearch) {
+      return '$base$_researchPromptExtension';
+    }
+    return base;
   }
 
   static Future<void> setSystemPrompt(String prompt) async {
@@ -112,6 +128,7 @@ Remember: You are ARYA, the user's personal AI assistant.
     String? overrideModel,
     List<MemoryEntry>? memories,
     int? maxTokens,
+    bool isResearch = false,
   }) async {
     try {
       // Resolve provider: use override or default
@@ -170,7 +187,7 @@ Remember: You are ARYA, the user's personal AI assistant.
         headers['X-Title'] = getSiteName();
       }
 
-      final sysPrompt = await getSystemPrompt();
+      final sysPrompt = await getSystemPrompt(isResearch: isResearch);
       final messages = <Map<String, String>>[
         {'role': 'system', 'content': sysPrompt},
       ];

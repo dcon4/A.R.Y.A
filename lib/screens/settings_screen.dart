@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _listeningDuration = 30;
   int _pauseDuration = 3;
   bool _autoRouteEnabled = false;
+  bool _smartFreeEnabled = false;
   int _memoryCount = 0;
   String _selectedModelId = '';
   bool _useCustomModel = false;
@@ -82,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 30;
       _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 3;
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
+      _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
     });
   }
 
@@ -1549,6 +1551,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildSmartFreeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Smart Free",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 87, 51, 1),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "When on, ARYA analyses your question before answering. It picks the best model for the type of question, and for research topics it shows both the accepted view and minority perspectives. For complex or ambiguous questions, it summarizes what it heard and asks you to confirm before answering.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _smartFreeEnabled
+                    ? "Smart Free is on"
+                    : "Smart Free is off",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Cera Pro',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: _smartFreeEnabled,
+              onChanged: (val) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('smart_free_enabled', val);
+                if (mounted) setState(() => _smartFreeEnabled = val);
+              },
+              activeColor: const Color.fromRGBO(255, 87, 51, 1),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildTtsSection() {
     return InkWell(
       onTap: _showTtsSettingsDialog,
@@ -2065,6 +2120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),
             const SizedBox(height: 16),
+            _buildSmartFreeSection(),
             _buildTtsSection(),
             const SizedBox(height: 32),
             const Divider(color: Color.fromRGBO(255, 87, 51, 0.3)),

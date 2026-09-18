@@ -9,13 +9,12 @@ import 'package:arya/services/conversation_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
+import 'package:arya/services/query_classifier.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
-import 'package:arya/widgets/feature_box.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -47,6 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _responseChunkIndex = 0;
   String _lastAiResponse = '';
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
+  QueryClassification? _pendingClassification;
+  String _pendingQuery = '';
+  bool _isConfirming = false;
 
   @override
   void initState() {
@@ -441,6 +443,25 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
       _speechTimeout?.cancel();
       _speechTimeout = null;
+
+      // If waiting for confirmation, check for yes/no response
+      if (_isConfirming) {
+        final lower = lastWords.toLowerCase().trim();
+        final yesPattern = RegExp(r'\b(yes|yeah|yep|sure|go ahead|correct|right|proceed|ok|okay)\b');
+        final noPattern = RegExp(r'\b(no|nope|nah|wrong|not quite|clarif|rephrase|different|actually)\b');
+        if (yesPattern.hasMatch(lower)) {
+          _confirmQuery();
+          return;
+        } else if (noPattern.hasMatch(lower)) {
+          _clarifyQuery();
+          return;
+        }
+        // Ambiguous — treat as a new query
+        _isConfirming = false;
+        _pendingClassification = null;
+        _pendingQuery = '';
+      }
+
       Future.delayed(Duration(milliseconds: 500), () {
         sendMessageToOpenRouter();
       });
@@ -460,28 +481,87 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // Smart Free: classify query and optionally confirm before answering
+    final prefs = await SharedPreferences.getInstance();
+    final smartFree = prefs.getBool('smart_free_enabled') ?? false;
+    if (smartFree) {
+      final classifier = QueryClassifier.instance;
+      final classification = await classifier.classify(
+        lastWords,
+        smartFreeEnabled: true,
+      );
+
+      if (classification.needsConfirmation) {
+        final summary = classifier.buildSummary(classification, lastWords);
+        _logger.log('HomeScreen', 'Smart Free: confirming query (${classification.category}, research=${classification.isResearch})');
+        setState(() {
+          _pendingClassification = classification;
+          _pendingQuery = lastWords;
+          _isConfirming = true;
+          generatedContent = summary;
+          isLoading = false;
+        });
+        systemSpeak(summary);
+        return;
+      }
+
+      // No confirmation needed — proceed with classification hints
+      await _sendQueryToAI(lastWords, classification: classification);
+      return;
+    }
+
+    await _sendQueryToAI(lastWords);
+  }
+
+  Future<void> _confirmQuery() async {
+    final query = _pendingQuery;
+    final classification = _pendingClassification;
+    setState(() {
+      _isConfirming = false;
+      _pendingClassification = null;
+      _pendingQuery = '';
+      isLoading = true;
+    });
+    await _sendQueryToAI(query, classification: classification);
+  }
+
+  Future<void> _clarifyQuery() async {
+    setState(() {
+      _isConfirming = false;
+      _pendingClassification = null;
+      _pendingQuery = '';
+      generatedContent = null;
+    });
+    systemSpeak("What would you like me to focus on?");
+    await startListening();
+  }
+
+  Future<void> _sendQueryToAI(String query, {QueryClassification? classification}) async {
     setState(() {
       isLoading = true;
     });
 
     // Recall relevant memories
     await MemoryService.instance.load();
-    final relevantMemories = MemoryService.instance.search(lastWords);
+    final relevantMemories = MemoryService.instance.search(query);
     for (final m in relevantMemories) {
       MemoryService.instance.incrementHitCount(m.id);
     }
 
     // Determine route (provider + model)
-    final route = await _resolveRoute(lastWords);
+    final route = await _resolveRoute(query);
     _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
 
+    final isResearch = classification?.isResearch ?? false;
+
     final response = await openaiService.chatGPTAPI(
-      lastWords,
+      query,
       history: _messageHistory.isNotEmpty ? _messageHistory : null,
       providerId: route.providerId,
       overrideModel: route.model,
       memories: relevantMemories.isNotEmpty ? relevantMemories : null,
       maxTokens: 2000,
+      isResearch: isResearch,
     );
 
     _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
@@ -494,11 +574,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // Log the conversation entry
     if (response != null && response.isNotEmpty) {
       _lastAiResponse = response;
-      _messageHistory.add({'role': 'user', 'content': lastWords});
+      _messageHistory.add({'role': 'user', 'content': query});
       _messageHistory.add({'role': 'assistant', 'content': response});
 
       conversationService.addEntry(ConversationEntry(
-        userQuery: lastWords,
+        userQuery: query,
         aiResponse: response,
         model: route.model,
       ));
@@ -636,6 +716,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _messageHistory.clear();
       generatedContent = null;
       lastWords = '';
+      _isConfirming = false;
+      _pendingClassification = null;
+      _pendingQuery = '';
     });
     conversationService.clear();
     _clearResponseChunks();
@@ -810,15 +893,10 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (BuildContext context) {
             return IconButton(
               iconSize: 45,
-              icon: SizedBox(
-                width: 35,
-                height: 35,
-                child: Lottie.asset(
-                  'assets/images/Fire.json',
-                  fit: BoxFit.contain,
-                  repeat: true,
-                  animate: true,
-                ),
+              icon: const Icon(
+                Icons.menu,
+                color: Color.fromRGBO(255, 87, 51, 1),
+                size: 28,
               ),
               onPressed: () {
                 debugPrint("Menu button pressed");
@@ -924,15 +1002,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   SizedBox(height: 8),
-                  // Small Android-style icon
-                  Center(
-                    child: Icon(
-                      Icons.android,
-                      size: 48,
-                      color: const Color.fromRGBO(255, 87, 51, 1),
-                    ),
-                  ),
-                  SizedBox(height: 12),
 
                   // Welcome message or Speech Recognition Display
                   Container(
@@ -1144,56 +1213,54 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                  SizedBox(height: 30),
-
-                  // Features header
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 30),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 4,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: MyAppTheme.mainFontColor,
-                            borderRadius: BorderRadius.circular(2),
+                  // Confirmation buttons (Smart Free)
+                  if (_isConfirming)
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _confirmQuery,
+                              icon: const Icon(Icons.check, size: 18),
+                              label: const Text(
+                                "Yes, go ahead",
+                                style: TextStyle(fontFamily: 'Cera Pro'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color.fromRGBO(76, 175, 80, 1),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          "Features",
-                          style: TextStyle(
-                            color: MyAppTheme.mainFontColor,
-                            fontSize: 20,
-                            fontFamily: 'Cera Pro',
-                            fontWeight: FontWeight.bold,
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _clarifyQuery,
+                              icon: const Icon(Icons.edit, size: 18),
+                              label: const Text(
+                                "No, let me clarify",
+                                style: TextStyle(fontFamily: 'Cera Pro'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color.fromRGBO(255, 87, 51, 0.3),
+                                foregroundColor: MyAppTheme.mainFontColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-
-                  SizedBox(height: 20),
-
-                  //features list
-                  Column(
-                    children: [
-                      MyFeatureBox(
-                        color: MyAppTheme.firstSuggestionBoxColor,
-                        headerText: 'ChatGPT Integration',
-                        descriptionText:
-                            'Integrated ChatGPT into ARYA for intelligent conversations.',
-                        icon: Icons.chat_bubble_outline,
-                      ),
-                      MyFeatureBox(
-                        color: MyAppTheme.secondSuggestionBoxColor,
-                        headerText: 'Smart Voice Assistant',
-                        descriptionText:
-                            'Interact with ARYA using natural language voice commands.',
-                        icon: Icons.mic_outlined,
-                      ),
-                    ],
-                  ),
 
                   SizedBox(height: 20),
                 ],
