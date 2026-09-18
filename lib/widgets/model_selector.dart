@@ -189,7 +189,7 @@ class _ModelSelectorState extends State<ModelSelector> {
               color: Colors.grey[600],
               fontFamily: 'Cera Pro',
             ),
-            prefixIcon: const Icon(
+            prefixIcon: Icon(
               Icons.search,
               color: MyAppTheme.mainFontColor.withValues(alpha: 0.7),
               size: 20,
@@ -257,7 +257,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                   ),
                 ],
               ),
-              const Divider(
+              Divider(
                 color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
                 height: 12,
               ),

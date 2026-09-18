@@ -337,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(
+                   icon: Icon(
                     Icons.paste,
                     color: MyAppTheme.mainFontColor.withValues(alpha: 0.7),
                   ),
