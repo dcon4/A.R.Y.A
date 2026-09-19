@@ -10,6 +10,8 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/weather_service.dart';
+import 'package:arya/services/web_search_service.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -51,6 +53,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isConfirming = false;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
+
+  // Search State
+  enum SearchState { idle, awaitingQuery, showingResults, readingResult }
+  SearchState _searchState = SearchState.idle;
+  List<SearchResult> _searchResults = [];
+  int _selectedResultIndex = -1;
 
   @override
   void initState() {
@@ -268,6 +276,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (lower.startsWith('forget ')) return 'forget';
     if (lower == 'what do you remember' || lower == 'what do you remember about me' || lower == 'list memories') return 'recall';
     if (lower == 'clear my memories' || lower == 'forget everything') return 'clear_memories';
+    if (lower.contains('weather') || lower == 'forecast') return 'weather';
+    if (lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet')) return 'web_search';
     return null;
   }
 
@@ -311,6 +321,21 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'clear_memories':
         await MemoryService.instance.clearAll();
         await systemSpeak('All memories cleared');
+        break;
+      case 'weather':
+        final weatherReport = await WeatherService.instance.fetchWeather();
+        await systemSpeak(weatherReport);
+        break;
+      case 'web_search':
+        final prefs = await SharedPreferences.getInstance();
+        if (!(prefs.getBool('web_search_enabled') ?? false)) {
+          await systemSpeak("Web search is not enabled in settings.");
+          return true;
+        }
+        setState(() {
+          _searchState = SearchState.awaitingQuery;
+        });
+        await systemSpeak("What would you like me to search for?");
         break;
     }
     return true;
@@ -445,6 +470,64 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
       _speechTimeout?.cancel();
       _speechTimeout = null;
+
+      // Handle search state machine
+      if (_searchState == SearchState.awaitingQuery) {
+        setState(() {
+          _searchState = SearchState.showingResults;
+        });
+        await systemSpeak("Searching for ${lastWords}.");
+        final results = await WebSearchService.instance.search(lastWords);
+        if (results.isEmpty) {
+          await systemSpeak("No results found.");
+          setState(() {
+            _searchState = SearchState.idle;
+          });
+        } else {
+          setState(() {
+            _searchResults = results;
+          });
+          String list = "Found ${results.length} results. ";
+          for (int i = 0; i < results.length && i < 5; i++) {
+            list += "${i + 1}: ${results[i].title}. ";
+          }
+          list += "Say a number to open, 'new search', or 'cancel'.";
+          await systemSpeak(list);
+        }
+        return;
+      }
+
+      if (_searchState == SearchState.showingResults) {
+        final lower = lastWords.toLowerCase().trim();
+        if (lower == 'cancel') {
+          setState(() {
+            _searchState = SearchState.idle;
+          });
+          await systemSpeak("Search cancelled.");
+          return;
+        }
+        if (lower == 'new search') {
+          setState(() {
+            _searchState = SearchState.awaitingQuery;
+          });
+          await systemSpeak("What would you like to search for?");
+          return;
+        }
+        final indexMatch = RegExp(r'^\d+$').hasMatch(lower);
+        if (indexMatch) {
+          final index = int.parse(lower) - 1;
+          if (index >= 0 && index < _searchResults.length) {
+            setState(() {
+              _selectedResultIndex = index;
+              _searchState = SearchState.readingResult;
+            });
+            final res = _searchResults[index];
+            await systemSpeak("Reading ${res.title}. ${res.snippet}");
+            await systemSpeak("End of snippet. Say 'new search' or 'cancel'.");
+            return;
+          }
+        }
+      }
 
       // If waiting for confirmation, check for yes/no response
       if (_isConfirming) {

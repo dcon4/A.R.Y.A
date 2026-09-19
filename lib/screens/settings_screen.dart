@@ -29,6 +29,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customModelController = TextEditingController();
   final TextEditingController _customBaseUrlController = TextEditingController();
   final TextEditingController _systemPromptController = TextEditingController();
+  final TextEditingController _weatherZipController = TextEditingController();
+  bool _webSearchEnabled = false;
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -85,6 +87,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 12;
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
+      _webSearchEnabled = prefs.getBool('web_search_enabled') ?? false;
+      _weatherZipController.text = prefs.getString('weather_zip_code') ?? '';
     });
   }
 
@@ -1567,7 +1571,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          "When on, ARYA analyses your question before answering. It picks the best model for the type of question, and for research topics it shows both the accepted view and minority perspectives. For complex or ambiguous questions, it summarizes what it heard and asks you to confirm before answering.",
+          "Enhanced query analysis with confirmation before complex answers.",
           style: TextStyle(
             color: Color.fromRGBO(255, 138, 101, 0.8),
             fontSize: 14,
@@ -1580,9 +1584,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Expanded(
               child: Text(
-                _smartFreeEnabled
-                    ? "Smart Free is on"
-                    : "Smart Free is off",
+                _smartFreeEnabled ? "Smart Free is on" : "Smart Free is off",
                 style: const TextStyle(
                   color: Colors.white,
                   fontFamily: 'Cera Pro',
@@ -1601,6 +1603,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildWeatherSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Weather Settings",
+          style: TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Set your US Zip Code for local weather forecasts.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _weatherZipController,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white, fontFamily: 'Cera Pro'),
+          decoration: InputDecoration(
+            hintText: "Enter 5-digit Zip Code",
+            hintStyle: TextStyle(color: Colors.grey[600]),
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.save, color: MyAppTheme.mainFontColor),
+              onPressed: () async {
+                final zip = _weatherZipController.text.trim();
+                if (zip.length == 5 && RegExp(r'^\d+$').hasMatch(zip)) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('weather_zip_code', zip);
+                  if (mounted) {
+                    setState(() {});
+                    _showSnack(context, 'Zip code saved');
+                  }
+                } else {
+                  _showSnack(context, 'Please enter a valid 5-digit zip code');
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildWebSearchSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Web Search (DuckDuckGo)",
+          style: TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Enable keyless search for real-time information from the web.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                "Enable keyless search",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Cera Pro',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: _webSearchEnabled,
+              onChanged: (val) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('web_search_enabled', val);
+                if (mounted) setState(() => _webSearchEnabled = val);
+              },
+              activeColor: MyAppTheme.mainFontColor,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }
