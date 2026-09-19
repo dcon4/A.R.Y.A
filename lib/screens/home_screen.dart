@@ -21,6 +21,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+enum SearchState { idle, awaitingQuery, showingResults, readingResult }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -461,10 +463,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void onSpeechResult(SpeechRecognitionResult result) {
+  void onSpeechResult(SpeechRecognitionResult result) async {
     setState(() {
       lastWords = result.recognizedWords;
     });
+
 
     if (result.finalResult && lastWords.isNotEmpty) {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
