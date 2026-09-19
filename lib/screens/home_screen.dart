@@ -57,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _previousAiResponse = '';
 
   // Search State
-  enum SearchState { idle, awaitingQuery, showingResults, readingResult }
   SearchState _searchState = SearchState.idle;
   List<SearchResult> _searchResults = [];
   int _selectedResultIndex = -1;
