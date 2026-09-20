@@ -2236,6 +2236,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSmartFreeSection(),
+            _buildWeatherSection(),
+            _buildWebSearchSection(),
             _buildTtsSection(),
             const SizedBox(height: 32),
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
