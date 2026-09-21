@@ -3,6 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Build info - updated at compile time via --dart-define
+const String buildNumber = String.fromEnvironment('BUILD_NUMBER', defaultValue: 'dev');
+const String buildTimestamp = String.fromEnvironment('BUILD_TIMESTAMP', defaultValue: 'unknown');
+const String gitCommit = String.fromEnvironment('GIT_COMMIT', defaultValue: 'unknown');
+
 class DebugLogger {
   static final DebugLogger _instance = DebugLogger._();
   factory DebugLogger() => _instance;
@@ -30,6 +35,7 @@ class DebugLogger {
     await _logFile!.create(recursive: true);
     _initialized = true;
     log('DebugLogger', 'Logger initialized - arya version 1.0.0');
+    log('DebugLogger', 'Build: $buildNumber | Timestamp: $buildTimestamp | Commit: $gitCommit');
     if (_verboseEnabled) {
       verbose('DebugLogger', 'Verbose logging enabled');
     }
