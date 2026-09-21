@@ -23,19 +23,27 @@ class WeatherService {
       final lat = place['latitude'];
       final lon = place['longitude'];
 
-      // Get weather from Open-Meteo
+      // Get weather from Open-Meteo with Fahrenheit and 3-day forecast
       final weatherResponse = await http.get(Uri.parse(
-        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto'
+        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto&forecast_days=3'
       ));
       if (weatherResponse.statusCode != 200) return "Weather service unavailable.";
 
       final weatherData = jsonDecode(weatherResponse.body);
       final currentTemp = weatherData['current']['temperature_2m'];
       final condition = _getCondition(weatherData['current']['weather_code']);
-      final todayMax = weatherData['daily']['temperature_2m_max'][0];
-      final todayMin = weatherData['daily']['temperature_2m_min'][0];
       
-      return "Currently in ${place['place name']}, it is $currentTemp degrees and $condition. Today's high is $todayMax and low is $todayMin.";
+      final daily = weatherData['daily'];
+      final days = <String>[];
+      for (int i = 0; i < 3 && i < daily['time'].length; i++) {
+        final date = daily['time'][i];
+        final maxF = daily['temperature_2m_max'][i];
+        final minF = daily['temperature_2m_min'][i];
+        final dayCond = _getCondition(daily['weather_code'][i]);
+        days.add("$date: high $maxF°F, low $minF°F, $dayCond");
+      }
+      
+      return "Currently in ${place['place name']}, it is ${currentTemp.toStringAsFixed(0)}°F and $condition. ${days.join('. ')}.";
     } catch (e) {
       return "Error fetching weather: $e";
     }
