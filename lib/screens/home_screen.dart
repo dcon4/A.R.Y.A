@@ -279,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (lower == 'what do you remember' || lower == 'what do you remember about me' || lower == 'list memories') return 'recall';
     if (lower == 'clear my memories' || lower == 'forget everything') return 'clear_memories';
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
-    if (lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet')) return 'web_search';
+    if (lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ') || lower == 'web search') return 'web_search';
     return null;
   }
 
@@ -547,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await _handleReadingSequentialEnd();
           return;
         }
-if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet')) {
+if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ')) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
