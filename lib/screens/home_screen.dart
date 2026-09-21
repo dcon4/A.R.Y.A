@@ -338,6 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _searchState = SearchState.awaitingQuery;
         });
         await systemSpeak("What would you like me to search for?");
+        await startListening();
         break;
     }
     return true;
@@ -520,6 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             list += "Say a number to open, 'read all' to hear them sequentially, 'new search', or 'cancel'.";
             await systemSpeak(list);
+            await startListening();
           }
           return;
         }
@@ -550,6 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _searchState = SearchState.awaitingQuery;
           });
           await systemSpeak("What would you like to search for?");
+          await startListening();
           return;
         }
         final indexMatch = RegExp(r'^\d+$').hasMatch(lower);

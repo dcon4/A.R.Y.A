@@ -15,12 +15,13 @@ class WeatherService {
 
     try {
       // Get coordinates for zip code using Zippopotam.us
-      final geoResponse = await http.get(Uri.parse('https://api.zippopotam.us/us/'));
+      final geoResponse = await http.get(Uri.parse('https://api.zippopotam.us/us/$zip'));
       if (geoResponse.statusCode != 200) return "Could not find location for zip code $zip.";
       
       final geoData = jsonDecode(geoResponse.body);
-      final lat = geoData['place']['lat'];
-      final lon = geoData['place']['long'];
+      final place = geoData['places'][0];
+      final lat = place['latitude'];
+      final lon = place['longitude'];
 
       // Get weather from Open-Meteo
       final weatherResponse = await http.get(Uri.parse(
@@ -34,7 +35,7 @@ class WeatherService {
       final todayMax = weatherData['daily']['temperature_2m_max'][0];
       final todayMin = weatherData['daily']['temperature_2m_min'][0];
       
-      return "Currently in ${geoData['place']['place name']}, it is $currentTemp degrees and $condition. Today's high is $todayMax and low is $todayMin.";
+      return "Currently in ${place['place name']}, it is $currentTemp degrees and $condition. Today's high is $todayMax and low is $todayMin.";
     } catch (e) {
       return "Error fetching weather: $e";
     }
