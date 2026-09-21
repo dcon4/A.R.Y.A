@@ -24,6 +24,7 @@ dependencies:
   encrypt: ^5.0.3
   crypto: ^3.0.6
   html: ^0.15.4
+  intl: ^0.20.2
 
 
 dev_dependencies:

@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class WeatherService {
   static final WeatherService instance = WeatherService._internal();
@@ -36,11 +37,13 @@ class WeatherService {
       final daily = weatherData['daily'];
       final days = <String>[];
       for (int i = 0; i < 3 && i < daily['time'].length; i++) {
-        final date = daily['time'][i];
+        final dateStr = daily['time'][i];
+        final date = DateTime.parse(dateStr);
+        final dayName = DateFormat('EEEE').format(date);
         final maxF = daily['temperature_2m_max'][i];
         final minF = daily['temperature_2m_min'][i];
         final dayCond = _getCondition(daily['weather_code'][i]);
-        days.add("$date: high $maxF°F, low $minF°F, $dayCond");
+        days.add("$dayName: high ${maxF.toStringAsFixed(0)}°F, low ${minF.toStringAsFixed(0)}°F, $dayCond");
       }
       
       return "Currently in ${place['place name']}, it is ${currentTemp.toStringAsFixed(0)}°F and $condition. ${days.join('. ')}.";

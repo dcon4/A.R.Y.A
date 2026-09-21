@@ -511,6 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _searchState = SearchState.idle;
             });
+            await startListening();
           } else {
             setState(() {
               _searchResults = results;
@@ -569,6 +570,47 @@ class _HomeScreenState extends State<HomeScreen> {
             return;
           }
         }
+      }
+
+      // Handle reading result state (for sequential reading)
+      if (_searchState == SearchState.readingResult) {
+        final lower = lastWords.toLowerCase().trim();
+        if (lower == 'cancel') {
+          setState(() {
+            _searchState = SearchState.idle;
+            _readingAllSequentially = false;
+          });
+          await systemSpeak("Search cancelled.");
+          return;
+        }
+        if (lower == 'skip' && _readingAllSequentially) {
+          setState(() {
+            _selectedResultIndex++;
+          });
+          if (_selectedResultIndex < _searchResults.length) {
+            final res = _searchResults[_selectedResultIndex];
+            await systemSpeak("Skipping to ${res.title}. ${res.snippet}");
+            await _handleReadingSequentialEnd();
+          } else {
+            await systemSpeak("No more results to skip to.");
+            setState(() {
+              _readingAllSequentially = false;
+              _searchState = SearchState.idle;
+            });
+          }
+          return;
+        }
+        if (lower == 'new search') {
+          setState(() {
+            _searchState = SearchState.awaitingQuery;
+            _readingAllSequentially = false;
+          });
+          await systemSpeak("What would you like me to search for?");
+          await startListening();
+          return;
+        }
+        // If not a recognized command while reading, treat as new query
+        // fall through to sendMessageToOpenRouter
       }
 
       // If waiting for confirmation, check for yes/no response
