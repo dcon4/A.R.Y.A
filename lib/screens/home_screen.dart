@@ -548,11 +548,11 @@ class _HomeScreenState extends State<HomeScreen> {
           await _handleReadingSequentialEnd();
           return;
         }
-        if (lower == 'new search') {
+if (lower == 'new search' || lower.contains('search')) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
-          await systemSpeak("What would you like to search for?");
+          await systemSpeak("What would you like me to search for?");
           await startListening();
           return;
         }
@@ -674,12 +674,15 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
 
-      // Check for voice commands first
-      if (await _handleVoiceCommand(lastWords)) {
-        setState(() {
-          isLoading = false;
-        });
-        return;
+      // Skip voice command check if we're in a search flow - let onSpeechResult handle it
+      if (_searchState == SearchState.idle) {
+        // Check for voice commands first
+        if (await _handleVoiceCommand(lastWords)) {
+          setState(() {
+            isLoading = false;
+          });
+          return;
+        }
       }
 
       // Smart Free: classify query and optionally confirm before answering
