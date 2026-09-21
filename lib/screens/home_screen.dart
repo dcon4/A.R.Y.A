@@ -334,11 +334,12 @@ class _HomeScreenState extends State<HomeScreen> {
           await systemSpeak("Web search is not enabled in settings.");
           return true;
         }
+        await stopListening();
         setState(() {
           _searchState = SearchState.awaitingQuery;
         });
         await systemSpeak("What would you like me to search for?");
-        await startListening();
+        startListening();
         break;
     }
     return true;
@@ -358,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // We need to wait for a command here. 
       // Since we are in a sequence, we'll trigger a listening window.
-      await startListening(); 
+      startListening(); 
       // Note: the actual result processing happens in onSpeechResult, 
       // so we just need to handle 'skip' and 'cancel' there.
     } else {
@@ -476,8 +477,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _micReallyListening = false;
     });
 
-    // Automatically send to AI after stopping
-    if (lastWords.isNotEmpty) {
+    // Automatically send to AI after stopping (but not during search flow)
+    if (lastWords.isNotEmpty && _searchState == SearchState.idle) {
       await sendMessageToOpenRouter();
     }
 
@@ -511,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _searchState = SearchState.idle;
             });
-            await startListening();
+            startListening();
           } else {
             setState(() {
               _searchResults = results;
@@ -522,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             list += "Say a number to open, 'read all' to hear them sequentially, 'new search', or 'cancel'.";
             await systemSpeak(list);
-            await startListening();
+            startListening();
           }
           return;
         }
@@ -553,7 +554,7 @@ if (lower == 'new search' || lower.contains('search')) {
             _searchState = SearchState.awaitingQuery;
           });
           await systemSpeak("What would you like me to search for?");
-          await startListening();
+          startListening();
           return;
         }
         final indexMatch = RegExp(r'^\d+$').hasMatch(lower);
@@ -606,7 +607,7 @@ if (lower == 'new search' || lower.contains('search')) {
             _readingAllSequentially = false;
           });
           await systemSpeak("What would you like me to search for?");
-          await startListening();
+          startListening();
           return;
         }
         // If not a recognized command while reading, treat as new query
