@@ -547,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await _handleReadingSequentialEnd();
           return;
         }
-if (lower == 'new search' || lower.contains('search')) {
+if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet')) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
