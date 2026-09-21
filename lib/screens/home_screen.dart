@@ -477,10 +477,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _micReallyListening = false;
     });
 
-    // Automatically send to AI after stopping (but not during search flow)
-    if (lastWords.isNotEmpty && _searchState == SearchState.idle) {
-      await sendMessageToOpenRouter();
-    }
+    // Do NOT call sendMessageToOpenRouter here - onSpeechResult handles final results
+    // Calling it here creates an infinite loop (stop triggers final onResult, which calls it again)
 
     // If wake word was paused but no speech result was processed (stop was manual), resume.
     if (_wakeWordPausedForSpeech) {
