@@ -43,10 +43,10 @@ class WeatherService {
         final maxF = daily['temperature_2m_max'][i];
         final minF = daily['temperature_2m_min'][i];
         final dayCond = _getCondition(daily['weather_code'][i]);
-        days.add("$dayName: high ${maxF.toStringAsFixed(0)}°F, low ${minF.toStringAsFixed(0)}°F, $dayCond");
+        days.add("$dayName: high ${maxF.toStringAsFixed(0)} degrees, low ${minF.toStringAsFixed(0)} degrees, $dayCond");
       }
       
-      return "Currently in ${place['place name']}, it is ${currentTemp.toStringAsFixed(0)}°F and $condition. ${days.join('. ')}.";
+      return "Currently in ${place['place name']}, it is ${currentTemp.toStringAsFixed(0)} degrees and $condition. ${days.join('. ')}.";
     } catch (e) {
       return "Error fetching weather: $e";
     }
