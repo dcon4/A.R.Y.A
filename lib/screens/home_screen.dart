@@ -349,7 +349,10 @@ class _HomeScreenState extends State<HomeScreen> {
   
   Future<void> _handleReadingSequentialEnd() async {
     if (!_readingAllSequentially) {
-      await _speakAndWait("End of snippet. Say 'new search' or 'cancel'.");
+      await _speakAndWait("End of snippet. Say a number to open another, 'read all', 'new search', or 'cancel'.");
+      setState(() {
+        _searchState = SearchState.showingResults;
+      });
       return;
     }
 
@@ -585,6 +588,19 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
       // Handle reading result state (for sequential reading)
       if (_searchState == SearchState.readingResult) {
         final lower = lastWords.toLowerCase().trim();
+
+        // Handle number selection while reading
+        final index = _parseNumberIndex(lower);
+        if (index != null && index >= 0 && index < _searchResults.length) {
+          setState(() {
+            _selectedResultIndex = index;
+          });
+          final res = _searchResults[index];
+          await _speakAndWait("Reading ${res.title}. ${res.snippet}");
+          await _handleReadingSequentialEnd();
+          return;
+        }
+
         if (lower == 'cancel') {
           setState(() {
             _searchState = SearchState.idle;
@@ -610,7 +626,7 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
           }
           return;
         }
-        if (lower == 'new search') {
+        if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ')) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
             _readingAllSequentially = false;
