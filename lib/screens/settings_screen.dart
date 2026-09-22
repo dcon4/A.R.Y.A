@@ -30,7 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customBaseUrlController = TextEditingController();
   final TextEditingController _systemPromptController = TextEditingController();
   final TextEditingController _weatherZipController = TextEditingController();
-  bool _webSearchEnabled = false;
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -87,7 +86,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 12;
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
-      _webSearchEnabled = prefs.getBool('web_search_enabled') ?? false;
       _weatherZipController.text = prefs.getString('weather_zip_code') ?? '';
     });
   }
@@ -1718,57 +1716,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildWebSearchSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Web Search (DuckDuckGo)",
-          style: TextStyle(
-            color: MyAppTheme.mainFontColor,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cera Pro',
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          "Enable keyless search for real-time information from the web.",
-          style: TextStyle(
-            color: Color.fromRGBO(255, 138, 101, 0.8),
-            fontSize: 14,
-            fontFamily: 'Cera Pro',
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                "Enable keyless search",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Cera Pro',
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            Switch(
-              value: _webSearchEnabled,
-              onChanged: (val) async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('web_search_enabled', val);
-                if (mounted) setState(() => _webSearchEnabled = val);
-              },
-              activeColor: MyAppTheme.mainFontColor,
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
+  
 
   Widget _buildTtsSection() {
     return InkWell(
@@ -2287,12 +2235,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             _buildSmartFreeSection(),
             _buildWeatherSection(),
-            _buildWebSearchSection(),
-            _buildTtsSection(),
-            const SizedBox(height: 32),
-            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
-            const SizedBox(height: 16),
             _buildWebSearchToggle(),
+            _buildTtsSection(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
             const SizedBox(height: 32),
