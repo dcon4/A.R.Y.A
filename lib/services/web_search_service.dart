@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html;
+import 'package:arya/services/debug_logger.dart';
 
 class SearchResult {
   final String title;
@@ -14,23 +15,34 @@ class WebSearchService {
   WebSearchService._internal();
 
   Future<List<SearchResult>> search(String query) async {
+    final logger = DebugLogger();
     try {
       final encodedQuery = Uri.encodeComponent(query);
+      final url = 'https://html.duckduckgo.com/html/?q=$encodedQuery';
+      logger.log('WebSearchService', 'Searching: $query');
+      logger.log('WebSearchService', 'URL: $url');
+      
       final response = await http.get(
-        Uri.parse('https://html.duckduckgo.com/html/?q=$encodedQuery'),
+        Uri.parse(url),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
         },
       );
-      if (response.statusCode != 200) return [];
+      logger.log('WebSearchService', 'Response status: ${response.statusCode}, body length: ${response.body.length}');
+      
+      if (response.statusCode != 200) {
+        logger.log('WebSearchService', 'Non-200 status: ${response.statusCode}');
+        return [];
+      }
 
       final document = html.parse(response.body);
       
       // DuckDuckGo HTML structure (as of 2024): results are in .result class
       // Each result has: .result__title (link with title), .result__snippet (text)
       final resultElements = document.querySelectorAll('.result');
+      logger.log('WebSearchService', 'Found ${resultElements.length} result elements');
       
       List<SearchResult> results = [];
       for (var element in resultElements) {
@@ -67,6 +79,7 @@ class WebSearchService {
         
         if (title.isNotEmpty && snippet.isNotEmpty) {
           results.add(SearchResult(title: title, snippet: snippet, url: url));
+          logger.log('WebSearchService', 'Added result: $title');
         }
       }
       
@@ -74,8 +87,11 @@ class WebSearchService {
       final seen = <String>{};
       results = results.where((r) => seen.add(r.title.toLowerCase())).toList();
       
+      logger.log('WebSearchService', 'Returning ${results.length} results');
       return results.take(8).toList();
-    } catch (e) {
+    } catch (e, st) {
+      logger.error('WebSearchService', 'Search error', e);
+      logger.error('WebSearchService', 'Stack trace: $st');
       return [];
     }
   }
