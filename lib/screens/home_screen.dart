@@ -520,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
               list += "${i + 1}: ${results[i].title}. ";
             }
             list += "Say a number to open, 'read all' to hear them sequentially, 'new search', or 'cancel'.";
-            await systemSpeak(list);
+            await _speakAndWait(list);
             startListening();
           }
           return;
