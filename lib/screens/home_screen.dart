@@ -526,6 +526,18 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
 
+      // Helper: convert number words to index (0-based)
+      int? _parseNumberIndex(String lower) {
+        final digitMatch = RegExp(r'^\d+$').hasMatch(lower);
+        if (digitMatch) return int.parse(lower) - 1;
+        const numberWords = {
+          'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
+          'six': 5, 'seven': 6, 'eight': 7, 'nine': 8, 'ten': 9,
+          'first': 0, 'second': 1, 'third': 2,
+        };
+        return numberWords[lower];
+      }
+
       if (_searchState == SearchState.showingResults) {
         final lower = lastWords.toLowerCase().trim();
         if (lower == 'cancel') {
@@ -555,9 +567,8 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
           startListening();
           return;
         }
-        final indexMatch = RegExp(r'^\d+$').hasMatch(lower);
-        if (indexMatch) {
-          final index = int.parse(lower) - 1;
+        final index = _parseNumberIndex(lower);
+        if (index != null) {
           if (index >= 0 && index < _searchResults.length) {
             setState(() {
               _selectedResultIndex = index;
