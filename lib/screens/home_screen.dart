@@ -405,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakAndWait(String text) async {
     _announceCompleter = Completer<void>();
     await flutterTts.speak(text);
-    await _announceCompleter!.future.timeout(const Duration(seconds: 30));
+    await _announceCompleter!.future.timeout(const Duration(seconds: 60));
     _announceCompleter = null;
   }
 
