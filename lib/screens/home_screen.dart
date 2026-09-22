@@ -338,7 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _searchState = SearchState.awaitingQuery;
         });
-        await systemSpeak("What would you like me to search for?");
+        await _speakAndWait("What would you like me to search for?");
         startListening();
         break;
     }
@@ -349,13 +349,13 @@ class _HomeScreenState extends State<HomeScreen> {
   
   Future<void> _handleReadingSequentialEnd() async {
     if (!_readingAllSequentially) {
-      await systemSpeak("End of snippet. Say 'new search' or 'cancel'.");
+      await _speakAndWait("End of snippet. Say 'new search' or 'cancel'.");
       return;
     }
 
     final nextIndex = _selectedResultIndex + 1;
     if (nextIndex < _searchResults.length) {
-      await systemSpeak("End of result. Moving to the next result. Say 'skip' to skip, or 'cancel'.");
+      await _speakAndWait("End of result. Moving to the next result. Say 'skip' to skip, or 'cancel'.");
       
       // We need to wait for a command here. 
       // Since we are in a sequence, we'll trigger a listening window.
@@ -363,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Note: the actual result processing happens in onSpeechResult, 
       // so we just need to handle 'skip' and 'cancel' there.
     } else {
-      await systemSpeak("You have reached the end of the search results.");
+      await _speakAndWait("You have reached the end of the search results.");
       setState(() {
         _readingAllSequentially = false;
         _searchState = SearchState.idle;
@@ -503,10 +503,10 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _searchState = SearchState.showingResults;
           });
-          await systemSpeak("Searching for ${lastWords}.");
+          await _speakAndWait("Searching for ${lastWords}.");
           final results = await WebSearchService.instance.search(lastWords);
           if (results.isEmpty) {
-            await systemSpeak("No results found.");
+            await _speakAndWait("No results found.");
             setState(() {
               _searchState = SearchState.idle;
             });
@@ -533,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _searchState = SearchState.idle;
             _readingAllSequentially = false;
           });
-          await systemSpeak("Search cancelled.");
+          await _speakAndWait("Search cancelled.");
           return;
         }
         if (lower == 'read all') {
@@ -543,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _searchState = SearchState.readingResult;
           });
           final res = _searchResults[0];
-          await systemSpeak("Reading first result: ${res.title}. ${res.snippet}");
+          await _speakAndWait("Reading first result: ${res.title}. ${res.snippet}");
           await _handleReadingSequentialEnd();
           return;
         }
@@ -551,7 +551,7 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
-          await systemSpeak("What would you like me to search for?");
+          await _speakAndWait("What would you like me to search for?");
           startListening();
           return;
         }
@@ -564,7 +564,7 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
               _searchState = SearchState.readingResult;
             });
             final res = _searchResults[index];
-            await systemSpeak("Reading ${res.title}. ${res.snippet}");
+            await _speakAndWait("Reading ${res.title}. ${res.snippet}");
             await _handleReadingSequentialEnd();
             return;
           }
@@ -579,7 +579,7 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
             _searchState = SearchState.idle;
             _readingAllSequentially = false;
           });
-          await systemSpeak("Search cancelled.");
+          await _speakAndWait("Search cancelled.");
           return;
         }
         if (lower == 'skip' && _readingAllSequentially) {
@@ -604,7 +604,7 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
             _searchState = SearchState.awaitingQuery;
             _readingAllSequentially = false;
           });
-          await systemSpeak("What would you like me to search for?");
+          await _speakAndWait("What would you like me to search for?");
           startListening();
           return;
         }
