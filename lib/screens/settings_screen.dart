@@ -1332,7 +1332,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Web Search",
+              "Web Search (Keyless DuckDuckGo)",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Enable voice-activated web search using DuckDuckGo (keyless, free). Say 'web search' then your query.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Enable keyless web search",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: providers.getWebSearchEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await providers.setWebSearchEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: MyAppTheme.mainFontColor,
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              "Web Search on Every Request (OpenRouter :online)",
               style: TextStyle(
                 color: MyAppTheme.mainFontColor,
                 fontSize: 18,
@@ -1364,13 +1413,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 FutureBuilder<bool>(
-                  future: providers.getWebSearchEnabled(),
+                  future: providers.getWebSearchOnlineEnabled(),
                   builder: (context, snapshot) {
                     final enabled = snapshot.data ?? false;
                     return Switch(
                       value: enabled,
                       onChanged: (val) async {
-                        await providers.setWebSearchEnabled(val);
+                        await providers.setWebSearchOnlineEnabled(val);
                         setInnerState(() {});
                       },
                       activeColor: MyAppTheme.mainFontColor,
@@ -1379,6 +1428,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 24),
           ],
         );
       },

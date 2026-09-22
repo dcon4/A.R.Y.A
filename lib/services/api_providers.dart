@@ -5,6 +5,7 @@ const _prefsKey = 'api_key';
 const _prefsModel = 'api_model';
 const _prefsCustomBaseUrl = 'api_custom_base_url';
 const _prefsWebSearch = 'web_search_enabled';
+const _prefsWebSearchOnline = 'web_search_online_enabled';
 
 class ApiProvider {
   final String id;
@@ -247,6 +248,16 @@ Future<bool> getWebSearchEnabled() async {
 Future<void> setWebSearchEnabled(bool enabled) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool(_prefsWebSearch, enabled);
+}
+
+Future<bool> getWebSearchOnlineEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_prefsWebSearchOnline) ?? false;
+}
+
+Future<void> setWebSearchOnlineEnabled(bool enabled) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_prefsWebSearchOnline, enabled);
 }
 
 void clearCachedSettings() {

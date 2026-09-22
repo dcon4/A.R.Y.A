@@ -171,7 +171,7 @@ When the user asks a research question, you must present a balanced view:
         }
       }
 
-      final webSearch = !braveSearch && await providers.getWebSearchEnabled();
+      final webSearch = !braveSearch && await providers.getWebSearchOnlineEnabled();
       if (webSearch && !model.contains(':online')) {
         model = '$model:online';
       }
