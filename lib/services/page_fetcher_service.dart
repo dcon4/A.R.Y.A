@@ -5,8 +5,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:arya/services/debug_logger.dart';
 
 class PageFetcherService {
-  static final PageFetcherService _instance = PageFetcherService._internal();
-  factory PageFetcherService() => _instance;
+  static final PageFetcherService instance = PageFetcherService._internal();
   PageFetcherService._internal();
 
   final _logger = DebugLogger();
