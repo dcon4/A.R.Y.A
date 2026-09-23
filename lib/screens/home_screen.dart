@@ -140,25 +140,40 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     });
+  }
+
+  final _logger = DebugLogger();
+
+  @override
+  void initState() {
+    super.initState();
+    initSpeechToText();
+    initTextToSpeech();
+    // ... rest of initState
 
     // Initialize BrowserFlow after the first frame to avoid forward reference issues
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _browserFlow._tts = flutterTts;
-      _browserFlow._logger = _logger;
-      _browserFlow.start(
-        onSpeak: (msg) { systemSpeak(msg); },
-        onListeningStarted: () { startListening(); },
-        onIdle: () {
-          _browserMode = false;
-          setState(() {});
-        },
-        onError: (msg) {
-          systemSpeak(msg);
-          startListening();
-        },
-      );
-      _browserMode = true;
+    Future.delayed(Duration.zero, () {
+      _initializeBrowserFlow();
     });
+  }
+
+  Future<void> _initializeBrowserFlow() async {
+    _browserFlow._tts = flutterTts;
+    _browserFlow._logger = _logger;
+    await _browserFlow.start(
+      onSpeak: (msg) { systemSpeak(msg); },
+      onListeningStarted: () { startListening(); },
+      onIdle: () {
+        _browserMode = false;
+        setState(() {});
+      },
+      onError: (msg) {
+        systemSpeak(msg);
+        startListening();
+      },
+    );
+    _browserMode = true;
+  }
 
   final _logger = DebugLogger();
 
