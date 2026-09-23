@@ -70,7 +70,7 @@ class BrowserFlow {
     // Caller should start listening after TTS completes
   }
 
-  Future<void> handleSpeechResult(String text, {required Function(String) onNextListen}) async {
+  Future<void> handleSpeechResult(String text, {Function()? onNextListen}) async {
     final lower = text.trim().toLowerCase();
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
@@ -344,27 +344,6 @@ class BrowserFlow {
 
     // If unrecognized, re-prompt
     _onSpeak?.call("Say 'skip', 'next', 'new search', or 'cancel'.");
-  }
-
-  Future<void> _performSearch(String query) async {
-    _onSpeak?.call("Searching for: $query.");
-
-    try {
-      final results = await WebSearchService.instance.search(query);
-      if (results.isEmpty) {
-        _onError?.call("No results found for '$query'. Say another query or 'cancel'.");
-        return;
-      }
-
-      _allResults = results;
-      _pageOffset = 0;
-      _currentResultIndex = 0;
-      _readingAllSequentially = false;
-
-      await _presentCurrentPage();
-    } catch (e) {
-      _onError?.call("Search failed: $e");
-    }
   }
 
   void _handleCancel() {
