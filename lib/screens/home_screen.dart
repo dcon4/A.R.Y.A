@@ -131,20 +131,15 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     };
 
-    @override
-  void initState() {
-    super.initState();
-    initSpeechToText();
-    initTextToSpeech();
-    // ... rest of initState
-
     // Initialize BrowserFlow after the first frame to avoid forward reference issues
     Future.delayed(Duration.zero, _initializeBrowserFlow);
   }
 
+  final _logger = DebugLogger();
+
   Future<void> _initializeBrowserFlow() async {
-    _browserFlow._tts = flutterTts;
-    _browserFlow._logger = _logger;
+    _browserFlow.tts = flutterTts;
+    _browserFlow.logger = _logger;
     await _browserFlow.start(
       onSpeak: (msg) { systemSpeak(msg); },
       onListeningStarted: () { startListening(); },
@@ -159,8 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     _browserMode = true;
   }
-
-  final _logger = DebugLogger();
 
   Future<void> initSpeechToText() async {
     _logger.log('HomeScreen', 'Initializing speech to text');

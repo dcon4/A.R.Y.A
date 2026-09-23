@@ -10,10 +10,14 @@ class BrowserFlow {
   static const int PAGE_SIZE = 5;
   static const int MAX_CHUNK_SIZE = 3500;
 
-  final FlutterTts _tts = FlutterTts();
-  final DebugLogger _logger = DebugLogger();
+  late FlutterTts _tts;
+  late DebugLogger _logger;
   final WebSearchService _searchService = WebSearchService.instance;
   final PageFetcherService _pageFetcher = PageFetcherService.instance;
+
+  // Allow injection from outside (e.g., from HomeScreen)
+  set tts(FlutterTts value) => _tts = value;
+  set logger(DebugLogger value) => _logger = value;
 
   // State
   List<ws.SearchResult> _allResults = [];
