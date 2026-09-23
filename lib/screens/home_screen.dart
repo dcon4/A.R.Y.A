@@ -131,20 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     };
 
-    _btChannel.setMethodCallHandler((call) async {
-      if (call.method == 'toggleMic') {
-        if (speechToText.isListening) {
-          await stopListening();
-        } else {
-          await startListening();
-        }
-      }
-    });
-  }
-
-  final _logger = DebugLogger();
-
-  @override
+    @override
   void initState() {
     super.initState();
     initSpeechToText();
@@ -152,9 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // ... rest of initState
 
     // Initialize BrowserFlow after the first frame to avoid forward reference issues
-    Future.delayed(Duration.zero, () {
-      _initializeBrowserFlow();
-    });
+    Future.delayed(Duration.zero, _initializeBrowserFlow);
   }
 
   Future<void> _initializeBrowserFlow() async {
