@@ -13,6 +13,7 @@ import 'package:arya/services/query_classifier.dart';
 import 'package:arya/services/weather_service.dart';
 import 'package:arya/services/web_search_service.dart';
 import 'package:arya/services/wake_word_service.dart';
+import 'package:arya/services/browser_flow.dart';
 import 'package:arya/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
     SearchState _searchState = SearchState.idle;
   List<SearchResult> _searchResults = [];
   int _selectedResultIndex = -1;
+
+  // Browser Flow
+  final BrowserFlow _browserFlow = BrowserFlow();
+  bool _browserMode = false;
 
   @override
   void initState() {
@@ -135,7 +140,25 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     });
-  }
+
+    // Initialize BrowserFlow after the first frame to avoid forward reference issues
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _browserFlow._tts = flutterTts;
+      _browserFlow._logger = _logger;
+      _browserFlow.start(
+        onSpeak: (msg) { systemSpeak(msg); },
+        onListeningStarted: () { startListening(); },
+        onIdle: () {
+          _browserMode = false;
+          setState(() {});
+        },
+        onError: (msg) {
+          systemSpeak(msg);
+          startListening();
+        },
+      );
+      _browserMode = true;
+    });
 
   final _logger = DebugLogger();
 
@@ -334,12 +357,21 @@ class _HomeScreenState extends State<HomeScreen> {
           await systemSpeak("Web search is not enabled in settings.");
           return true;
         }
-        await stopListening();
         setState(() {
-          _searchState = SearchState.awaitingQuery;
+          _browserMode = true;
         });
-        await _speakAndWait("What would you like me to search for?");
-        startListening();
+        await _browserFlow.start(
+          onSpeak: (msg) { systemSpeak(msg); },
+          onListeningStarted: () { startListening(); },
+          onIdle: () {
+            _browserMode = false;
+            setState(() {});
+          },
+          onError: (msg) {
+            systemSpeak(msg);
+            startListening();
+          },
+        );
         break;
     }
     return true;
@@ -500,6 +532,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
       _speechTimeout?.cancel();
       _speechTimeout = null;
+
+      // Handle browser flow
+      if (_browserMode) {
+        await _browserFlow.handleSpeechResult(lastWords, onNextListen: startListening);
+        return;
+      }
 
       // Handle search state machine
         if (_searchState == SearchState.awaitingQuery) {
@@ -700,8 +738,8 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
     try {
       _logger.log('HomeScreen', 'Sending to AI: "${lastWords.length > 60 ? lastWords.substring(0, 60) + "..." : lastWords}"');
 
-      // Skip voice command check if we're in a search flow - let onSpeechResult handle it
-      if (_searchState == SearchState.idle) {
+      // Skip voice command check if we're in browser mode - let onSpeechResult handle it
+      if (!_browserMode) {
         // Check for voice commands first
         if (await _handleVoiceCommand(lastWords)) {
           setState(() {
