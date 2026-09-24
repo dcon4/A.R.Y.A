@@ -46,6 +46,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
   Completer<void>? _announceCompleter;
+  // Serializes speech so overlapping prompts can't orphan each other's
+  // completion waiters (which caused 60-second TimeoutException stalls).
+  Future<void> _speakChain = Future.value();
+  // Bumped when the user barges in; queued speech from before is skipped.
+  int _speakGen = 0;
   static const int _maxTtsChunkSize = 3500;
   List<String> _responseChunks = [];
   int _responseChunkIndex = 0;
@@ -438,11 +443,54 @@ class _HomeScreenState extends State<HomeScreen> {
     return (providerId: resolvedPid, model: resolvedModel);
   }
 
-  Future<void> _speakAndWait(String text) async {
-    _announceCompleter = Completer<void>();
-    await flutterTts.speak(text);
-    await _announceCompleter!.future.timeout(const Duration(seconds: 60));
-    _announceCompleter = null;
+  Future<void> _speakAndWait(String text) {
+    final gen = _speakGen;
+    final next = _speakChain
+        .then((_) => _speakNow(text, gen))
+        .catchError((Object e) {
+      _logger.log('HomeScreen', 'Speech failed: $e');
+    });
+    _speakChain = next;
+    return next;
+  }
+
+  Future<void> _speakNow(String text, int gen) async {
+    // Superseded by a barge-in while queued — drop it.
+    if (gen != _speakGen) return;
+    final completer = Completer<void>();
+    _announceCompleter = completer;
+    try {
+      await flutterTts.speak(text);
+      await completer.future.timeout(_speakTimeoutFor(text));
+    } on TimeoutException {
+      // Completion never arrived (speech was stopped/interrupted). Continue
+      // instead of stalling the whole flow for a minute.
+      _logger.log('HomeScreen', 'TTS completion timeout (${text.length} chars) — continuing');
+    } finally {
+      if (identical(_announceCompleter, completer)) {
+        _announceCompleter = null;
+      }
+    }
+  }
+
+  Duration _speakTimeoutFor(String text) {
+    // Observed TTS rate can be as slow as ~10 chars/second; scale with length.
+    final seconds = (30 + text.length ~/ 5).clamp(60, 150);
+    return Duration(seconds: seconds);
+  }
+
+  /// Called when the user speaks while the app is talking: release the
+  /// current wait, stop TTS, and drop any queued speech.
+  Future<void> _interruptSpeech() async {
+    _speakGen++;
+    _clearResponseChunks();
+    final pending = _announceCompleter;
+    if (pending != null && !pending.isCompleted) {
+      pending.complete();
+    }
+    try {
+      await flutterTts.stop();
+    } catch (_) {}
   }
 
   Future<void> _speakProviderAnnouncement(SharedPreferences prefs) async {
@@ -474,9 +522,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Stop any ongoing TTS so it doesn't get interrupted mid-sentence
-    // by the announcement speech or by a new response later.
+    // by the announcement speech or by a new response later. Skip when a
+    // prompt is mid-speech — killing it orphaned its completion waiter and
+    // stalled the flow for 60 seconds.
     _clearResponseChunks();
-    await flutterTts.stop();
+    if (_announceCompleter == null) {
+      await flutterTts.stop();
+    }
 
     setState(() {
       _micReallyListening = true;
@@ -533,6 +585,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.log('HomeScreen', 'Final speech result: "${lastWords.substring(0, lastWords.length > 50 ? 50 : lastWords.length)}${lastWords.length > 50 ? '...' : ''}"');
       _speechTimeout?.cancel();
       _speechTimeout = null;
+
+      // Barge-in: stop whatever the app was saying so prompts can't
+      // orphan each other's completion waiters.
+      await _interruptSpeech();
 
       // Non-search voice commands (weather, memory) first — must work
       // even when browser mode is active so weather never routes to DuckDuckGo.

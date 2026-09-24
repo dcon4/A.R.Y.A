@@ -7,7 +7,9 @@ import 'package:arya/services/web_search_service.dart' as ws;
 
 class BrowserFlow {
   static const int PAGE_SIZE = 5;
-  static const int MAX_CHUNK_SIZE = 3500;
+  // ~1200 chars speaks for roughly 1-2 minutes at slow TTS rates; larger
+  // chunks regularly exceeded the completion wait and aborted reading.
+  static const int MAX_CHUNK_SIZE = 1200;
 
   late FlutterTts _tts;
   late DebugLogger _logger;
@@ -67,7 +69,7 @@ class BrowserFlow {
   static String? extractSearchQuery(String text) {
     final lower = text.toLowerCase().trim();
     final m = RegExp(
-      r'^(?:please\s+)?(?:search(?:\s+the\s+web)?(?:\s+for)?|google|look\s+up|find)\s+(.+)$',
+      r'^(?:please\s+)?(?:(?:new\s+)?search(?:\s+the\s+web)?(?:\s+for)?|google|look\s+up|find)\s+(.+)$',
     ).firstMatch(lower);
     if (m == null) return null;
     final q = m.group(1)!.trim();
@@ -301,12 +303,11 @@ class BrowserFlow {
       return true;
     }
     if (_isSearchTrigger(lower)) {
-      // Explicit search keywords start a new search prompt (or take the query if present).
-      final queryMatch = RegExp(
-        r'^(?:new\s+search(?:\s+for)?|search(?:\s+for)?|google|look\s+up|find)\s+(.+)$',
-      ).firstMatch(lower);
-      if (queryMatch != null && queryMatch.group(1)!.trim().isNotEmpty) {
-        await _performSearch(queryMatch.group(1)!.trim());
+      // Use the shared extractor so vacuous phrases like "search the web"
+      // prompt for a query instead of searching for "the web".
+      final query = extractSearchQuery(text);
+      if (query != null) {
+        await _performSearch(query);
       } else {
         // Bare "new search" — clear old results so the next free-text
         // utterance is taken as the new query instead of going to AI.
@@ -394,7 +395,7 @@ class BrowserFlow {
         return;
       }
 
-      _currentPageChunks = _splitAtSentences(content, 3500);
+      _currentPageChunks = _splitAtSentences(content, MAX_CHUNK_SIZE);
       _currentChunkIndex = 0;
       _readingGen++;
       _isReadingPage = true;
