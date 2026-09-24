@@ -484,6 +484,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _interruptSpeech() async {
     _speakGen++;
     _clearResponseChunks();
+    // Kill any in-flight article chunk chain — the user is taking over.
+    _browserFlow.invalidateReading();
     final pending = _announceCompleter;
     if (pending != null && !pending.isCompleted) {
       pending.complete();

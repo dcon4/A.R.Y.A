@@ -362,7 +362,7 @@ class BrowserFlow {
     await _openResult(_currentResultIndex);
   }
 
-  Future<void> _openResult(int index) async {
+  Future<void> _openResult(int index, {bool announce = true}) async {
     if (index < 0 || index >= _allResults.length) {
       await _onError("Invalid result. Say a number or 'cancel'.");
       return;
@@ -373,25 +373,31 @@ class BrowserFlow {
     _readingGen++;
     _logger.log('BrowserFlow', 'Opening result ${index + 1}: ${result.title} (${result.url})');
 
-    await _onSpeak("Opening: ${result.title}.");
+    if (announce) {
+      await _onSpeak("Opening: ${result.title}.");
+    }
 
     try {
       final url = result.url.trim();
       if (url.isEmpty) {
-        _isReadingPage = false;
-        _readingAllSequentially = false;
         _logger.log('BrowserFlow', 'Empty URL for result ${index + 1}: ${result.title}');
-        await _onError("That result has no readable link. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
+        if (_readingAllSequentially) {
+          await _advanceToNextResult();
+        } else {
+          await _onError("That result has no readable link. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
+        }
         return;
       }
 
       final content = await PageFetcherService.instance.fetchPageContent(url);
 
       if (content == null || content.isEmpty) {
-        _isReadingPage = false;
-        _readingAllSequentially = false;
         _logger.log('BrowserFlow', 'Fetch failed for $url — using snippet');
-        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
+        if (_readingAllSequentially) {
+          await _advanceToNextResult();
+        } else {
+          await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
+        }
         return;
       }
 
@@ -399,20 +405,46 @@ class BrowserFlow {
       _currentChunkIndex = 0;
       _readingGen++;
       _isReadingPage = true;
+      final gen = _readingGen;
       _logger.log('BrowserFlow', 'Reading ${_currentPageChunks.length} chunk(s)');
 
       await _onSpeak("Reading ${result.title}.");
-      await _readNextChunk();
+      await _readNextChunk(gen);
     } catch (e) {
-      _isReadingPage = false;
-      _readingAllSequentially = false;
       _logger.error('BrowserFlow', 'Error reading page', e);
-      await _onError("Error reading page: $e");
+      if (_readingAllSequentially) {
+        await _advanceToNextResult();
+      } else {
+        _readingAllSequentially = false;
+        await _onError("Error reading page: $e");
+      }
     }
   }
 
-  Future<void> _readNextChunk() async {
-    if (!_isReadingPage) return;
+  /// Called when the user barges in: kills the in-flight chunk chain so the
+  /// old article doesn't keep speaking its next chunk in the background.
+  void invalidateReading() {
+    _readingGen++;
+  }
+
+  /// Read-all keeps going on its own: one short transition line, then the
+  /// next article. No "say next or skip" prompt between articles.
+  Future<void> _advanceToNextResult() async {
+    final nextIndex = _currentResultIndex + 1;
+    if (_allResults.isNotEmpty && nextIndex < _allResults.length) {
+      _currentResultIndex = nextIndex;
+      await _onSpeak("Finished with that article. Continuing to the next article.");
+      if (_allResults.isEmpty) return; // cancelled during the transition
+      await _openResult(nextIndex, announce: false);
+    } else {
+      _isReadingPage = false;
+      _readingAllSequentially = false;
+      await _speakAndListen("You have reached the end of the search results.");
+    }
+  }
+
+  Future<void> _readNextChunk(int gen) async {
+    if (!_isReadingPage || gen != _readingGen) return;
     if (_currentChunkIndex >= _currentPageChunks.length) {
       await _handleChunkEnd();
       return;
@@ -421,7 +453,7 @@ class BrowserFlow {
     final chunk = _currentPageChunks[_currentChunkIndex];
     await _onSpeak("Part ${_currentChunkIndex + 1} of ${_currentPageChunks.length}. ${chunk}");
     _currentChunkIndex++;
-    await _readNextChunk();
+    await _readNextChunk(gen);
   }
 
   Future<void> _handleChunkEnd() async {
@@ -430,14 +462,7 @@ class BrowserFlow {
       return;
     }
 
-    final nextIndex = _currentResultIndex + 1;
-    if (nextIndex < _allResults.length) {
-      await _speakAndListen("End of article. Say 'next' or 'skip' for the next result, or 'cancel'.");
-    } else {
-      _isReadingPage = false;
-      _readingAllSequentially = false;
-      await _speakAndListen("You have reached the end of the search results.");
-    }
+    await _advanceToNextResult();
   }
 
   Future<void> _handleReadingCommands(String text) async {
@@ -495,7 +520,7 @@ class BrowserFlow {
 
     if (lower == 'repeat') {
       _currentChunkIndex = 0;
-      await _readNextChunk();
+      await _readNextChunk(_readingGen);
       return;
     }
 
@@ -507,8 +532,12 @@ class BrowserFlow {
       return;
     }
 
-    // If unrecognized, re-prompt
+    // Unrecognized — re-prompt, then keep reading where we left off so a
+    // stray utterance doesn't end "read all" halfway through.
     await _speakAndListen("Say a number, 'next', 'new search', or 'cancel'.");
+    if (_isReadingPage) {
+      await _readNextChunk(_readingGen);
+    }
   }
 
   void _handleCancel() {
