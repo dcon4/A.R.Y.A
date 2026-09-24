@@ -532,6 +532,18 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
+      // Check for voice commands FIRST (weather, remember, etc.) - these should work regardless of search state
+      if (await _handleVoiceCommand(lastWords)) {
+        // Reset search state when a voice command is handled
+        if (_searchState != SearchState.idle) {
+          setState(() {
+            _searchState = SearchState.idle;
+            _readingAllSequentially = false;
+          });
+        }
+        return;
+      }
+
       // Handle search state machine
         if (_searchState == SearchState.awaitingQuery) {
           setState(() {
