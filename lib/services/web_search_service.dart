@@ -83,17 +83,20 @@ class WebSearchService {
         }
 
         if (url.isEmpty) {
-          logger.log('WebSearchService', 'Skipping result with empty URL: $title');
-          continue;
+          // No link found — keep the result; opening it will read the snippet.
+          logger.log('WebSearchService', 'No URL for result, keeping snippet only: $title');
         }
 
         results.add(SearchResult(title: title, snippet: snippet, url: url));
         logger.log('WebSearchService', 'Added result: $title -> $url');
       }
 
-      // Deduplicate by URL (more reliable than title)
+      // Deduplicate by URL, falling back to title for URL-less results.
       final seen = <String>{};
-      results = results.where((r) => seen.add(r.url.toLowerCase())).toList();
+      results = results
+          .where((r) => seen.add(
+              r.url.isNotEmpty ? r.url.toLowerCase() : 'title:${r.title.toLowerCase()}'))
+          .toList();
 
       logger.log('WebSearchService', 'Returning ${results.length} results');
       return results.take(8).toList();

@@ -98,10 +98,21 @@ class BrowserFlow {
     }
   }
 
+  /// Normalize an utterance for command comparison: lowercase, strip
+  /// punctuation, collapse whitespace. STT often adds trailing periods.
+  String _norm(String text) {
+    return text
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   /// Returns true if the utterance was consumed by the search flow.
   /// Returns false when the caller should treat it as a normal AI query.
   Future<bool> handleSpeechResult(String text, {Function()? onNextListen}) async {
-    final lower = text.trim().toLowerCase();
+    final lower = _norm(text);
     _logger.log('BrowserFlow', 'handleSpeechResult: "$text" (reading=$_isReadingPage, results=${_allResults.length})');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
@@ -120,7 +131,13 @@ class BrowserFlow {
         await _onError("I didn't hear a search query. Try again.");
         return true;
       }
-      await _performSearch(text.trim());
+      final explicit = extractSearchQuery(text);
+      if (explicit == null && _isSearchTrigger(lower)) {
+        // Bare activation phrase ("search", "google") with no query yet.
+        await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
+        return true;
+      }
+      await _performSearch(explicit ?? text.trim());
       return true;
     }
 
@@ -202,62 +219,80 @@ class BrowserFlow {
         .hasMatch(lower);
   }
 
-  /// Extract a result number from phrases like "three", "3", "number 3", "the third one".
+  /// Extract a result number from phrases like "three", "result three",
+  /// "read result three", "the third one", "number 3", "3rd".
+  /// Returns null when the phrase is not a number selection (so free-form
+  /// questions go to AI instead of opening a result by accident).
   int? _extractNumber(String text) {
-    var lower = text.trim().toLowerCase();
-    lower = lower.replaceAll(RegExp(r'[^\w\s]'), ' ').trim();
+    final lower = _norm(text);
     if (lower.isEmpty) return null;
 
-    // Common prefixes
-    lower = lower
-        .replaceFirst(RegExp(r'^(the|a|an|option|result|number|item|choice|pick|open)\s+'), '')
-        .trim();
-
-    // Phonetic and word corrections
-    final corrected = lower
-        .replaceAll(RegExp(r'\bwon\b'), 'one')
-        .replaceAll(RegExp(r'\bto\b'), 'two')
-        .replaceAll(RegExp(r'\btoo\b'), 'two')
-        .replaceAll(RegExp(r'\bfor\b'), 'four')
-        .replaceAll(RegExp(r'\bate\b'), 'eight')
-        .replaceAll(RegExp(r'\bfife\b'), 'five')
-        .replaceAll(RegExp(r'\bdive\b'), 'five')
-        .replaceAll(RegExp(r'\bhive\b'), 'five')
-        .replaceAll(RegExp(r'\btree\b'), 'three')
-        .replaceAll(RegExp(r'\bfree\b'), 'three')
-        .replaceAll(RegExp(r'\bsir\b'), 'three')
-        .replaceAll(RegExp(r'\bone\b'), 'one')
-        .trim();
-
-    // Try digit (possibly with trailing words like "3 please")
-    final digitMatch = RegExp(r'(\d+)').firstMatch(corrected);
-    if (digitMatch != null) {
-      return int.parse(digitMatch.group(1)!);
-    }
-
-    // Try number words anywhere in the phrase
+    // Command/filler words that may surround the number.
+    const filler = {
+      'the', 'a', 'an', 'read', 'reads', 'reading', 'please', 'open', 'opens',
+      'opening', 'show', 'shows', 'select', 'choose', 'pick', 'result',
+      'results', 'number', 'option', 'item', 'choice', 'of', 'page', 'go',
+      'going', 'ahead', 'i', 'me', 'my', 'want', 'would', 'like', 'just',
+      'really', 'um', 'uh', 'ah', 'yeah', 'yes', 'ok', 'okay',
+    };
     const numberWords = {
       'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
       'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
       'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
+      'sixth': 6, 'seventh': 7, 'eighth': 8, 'ninth': 9, 'tenth': 10,
     };
-    for (final entry in numberWords.entries) {
-      if (corrected == entry.key || corrected.endsWith(' ${entry.key}')) {
-        return entry.value;
-      }
+    // STT phonetic mishearings that should map to number words.
+    const phonetic = {
+      'won': 'one', 'wan': 'one', 'to': 'two', 'too': 'two', 'for': 'four',
+      'ate': 'eight', 'fife': 'five', 'dive': 'five', 'hive': 'five',
+      'tree': 'three', 'free': 'three', 'sir': 'three', 'siv': 'six',
+      'seks': 'six', 'niner': 'nine',
+    };
+
+    final tokens = lower
+        .split(' ')
+        .where((t) => t.isNotEmpty && !filler.contains(t))
+        .toList();
+    if (tokens.isEmpty) return null;
+
+    bool hasDigit(String t) => RegExp(r'\d').hasMatch(t);
+    bool isNumberish(String t) =>
+        hasDigit(t) || numberWords.containsKey(t) || phonetic.containsKey(t);
+
+    // Every remaining token must be number-like, otherwise this is prose.
+    if (!tokens.every(isNumberish)) return null;
+
+    // Digits first ("result 3", "3rd").
+    for (final t in tokens) {
+      final d = RegExp(r'\d+').firstMatch(t);
+      if (d != null) return int.parse(d.group(0)!);
     }
-    return numberWords[corrected];
+    // Exact number words as spoken ("third", "three").
+    for (final t in tokens) {
+      final v = numberWords[t];
+      if (v != null) return v;
+    }
+    // Phonetic corrections ("tree" → three, "to" → two).
+    for (final t in tokens) {
+      final mapped = phonetic[t];
+      if (mapped != null) return numberWords[mapped];
+    }
+    return null;
   }
 
   Future<bool> _handleResultSelection(String text) async {
-    final lower = text.trim().toLowerCase();
+    final lower = _norm(text);
     _logger.log('BrowserFlow', 'Result selection input: "$lower"');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
       _handleCancel();
       return true;
     }
-    if (lower == 'read all' || lower == 'all' || lower.contains('read all')) {
+    if (lower == 'read all' ||
+        lower == 'all' ||
+        lower == 'read everything' ||
+        lower.contains('read all') ||
+        lower.contains('read them all')) {
       await _startReadingAll();
       return true;
     }
@@ -273,6 +308,9 @@ class BrowserFlow {
       if (queryMatch != null && queryMatch.group(1)!.trim().isNotEmpty) {
         await _performSearch(queryMatch.group(1)!.trim());
       } else {
+        // Bare "new search" — clear old results so the next free-text
+        // utterance is taken as the new query instead of going to AI.
+        _allResults = [];
         _pageOffset = 0;
         _currentResultIndex = 0;
         _readingAllSequentially = false;
@@ -340,6 +378,7 @@ class BrowserFlow {
       final url = result.url.trim();
       if (url.isEmpty) {
         _isReadingPage = false;
+        _readingAllSequentially = false;
         _logger.log('BrowserFlow', 'Empty URL for result ${index + 1}: ${result.title}');
         await _onError("That result has no readable link. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
@@ -349,6 +388,7 @@ class BrowserFlow {
 
       if (content == null || content.isEmpty) {
         _isReadingPage = false;
+        _readingAllSequentially = false;
         _logger.log('BrowserFlow', 'Fetch failed for $url — using snippet');
         await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
@@ -364,6 +404,7 @@ class BrowserFlow {
       await _readNextChunk();
     } catch (e) {
       _isReadingPage = false;
+      _readingAllSequentially = false;
       _logger.error('BrowserFlow', 'Error reading page', e);
       await _onError("Error reading page: $e");
     }
@@ -390,7 +431,7 @@ class BrowserFlow {
 
     final nextIndex = _currentResultIndex + 1;
     if (nextIndex < _allResults.length) {
-      await _speakAndListen("End of article. Moving to the next result. Say 'skip' to skip, or 'cancel'.");
+      await _speakAndListen("End of article. Say 'next' or 'skip' for the next result, or 'cancel'.");
     } else {
       _isReadingPage = false;
       _readingAllSequentially = false;
@@ -399,7 +440,7 @@ class BrowserFlow {
   }
 
   Future<void> _handleReadingCommands(String text) async {
-    final lower = text.trim().toLowerCase();
+    final lower = _norm(text);
     _logger.log('BrowserFlow', 'Reading command: "$lower"');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
