@@ -39,18 +39,42 @@ class BrowserFlow {
   late void Function() _onIdle;
   late Future<void> Function(String) _onError;
 
+  bool get hasResults => _allResults.isNotEmpty;
+  bool get isReading => _isReadingPage;
+
   Future<void> start({
     required Future<void> Function(String) onSpeak,
     required void Function() onListeningStarted,
     required void Function() onIdle,
     required Future<void> Function(String) onError,
+    String? initialQuery,
   }) async {
     _onSpeak = onSpeak;
     _onListeningStarted = onListeningStarted;
     _onIdle = onIdle;
     _onError = onError;
     _resetState();
-    await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
+    final query = initialQuery?.trim();
+    if (query != null && query.isNotEmpty) {
+      await _performSearch(query);
+    } else {
+      await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
+    }
+  }
+
+  /// Pull the query out of phrases like "search for cats" / "google cats".
+  /// Returns null when the phrase only activates search mode.
+  static String? extractSearchQuery(String text) {
+    final lower = text.toLowerCase().trim();
+    final m = RegExp(
+      r'^(?:please\s+)?(?:search(?:\s+the\s+web)?(?:\s+for)?|google|look\s+up|find)\s+(.+)$',
+    ).firstMatch(lower);
+    if (m == null) return null;
+    final q = m.group(1)!.trim();
+    if (q.isEmpty || q == 'the web' || q == 'web' || q == 'internet' || q == 'online') {
+      return null;
+    }
+    return q;
   }
 
   void _resetState() {
@@ -65,38 +89,47 @@ class BrowserFlow {
   }
 
   Future<void> _speakAndListen(String message) async {
-    await _onSpeak(message);
-    _onListeningStarted();
+    try {
+      await _onSpeak(message);
+    } catch (e) {
+      _logger.error('BrowserFlow', 'Speak failed', e);
+    } finally {
+      _onListeningStarted();
+    }
   }
 
-  Future<void> handleSpeechResult(String text, {Function()? onNextListen}) async {
+  /// Returns true if the utterance was consumed by the search flow.
+  /// Returns false when the caller should treat it as a normal AI query.
+  Future<bool> handleSpeechResult(String text, {Function()? onNextListen}) async {
     final lower = text.trim().toLowerCase();
+    _logger.log('BrowserFlow', 'handleSpeechResult: "$text" (reading=$_isReadingPage, results=${_allResults.length})');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
       _handleCancel();
-      return;
+      return true;
     }
 
     if (_isReadingPage) {
       await _handleReadingCommands(text);
-      return;
+      return true;
     }
 
     if (_allResults.isEmpty) {
-      // In search input phase
+      // Search input phase — free text is the query the user was just asked for.
       if (text.trim().isEmpty) {
         await _onError("I didn't hear a search query. Try again.");
-        return;
+        return true;
       }
       await _performSearch(text.trim());
-      return;
+      return true;
     }
 
-    // In results selection phase
-    await _handleResultSelection(text);
+    // Results selection phase
+    return _handleResultSelection(text);
   }
 
   Future<void> _performSearch(String query) async {
+    _logger.log('BrowserFlow', 'Performing search: "$query"');
     await _onSpeak("Searching for: $query.");
 
     try {
@@ -140,6 +173,7 @@ class BrowserFlow {
     if (endNum < totalResults) summary += ", 'more results'";
     summary += ", 'new search', or 'cancel'.";
 
+    _logger.log('BrowserFlow', 'Presenting results page ($startNum-$endNum of $totalResults)');
     await _speakAndListen(summary);
   }
 
@@ -149,50 +183,127 @@ class BrowserFlow {
     return _allResults.sublist(start, end);
   }
 
-  Future<void> _handleResultSelection(String text) async {
+  /// Explicit search keywords that mean "start a new search", not AI.
+  bool _isSearchTrigger(String lower) {
+    if (lower == 'new search' || lower == 'web search' || lower == 'find' || lower == 'search') {
+      return true;
+    }
+    if (lower.startsWith('new search') ||
+        lower.startsWith('search for ') ||
+        lower.startsWith('search ') ||
+        lower.startsWith('google ') ||
+        lower.startsWith('look up ') ||
+        lower.startsWith('look up') ||
+        lower.startsWith('find ')) {
+      return true;
+    }
+    // Word-boundary match so "research" does not trigger web search.
+    return RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b')
+        .hasMatch(lower);
+  }
+
+  /// Extract a result number from phrases like "three", "3", "number 3", "the third one".
+  int? _extractNumber(String text) {
+    var lower = text.trim().toLowerCase();
+    lower = lower.replaceAll(RegExp(r'[^\w\s]'), ' ').trim();
+    if (lower.isEmpty) return null;
+
+    // Common prefixes
+    lower = lower
+        .replaceFirst(RegExp(r'^(the|a|an|option|result|number|item|choice|pick|open)\s+'), '')
+        .trim();
+
+    // Phonetic and word corrections
+    final corrected = lower
+        .replaceAll(RegExp(r'\bwon\b'), 'one')
+        .replaceAll(RegExp(r'\bto\b'), 'two')
+        .replaceAll(RegExp(r'\btoo\b'), 'two')
+        .replaceAll(RegExp(r'\bfor\b'), 'four')
+        .replaceAll(RegExp(r'\bate\b'), 'eight')
+        .replaceAll(RegExp(r'\bfife\b'), 'five')
+        .replaceAll(RegExp(r'\bdive\b'), 'five')
+        .replaceAll(RegExp(r'\bhive\b'), 'five')
+        .replaceAll(RegExp(r'\btree\b'), 'three')
+        .replaceAll(RegExp(r'\bfree\b'), 'three')
+        .replaceAll(RegExp(r'\bsir\b'), 'three')
+        .replaceAll(RegExp(r'\bone\b'), 'one')
+        .trim();
+
+    // Try digit (possibly with trailing words like "3 please")
+    final digitMatch = RegExp(r'(\d+)').firstMatch(corrected);
+    if (digitMatch != null) {
+      return int.parse(digitMatch.group(1)!);
+    }
+
+    // Try number words anywhere in the phrase
+    const numberWords = {
+      'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+      'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
+    };
+    for (final entry in numberWords.entries) {
+      if (corrected == entry.key || corrected.endsWith(' ${entry.key}')) {
+        return entry.value;
+      }
+    }
+    return numberWords[corrected];
+  }
+
+  Future<bool> _handleResultSelection(String text) async {
     final lower = text.trim().toLowerCase();
+    _logger.log('BrowserFlow', 'Result selection input: "$lower"');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
       _handleCancel();
-      return;
+      return true;
     }
     if (lower == 'read all' || lower == 'all' || lower.contains('read all')) {
       await _startReadingAll();
-      return;
+      return true;
     }
     if (lower == 'more results' || lower == 'more' || lower == 'next five') {
       await _showMoreResults();
-      return;
+      return true;
     }
-    if (lower == 'new search') {
-      _pageOffset = 0;
-      _currentResultIndex = 0;
-      _readingAllSequentially = false;
-      await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
-      return;
+    if (_isSearchTrigger(lower)) {
+      // Explicit search keywords start a new search prompt (or take the query if present).
+      final queryMatch = RegExp(
+        r'^(?:new\s+search(?:\s+for)?|search(?:\s+for)?|google|look\s+up|find)\s+(.+)$',
+      ).firstMatch(lower);
+      if (queryMatch != null && queryMatch.group(1)!.trim().isNotEmpty) {
+        await _performSearch(queryMatch.group(1)!.trim());
+      } else {
+        _pageOffset = 0;
+        _currentResultIndex = 0;
+        _readingAllSequentially = false;
+        await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
+      }
+      return true;
     }
     if (lower == 'repeat' || lower == 'refresh') {
       await _onSpeak("Repeating results.");
       await _presentCurrentPage();
-      return;
+      return true;
     }
 
     // Check for number
     final number = _extractNumber(text);
-    if (number != null && number >= 1 && number <= _allResults.length) {
-      _currentResultIndex = number - 1;
-      _readingAllSequentially = false;
-      await _openResult(_currentResultIndex);
-      return;
+    if (number != null) {
+      _logger.log('BrowserFlow', 'Parsed number $number from "$text"');
+      if (number >= 1 && number <= _allResults.length) {
+        _currentResultIndex = number - 1;
+        _readingAllSequentially = false;
+        await _openResult(_currentResultIndex);
+        return true;
+      }
+      await _onError("There are only ${_allResults.length} results. Say a number from 1 to ${_allResults.length}, or 'cancel'.");
+      return true;
     }
 
-    if (text.trim().isNotEmpty) {
-      // Treat as new search query
-      await _performSearch(text.trim());
-      return;
-    }
-
-    await _onError("Say a result number, 'read all', 'more results', 'new search', or 'cancel'.");
+    // Free text without search keywords in the results list is an AI question.
+    // Only the initial "what would you like to search for?" prompt accepts free text as a query.
+    _logger.log('BrowserFlow', 'No search keyword or number — handing off to AI: "$text"');
+    return false;
   }
 
   Future<void> _showMoreResults() async {
@@ -221,6 +332,7 @@ class BrowserFlow {
     final result = _allResults[index];
     _isReadingPage = false;
     _readingGen++;
+    _logger.log('BrowserFlow', 'Opening result ${index + 1}: ${result.title} (${result.url})');
 
     await _onSpeak("Opening: ${result.title}.");
 
@@ -228,7 +340,7 @@ class BrowserFlow {
       final url = result.url.trim();
       if (url.isEmpty) {
         _isReadingPage = false;
-        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say 'next', a number, 'new search', or 'cancel'.");
+        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
       }
 
@@ -236,7 +348,7 @@ class BrowserFlow {
 
       if (content == null || content.isEmpty) {
         _isReadingPage = false;
-        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say 'next', a number, 'new search', or 'cancel'.");
+        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
       }
 
@@ -244,11 +356,13 @@ class BrowserFlow {
       _currentChunkIndex = 0;
       _readingGen++;
       _isReadingPage = true;
+      _logger.log('BrowserFlow', 'Reading ${_currentPageChunks.length} chunk(s)');
 
       await _onSpeak("Reading ${result.title}.");
       await _readNextChunk();
     } catch (e) {
       _isReadingPage = false;
+      _logger.error('BrowserFlow', 'Error reading page', e);
       await _onError("Error reading page: $e");
     }
   }
@@ -268,7 +382,7 @@ class BrowserFlow {
 
   Future<void> _handleChunkEnd() async {
     if (!_readingAllSequentially) {
-      await _speakAndListen("End of article. Say 'next', 'skip', 'new search', or 'cancel'.");
+      await _speakAndListen("End of article. Say a number, 'new search', or 'cancel'.");
       return;
     }
 
@@ -284,6 +398,7 @@ class BrowserFlow {
 
   Future<void> _handleReadingCommands(String text) async {
     final lower = text.trim().toLowerCase();
+    _logger.log('BrowserFlow', 'Reading command: "$lower"');
 
     if (lower == 'cancel' || lower == 'exit' || lower == 'go back') {
       _isReadingPage = false;
@@ -305,7 +420,7 @@ class BrowserFlow {
       return;
     }
 
-    if (lower == 'new search') {
+    if (lower == 'new search' || _isSearchTrigger(lower)) {
       _isReadingPage = false;
       _readingAllSequentially = false;
       _allResults = [];
@@ -329,7 +444,7 @@ class BrowserFlow {
           await _speakAndListen("No more results.");
         }
       } else {
-        await _speakAndListen("Say 'read all' to read sequentially, or a number to open a result.");
+        await _speakAndListen("Say a number to open a result, 'new search', or 'cancel'.");
       }
       return;
     }
@@ -349,43 +464,17 @@ class BrowserFlow {
     }
 
     // If unrecognized, re-prompt
-    await _speakAndListen("Say 'skip', 'next', 'new search', or 'cancel'.");
+    await _speakAndListen("Say a number, 'next', 'new search', or 'cancel'.");
   }
 
   void _handleCancel() {
+    _logger.log('BrowserFlow', 'Cancel — leaving search mode');
     _allResults = [];
     _pageOffset = 0;
     _currentResultIndex = 0;
     _readingAllSequentially = false;
     _isReadingPage = false;
     _onIdle();
-  }
-
-  int? _extractNumber(String text) {
-    final lower = text.trim().toLowerCase();
-
-    // Phonetic corrections
-    final corrected = lower
-        .replaceAll(RegExp(r'\bwon\b'), 'one')
-        .replaceAll(RegExp(r'\bto\b'), 'two')
-        .replaceAll(RegExp(r'\btoo\b'), 'two')
-        .replaceAll(RegExp(r'\bfor\b'), 'four')
-        .replaceAll(RegExp(r'\bate\b'), 'eight')
-        .replaceAll(RegExp(r'\bfife\b'), 'five')
-        .replaceAll(RegExp(r'\bdive\b'), 'five')
-        .replaceAll(RegExp(r'\bhive\b'), 'five');
-
-    // Try digit
-    final digitMatch = RegExp(r'^\d+$').hasMatch(corrected);
-    if (digitMatch) return int.parse(corrected);
-
-    // Try number words
-    const numberWords = {
-      'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-      'first': 1, 'second': 2, 'third': 3,
-    };
-    return numberWords[corrected];
   }
 
   List<String> _splitAtSentences(String text, int maxChunk) {

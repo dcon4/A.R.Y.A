@@ -274,7 +274,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (lower == 'what do you remember' || lower == 'what do you remember about me' || lower == 'list memories') return 'recall';
     if (lower == 'clear my memories' || lower == 'forget everything') return 'clear_memories';
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
-    if (lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ') || lower == 'web search') return 'web_search';
+    // Explicit search keywords only. Word boundaries so "research" does not match.
+    if (lower == 'find' ||
+        lower == 'search' ||
+        lower == 'web search' ||
+        lower == 'search the web' ||
+        lower.startsWith('find ') ||
+        lower.startsWith('search for ') ||
+        lower.startsWith('search ') ||
+        lower.startsWith('google ') ||
+        lower.startsWith('look up ') ||
+        RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
+      return 'web_search';
+    }
     return null;
   }
 
@@ -335,6 +347,8 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         _browserFlow.tts = flutterTts;
         _browserFlow.logger = _logger;
+        final initialQuery = BrowserFlow.extractSearchQuery(text);
+        _logger.log('HomeScreen', 'Entering web search mode (query=$initialQuery)');
         await _browserFlow.start(
           onSpeak: (msg) => _speakAndWait(msg),
           onListeningStarted: () {
@@ -349,6 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
             await _speakAndWait(msg);
             startListening();
           },
+          initialQuery: initialQuery,
         );
         break;
     }
@@ -534,10 +549,19 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      // Handle browser flow
+      // Handle browser flow. Returns false for free text that is not a
+      // search command/number — then fall through so it goes to AI chat.
       if (_browserMode) {
-        await _browserFlow.handleSpeechResult(lastWords, onNextListen: startListening);
-        return;
+        final handled = await _browserFlow.handleSpeechResult(lastWords, onNextListen: startListening);
+        if (handled) {
+          return;
+        }
+        _logger.log('HomeScreen', 'BrowserFlow unhandled — routing to AI: "$lastWords"');
+        setState(() {
+          _browserMode = false;
+          _searchState = SearchState.idle;
+          _readingAllSequentially = false;
+        });
       }
 
       // Enter browser mode on explicit search triggers, or run other commands
@@ -612,7 +636,8 @@ class _HomeScreenState extends State<HomeScreen> {
           await _handleReadingSequentialEnd();
           return;
         }
-if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ')) {
+        if (lower == 'new search' ||
+            RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
@@ -676,7 +701,8 @@ if (lower == 'new search' || lower.contains('search') || lower.contains('google'
           }
           return;
         }
-        if (lower == 'new search' || lower.contains('search') || lower.contains('google') || lower.contains('look up') || lower.contains('internet') || lower.contains('duckduckgo') || lower.contains('duck duck go') || lower == 'find' || lower.startsWith('find ') || lower.startsWith('search for ') || lower.startsWith('google ')) {
+        if (lower == 'new search' ||
+            RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
             _readingAllSequentially = false;
