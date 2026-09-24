@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 import 'package:arya/services/debug_logger.dart';
 
@@ -104,7 +105,7 @@ class WebSearchService {
   }
 
   /// Pull a real http(s) article URL out of a DuckDuckGo result element.
-  String _extractUrl(html.Element element, html.Element? titleElement) {
+  String _extractUrl(dom.Element element, dom.Element? titleElement) {
     final candidates = <String>[];
 
     if (titleElement != null) {
