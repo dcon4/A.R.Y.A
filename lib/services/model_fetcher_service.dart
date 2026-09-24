@@ -99,7 +99,8 @@ class ModelFetcherService {
             'id': m['id'] ?? '',
             'name': m['id'] ?? 'Unknown',
             'created': m['created'] ?? 0,
-            'is_free': false, // Groq models are paid
+            // Groq's developer tier is free — mark models free so the filter works.
+            'is_free': true,
             'supports_vision': (m['id'] as String).contains('vision'),
           };
         }).toList();

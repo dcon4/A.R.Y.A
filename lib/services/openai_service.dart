@@ -172,20 +172,11 @@ When the user asks a research question, you must present a balanced view:
       }
 
       final webSearch = !braveSearch && await providers.getWebSearchOnlineEnabled();
-      if (webSearch && !model.contains(':online')) {
+      if (webSearch && resolvedProviderId == 'openrouter' && !model.contains(':online')) {
         model = '$model:online';
       }
 
       _logger.log('OpenAIService', 'Sending request to $resolvedBaseUrl model=$model');
-
-      final headers = <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $resolvedApiKey',
-      };
-      if (resolvedRequiresReferer) {
-        headers['HTTP-Referer'] = getSiteUrl();
-        headers['X-Title'] = getSiteName();
-      }
 
       final sysPrompt = await getSystemPrompt(isResearch: isResearch);
       final messages = <Map<String, String>>[
@@ -207,14 +198,13 @@ When the user asks a research question, you must present a balanced view:
       }
       messages.add({'role': 'user', 'content': prompt});
 
-      final response = await http.post(
-        Uri.parse('$resolvedBaseUrl/chat/completions'),
-        headers: headers,
-        body: jsonEncode({
-          'model': model,
-          'messages': messages,
-          if (maxTokens != null) 'max_tokens': maxTokens,
-        }),
+      var response = await _postChat(
+        baseUrl: resolvedBaseUrl,
+        apiKey: resolvedApiKey,
+        requiresReferer: resolvedRequiresReferer,
+        model: model,
+        messages: messages,
+        maxTokens: maxTokens,
       );
 
       if (response.statusCode == 200) {
@@ -222,7 +212,31 @@ When the user asks a research question, you must present a balanced view:
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'];
         return content;
-      } else {
+      }
+
+      // Model no longer exists on this provider — discover a live one and retry once.
+      if (_isModelMissing(response.statusCode, response.body)) {
+        final recovered = await _recoverModel(resolvedProviderId, model);
+        if (recovered != null && recovered != model) {
+          _logger.log('OpenAIService', 'Retrying with recovered model: $recovered');
+          final retry = await _postChat(
+            baseUrl: resolvedBaseUrl,
+            apiKey: resolvedApiKey,
+            requiresReferer: resolvedRequiresReferer,
+            model: recovered,
+            messages: messages,
+            maxTokens: maxTokens,
+          );
+          if (retry.statusCode == 200) {
+            _logger.log('OpenAIService', 'API response OK after model recovery (${retry.body.length} chars)');
+            final data = jsonDecode(retry.body);
+            return data['choices'][0]['message']['content'];
+          }
+          response = retry;
+        }
+      }
+
+      {
         _logger.error('OpenAIService', 'API error HTTP ${response.statusCode}');
         _logger.verbose('OpenAIService', 'Response body: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
         String detail;
@@ -232,11 +246,167 @@ When the user asks a research question, you must present a balanced view:
         } catch (_) {
           detail = 'HTTP ${response.statusCode}';
         }
+        if (_isModelMissing(response.statusCode, response.body)) {
+          return 'I could not find an available AI model. Please open Settings and pick a model.';
+        }
         return 'API error: $detail';
       }
     } catch (e) {
       _logger.error('OpenAIService', 'Request exception', e);
       return 'Sorry, something went wrong. Please check your connection.';
+    }
+  }
+
+  bool _isModelMissing(int status, String body) {
+    if (status != 400 && status != 404 && status != 422) return false;
+    final lower = body.toLowerCase();
+    return lower.contains('model_not_found') ||
+        lower.contains('does not exist') ||
+        lower.contains('not a valid model') ||
+        lower.contains('invalid model') ||
+        lower.contains('unknown model');
+  }
+
+  Future<http.Response> _postChat({
+    required String baseUrl,
+    required String apiKey,
+    required bool requiresReferer,
+    required String model,
+    required List<Map<String, String>> messages,
+    int? maxTokens,
+  }) async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $apiKey',
+    };
+    if (requiresReferer) {
+      headers['HTTP-Referer'] = getSiteUrl();
+      headers['X-Title'] = getSiteName();
+    }
+    return http.post(
+      Uri.parse('$baseUrl/chat/completions'),
+      headers: headers,
+      body: jsonEncode({
+        'model': model,
+        'messages': messages,
+        if (maxTokens != null) 'max_tokens': maxTokens,
+      }),
+    ).timeout(const Duration(seconds: 60));
+  }
+
+  /// Find a live model for this provider, persist it, and return it.
+  Future<String?> _recoverModel(String providerId, String badModel) async {
+    try {
+      final apiKey = await providers.getApiKeyForProvider(providerId);
+      if (apiKey.isEmpty) return null;
+
+      List<Map<String, dynamic>> models = [];
+      // Import kept local via ModelFetcher through a light dependency.
+      final fetcher = _ModelFetcher();
+      switch (providerId) {
+        case 'openrouter':
+          models = await fetcher.fetchOpenRouterModels(apiKey);
+          break;
+        case 'openai':
+          models = await fetcher.fetchOpenAIModels(apiKey);
+          break;
+        case 'groq':
+          models = await fetcher.fetchGroqModels(apiKey);
+          break;
+        case 'deepseek':
+          models = await fetcher.fetchDeepSeekModels(apiKey);
+          break;
+        case 'cerebras':
+          models = await fetcher.fetchCerebrasModels(apiKey);
+          break;
+      }
+
+      if (models.isEmpty) {
+        final provider = providers.apiProviders.firstWhere(
+          (p) => p.id == providerId,
+          orElse: () => providers.apiProviders.first,
+        );
+        if (provider.defaultModel.isNotEmpty && provider.defaultModel != badModel) {
+          await _persistModel(providerId, provider.defaultModel);
+          return provider.defaultModel;
+        }
+        return null;
+      }
+
+      String? chosen;
+      // Prefer non-guard / non-whisper chat models.
+      const blocked = ['whisper', 'prompt-guard', 'safeguard', 'moderation', 'audio'];
+      for (final m in models) {
+        final id = (m['id'] ?? '').toString();
+        final lower = id.toLowerCase();
+        if (blocked.any((b) => lower.contains(b))) continue;
+        if (id == badModel) continue;
+        chosen = id;
+        break;
+      }
+      chosen ??= (models.first['id'] ?? '').toString();
+      if (chosen.isEmpty) return null;
+
+      await _persistModel(providerId, chosen);
+      return chosen;
+    } catch (e) {
+      _logger.error('OpenAIService', 'Model recovery failed', e);
+      return null;
+    }
+  }
+
+  Future<void> _persistModel(String providerId, String model) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Only overwrite the global model when this is the active provider,
+    // or when the stored model is the broken one.
+    final currentProvider = prefs.getString('api_provider') ?? 'openrouter';
+    final currentModel = prefs.getString('api_model') ?? '';
+    if (currentProvider == providerId || currentModel.isEmpty || _looksLikeBrokenPair(providerId, currentModel)) {
+      await prefs.setString('api_model', model);
+      await prefs.setString('api_provider', providerId);
+    }
+    clearCachedSettings();
+    _logger.log('OpenAIService', 'Saved recovered model $model for $providerId');
+  }
+
+  bool _looksLikeBrokenPair(String providerId, String model) {
+    if (providerId == 'openrouter' && !model.contains('/')) return true;
+    if (providerId == 'groq' && model == 'llama-3.3-70b-versatile') return true;
+    return false;
+  }
+}
+
+/// Thin wrapper so OpenaiService can recover models without a circular import graph issue.
+class _ModelFetcher {
+  Future<List<Map<String, dynamic>>> fetchOpenRouterModels(String key) =>
+      _fetch('https://openrouter.ai/api/v1/models', key);
+  Future<List<Map<String, dynamic>>> fetchOpenAIModels(String key) =>
+      _fetch('https://api.openai.com/v1/models', key);
+  Future<List<Map<String, dynamic>>> fetchGroqModels(String key) =>
+      _fetch('https://api.groq.com/openai/v1/models', key);
+  Future<List<Map<String, dynamic>>> fetchDeepSeekModels(String key) =>
+      _fetch('https://api.deepseek.com/models', key);
+  Future<List<Map<String, dynamic>>> fetchCerebrasModels(String key) =>
+      _fetch('https://api.cerebras.ai/v1/models', key);
+
+  Future<List<Map<String, dynamic>>> _fetch(String url, String key) async {
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Authorization': 'Bearer $key'},
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) return [];
+      final data = jsonDecode(response.body);
+      final list = data['data'] as List? ?? [];
+      return list
+          .map((m) => {
+                'id': m['id'] ?? '',
+                'name': m['name'] ?? m['id'] ?? '',
+              })
+          .where((m) => (m['id'] as String).isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 }

@@ -340,7 +340,8 @@ class BrowserFlow {
       final url = result.url.trim();
       if (url.isEmpty) {
         _isReadingPage = false;
-        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
+        _logger.log('BrowserFlow', 'Empty URL for result ${index + 1}: ${result.title}');
+        await _onError("That result has no readable link. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
       }
 
@@ -348,6 +349,7 @@ class BrowserFlow {
 
       if (content == null || content.isEmpty) {
         _isReadingPage = false;
+        _logger.log('BrowserFlow', 'Fetch failed for $url — using snippet');
         await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say a number, 'new search', or 'cancel'.");
         return;
       }
