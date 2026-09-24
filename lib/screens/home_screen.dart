@@ -130,30 +130,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     };
-
-    // Initialize BrowserFlow after the first frame to avoid forward reference issues
-    Future.delayed(Duration.zero, _initializeBrowserFlow);
   }
 
   final _logger = DebugLogger();
-
-  Future<void> _initializeBrowserFlow() async {
-    _browserFlow.tts = flutterTts;
-    _browserFlow.logger = _logger;
-    await _browserFlow.start(
-      onSpeak: (msg) { systemSpeak(msg); },
-      onListeningStarted: () { startListening(); },
-      onIdle: () {
-        _browserMode = false;
-        setState(() {});
-      },
-      onError: (msg) {
-        systemSpeak(msg);
-        startListening();
-      },
-    );
-    _browserMode = true;
-  }
 
   Future<void> initSpeechToText() async {
     _logger.log('HomeScreen', 'Initializing speech to text');
@@ -311,61 +290,75 @@ class _HomeScreenState extends State<HomeScreen> {
         final content = text.substring('remember '.length).trim();
         if (content.isNotEmpty) {
           await MemoryService.instance.addEntry(content);
-          await systemSpeak('Saved');
+          await _speakAndWait('Saved');
         }
         break;
       case 'remember_last':
         if (_lastAiResponse.isNotEmpty) {
           await MemoryService.instance.addEntry(_lastAiResponse);
-          await systemSpeak('Saved');
+          await _speakAndWait('Saved');
         }
         break;
       case 'forget':
         final query = text.substring('forget '.length).trim();
         if (query.isNotEmpty) {
           final count = await MemoryService.instance.forgetByContent(query);
-          await systemSpeak(count > 0 ? 'Forgotten $count memories' : 'Nothing found to forget');
+          await _speakAndWait(count > 0 ? 'Forgotten $count memories' : 'Nothing found to forget');
         }
         break;
       case 'recall':
         final all = MemoryService.instance.entries;
         if (all.isEmpty) {
-          await systemSpeak('No memories yet');
+          await _speakAndWait('No memories yet');
         } else {
           final top = all.take(3).map((e) => e.content).join('. ');
-          await systemSpeak('I remember: $top');
+          await _speakAndWait('I remember: $top');
         }
         break;
       case 'clear_memories':
         await MemoryService.instance.clearAll();
-        await systemSpeak('All memories cleared');
+        await _speakAndWait('All memories cleared');
         break;
       case 'weather':
         final weatherReport = await WeatherService.instance.fetchWeather();
-        await systemSpeak(weatherReport);
+        await _speakAndWait(weatherReport);
         break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
         if (!(prefs.getBool('web_search_enabled') ?? false)) {
-          await systemSpeak("Web search is not enabled in settings.");
+          await _speakAndWait("Web search is not enabled in settings.");
+          startListening();
           return true;
         }
         setState(() {
           _browserMode = true;
         });
+        _browserFlow.tts = flutterTts;
+        _browserFlow.logger = _logger;
         await _browserFlow.start(
-          onSpeak: (msg) { systemSpeak(msg); },
-          onListeningStarted: () { startListening(); },
+          onSpeak: (msg) => _speakAndWait(msg),
+          onListeningStarted: () {
+            startListening();
+          },
           onIdle: () {
             _browserMode = false;
             setState(() {});
+            startListening();
           },
-          onError: (msg) {
-            systemSpeak(msg);
+          onError: (msg) async {
+            await _speakAndWait(msg);
             startListening();
           },
         );
         break;
+    }
+    if (cmd != 'web_search') {
+      if (_browserMode) {
+        setState(() {
+          _browserMode = false;
+        });
+      }
+      startListening();
     }
     return true;
   }
@@ -526,15 +519,29 @@ class _HomeScreenState extends State<HomeScreen> {
       _speechTimeout?.cancel();
       _speechTimeout = null;
 
+      // Non-search voice commands (weather, memory) first — must work
+      // even when browser mode is active so weather never routes to DuckDuckGo.
+      final detectedCmd = _detectVoiceCommand(lastWords);
+      if (detectedCmd != null && detectedCmd != 'web_search') {
+        if (await _handleVoiceCommand(lastWords)) {
+          if (_searchState != SearchState.idle) {
+            setState(() {
+              _searchState = SearchState.idle;
+              _readingAllSequentially = false;
+            });
+          }
+          return;
+        }
+      }
+
       // Handle browser flow
       if (_browserMode) {
         await _browserFlow.handleSpeechResult(lastWords, onNextListen: startListening);
         return;
       }
 
-      // Check for voice commands FIRST (weather, remember, etc.) - these should work regardless of search state
+      // Enter browser mode on explicit search triggers, or run other commands
       if (await _handleVoiceCommand(lastWords)) {
-        // Reset search state when a voice command is handled
         if (_searchState != SearchState.idle) {
           setState(() {
             _searchState = SearchState.idle;

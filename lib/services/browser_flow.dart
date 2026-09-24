@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/page_fetcher_service.dart';
 import 'package:arya/services/web_search_service.dart';
@@ -35,23 +34,23 @@ class BrowserFlow {
   factory BrowserFlow() => _instance;
 
   // Internal callback references
-  late Function(String) _onSpeak;
-  late Function() _onListeningStarted;
-  late Function() _onIdle;
-  late Function(String) _onError;
+  late Future<void> Function(String) _onSpeak;
+  late void Function() _onListeningStarted;
+  late void Function() _onIdle;
+  late Future<void> Function(String) _onError;
 
   Future<void> start({
-    required Function(String) onSpeak,
-    required Function() onListeningStarted,
-    required Function() onIdle,
-    required Function(String) onError,
+    required Future<void> Function(String) onSpeak,
+    required void Function() onListeningStarted,
+    required void Function() onIdle,
+    required Future<void> Function(String) onError,
   }) async {
     _onSpeak = onSpeak;
     _onListeningStarted = onListeningStarted;
     _onIdle = onIdle;
     _onError = onError;
     _resetState();
-    await _askForSearch();
+    await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
   }
 
   void _resetState() {
@@ -65,9 +64,9 @@ class BrowserFlow {
     _isReadingPage = false;
   }
 
-  Future<void> _askForSearch() async {
-    _onSpeak?.call("What would you like to search for? Say your query, or 'cancel' to exit.");
-    // Caller should start listening after TTS completes
+  Future<void> _speakAndListen(String message) async {
+    await _onSpeak(message);
+    _onListeningStarted();
   }
 
   Future<void> handleSpeechResult(String text, {Function()? onNextListen}) async {
@@ -86,7 +85,7 @@ class BrowserFlow {
     if (_allResults.isEmpty) {
       // In search input phase
       if (text.trim().isEmpty) {
-        _onError?.call("I didn't hear a search query. Try again.");
+        await _onError("I didn't hear a search query. Try again.");
         return;
       }
       await _performSearch(text.trim());
@@ -98,12 +97,12 @@ class BrowserFlow {
   }
 
   Future<void> _performSearch(String query) async {
-    _onSpeak?.call("Searching for: $query.");
+    await _onSpeak("Searching for: $query.");
 
     try {
       final results = await WebSearchService.instance.search(query);
       if (results.isEmpty) {
-        _onError?.call("No results found for '$query'. Say another query or 'cancel'.");
+        await _onError("No results found for '$query'. Say another query or 'cancel'.");
         return;
       }
 
@@ -114,7 +113,7 @@ class BrowserFlow {
 
       await _presentCurrentPage();
     } catch (e) {
-      _onError?.call("Search failed: $e");
+      await _onError("Search failed: $e");
     }
   }
 
@@ -141,8 +140,7 @@ class BrowserFlow {
     if (endNum < totalResults) summary += ", 'more results'";
     summary += ", 'new search', or 'cancel'.";
 
-    _onSpeak?.call(summary);
-    // Caller should start listening after TTS
+    await _speakAndListen(summary);
   }
 
   List<ws.SearchResult> _currentPageResults() {
@@ -170,11 +168,11 @@ class BrowserFlow {
       _pageOffset = 0;
       _currentResultIndex = 0;
       _readingAllSequentially = false;
-      await _askForSearch();
+      await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
       return;
     }
     if (lower == 'repeat' || lower == 'refresh') {
-      _onSpeak?.call("Repeating results.");
+      await _onSpeak("Repeating results.");
       await _presentCurrentPage();
       return;
     }
@@ -194,8 +192,7 @@ class BrowserFlow {
       return;
     }
 
-    _onError?.call("Say a result number, 'read all', 'more results', 'new search', or 'cancel'.");
-    // Caller should restart listening
+    await _onError("Say a result number, 'read all', 'more results', 'new search', or 'cancel'.");
   }
 
   Future<void> _showMoreResults() async {
@@ -205,7 +202,7 @@ class BrowserFlow {
       _currentResultIndex = _pageOffset;
       await _presentCurrentPage();
     } else {
-      _onSpeak?.call("No more results available. Say a number, 'new search', or 'cancel'.");
+      await _speakAndListen("No more results available. Say a number, 'new search', or 'cancel'.");
     }
   }
 
@@ -217,20 +214,29 @@ class BrowserFlow {
 
   Future<void> _openResult(int index) async {
     if (index < 0 || index >= _allResults.length) {
-      _onError?.call("Invalid result. Say a number or 'cancel'.");
+      await _onError("Invalid result. Say a number or 'cancel'.");
       return;
     }
 
     final result = _allResults[index];
-    _onSpeak?.call("Opening: ${result.title}.");
-    _isReadingPage = true;
+    _isReadingPage = false;
     _readingGen++;
 
+    await _onSpeak("Opening: ${result.title}.");
+
     try {
-      final content = await PageFetcherService.instance.fetchPageContent(_allResults[index].url);
+      final url = result.url.trim();
+      if (url.isEmpty) {
+        _isReadingPage = false;
+        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say 'next', a number, 'new search', or 'cancel'.");
+        return;
+      }
+
+      final content = await PageFetcherService.instance.fetchPageContent(url);
 
       if (content == null || content.isEmpty) {
-        _onError?.call("Could not fetch the full article. Here is the snippet: ${_allResults[index].snippet}. Say 'next', a number, 'new search', or 'cancel'.");
+        _isReadingPage = false;
+        await _onError("Could not fetch the full article. Here is the snippet: ${result.snippet}. Say 'next', a number, 'new search', or 'cancel'.");
         return;
       }
 
@@ -239,10 +245,11 @@ class BrowserFlow {
       _readingGen++;
       _isReadingPage = true;
 
-      _onSpeak?.call("Reading ${_allResults[_currentResultIndex].title}.");
+      await _onSpeak("Reading ${result.title}.");
       await _readNextChunk();
     } catch (e) {
-      _onError?.call("Error reading page: $e");
+      _isReadingPage = false;
+      await _onError("Error reading page: $e");
     }
   }
 
@@ -254,25 +261,24 @@ class BrowserFlow {
     }
 
     final chunk = _currentPageChunks[_currentChunkIndex];
-    await _speakAndWait("Part ${_currentChunkIndex + 1} of ${_currentPageChunks.length}. ${chunk}");
+    await _onSpeak("Part ${_currentChunkIndex + 1} of ${_currentPageChunks.length}. ${chunk}");
     _currentChunkIndex++;
     await _readNextChunk();
   }
 
   Future<void> _handleChunkEnd() async {
     if (!_readingAllSequentially) {
-      _onSpeak?.call("End of article. Say 'next', 'skip', 'new search', or 'cancel'.");
+      await _speakAndListen("End of article. Say 'next', 'skip', 'new search', or 'cancel'.");
       return;
     }
 
     final nextIndex = _currentResultIndex + 1;
     if (nextIndex < _allResults.length) {
-      _onSpeak?.call("End of article. Moving to the next result. Say 'skip' to skip, or 'cancel'.");
-      // Wait for command - handled externally
+      await _speakAndListen("End of article. Moving to the next result. Say 'skip' to skip, or 'cancel'.");
     } else {
-      _onSpeak?.call("You have reached the end of the search results.");
       _isReadingPage = false;
       _readingAllSequentially = false;
+      await _speakAndListen("You have reached the end of the search results.");
     }
   }
 
@@ -283,7 +289,7 @@ class BrowserFlow {
       _isReadingPage = false;
       _readingAllSequentially = false;
       _allResults = [];
-      _onIdle?.call();
+      _onIdle();
       return;
     }
 
@@ -292,9 +298,9 @@ class BrowserFlow {
       if (_currentResultIndex < _allResults.length) {
         await _openResult(_currentResultIndex);
       } else {
-        _onSpeak?.call("No more results to skip to.");
         _isReadingPage = false;
         _readingAllSequentially = false;
+        await _speakAndListen("No more results to skip to.");
       }
       return;
     }
@@ -303,12 +309,12 @@ class BrowserFlow {
       _isReadingPage = false;
       _readingAllSequentially = false;
       _allResults = [];
-      await _askForSearch();
+      await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
       return;
     }
 
     if (lower == 'skip' && !_readingAllSequentially) {
-      _onSpeak?.call("Say 'next' or 'cancel'.");
+      await _speakAndListen("Say 'next' or 'cancel'.");
       return;
     }
 
@@ -318,12 +324,12 @@ class BrowserFlow {
         if (_currentResultIndex < _allResults.length) {
           await _openResult(_currentResultIndex);
         } else {
-          _onSpeak?.call("No more results.");
           _isReadingPage = false;
           _readingAllSequentially = false;
+          await _speakAndListen("No more results.");
         }
       } else {
-        _onSpeak?.call("Say 'read all' to read sequentially, or a number to open a result.");
+        await _speakAndListen("Say 'read all' to read sequentially, or a number to open a result.");
       }
       return;
     }
@@ -343,7 +349,7 @@ class BrowserFlow {
     }
 
     // If unrecognized, re-prompt
-    _onSpeak?.call("Say 'skip', 'next', 'new search', or 'cancel'.");
+    await _speakAndListen("Say 'skip', 'next', 'new search', or 'cancel'.");
   }
 
   void _handleCancel() {
@@ -352,7 +358,7 @@ class BrowserFlow {
     _currentResultIndex = 0;
     _readingAllSequentially = false;
     _isReadingPage = false;
-    _onIdle?.call();
+    _onIdle();
   }
 
   int? _extractNumber(String text) {
@@ -376,7 +382,7 @@ class BrowserFlow {
     // Try number words
     const numberWords = {
       'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-      'six': 6, 'seven': 7, 'eight': 8, 'nine': 8, 'ten': 10,
+      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
       'first': 1, 'second': 2, 'third': 3,
     };
     return numberWords[corrected];
@@ -406,11 +412,5 @@ class BrowserFlow {
       chunks.add(current.toString().trim());
     }
     return chunks;
-  }
-
-  Future<void> _speakAndWait(String text) async {
-    final completer = Completer<void>();
-    await _tts.speak(text);
-    await completer.future.timeout(const Duration(seconds: 60));
   }
 }
