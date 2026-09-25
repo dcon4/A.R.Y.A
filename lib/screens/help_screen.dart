@@ -132,6 +132,19 @@ class HelpScreen extends StatelessWidget {
             _bullet('Wake Word: hands-free "hey rhasspy"'),
             _bullet('Settings Backup: export and import everything'),
 
+            _heading('Works best with RemoteFix'),
+            _body('ARYA is designed to work alongside RemoteFix, another '
+                'app by the same developer. RemoteFix lets your standard '
+                'Bluetooth headset buttons - play, pause, next, and '
+                'previous - control Android notifications that do not '
+                'normally respond to them.'),
+            _body('ARYA shows a notification with controls for the '
+                'microphone, a new conversation, Brave Search, and '
+                'switching providers. With RemoteFix installed, your '
+                'headset buttons can drive those controls, so you can '
+                'run ARYA hands-free without touching the phone.'),
+            _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
+
             _heading('If something goes wrong'),
             _body('Tap the bug-report icon in the top bar and choose how '
                 'to send the log file, such as email or messaging. '
