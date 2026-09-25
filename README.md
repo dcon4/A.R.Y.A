@@ -60,6 +60,8 @@ exist.
   "forget cats", "clear my memories".
 - Conversations are saved automatically as text files to your selected
   folder and can be shared from the app.
+- Voice command: say "new conversation" to start a fresh chat - the
+  same as the button, and the current chat is saved first.
 - Debug log sharing: a bug-report icon in the top bar sends the current
   log file to anyone, so problems can be diagnosed without a cable.
 
@@ -125,10 +127,10 @@ flutter run
   search", or "cancel".
 - While an article is being read: "next", "skip", "repeat", or
   "cancel". Starting to talk yourself interrupts her immediately.
-- New conversation: the new-conversation button (or its background
-  control) interrupts TTS speech instantly, even mid-sentence - the
-  conversation text is still saved to your selected folder first, so
-  nothing is lost.
+- New conversation: say "new conversation" by voice, or use the
+  new-conversation button (or its background control) - it interrupts
+  TTS speech instantly, even mid-sentence - the conversation text is
+  still saved to your selected folder first, so nothing is lost.
 - Replay the last answer with the speaker icon on the response card.
 
 ## Settings quick reference

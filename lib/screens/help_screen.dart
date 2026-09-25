@@ -119,6 +119,9 @@ class HelpScreen extends StatelessWidget {
                 'talking.'),
 
             _heading('Conversations'),
+            _bullet('Say "new conversation" by voice for the same effect '
+                'as the new-conversation button - ARYA saves the chat, '
+                'stops talking, and starts a fresh one'),
             _bullet('The new-conversation button interrupts any speech at '
                 'once, even mid-sentence, and starts a fresh chat - the '
                 'conversation text is still saved to your selected folder '
