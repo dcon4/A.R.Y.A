@@ -1715,7 +1715,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Smart Free",
+          "Smart Confirmation",
           style: TextStyle(
             color: MyAppTheme.mainFontColor,
             fontSize: 18,
@@ -1738,7 +1738,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Expanded(
               child: Text(
-                _smartFreeEnabled ? "Smart Free is on" : "Smart Free is off",
+                _smartFreeEnabled ? "Smart Confirmation is on" : "Smart Confirmation is off",
                 style: const TextStyle(
                   color: Colors.white,
                   fontFamily: 'Cera Pro',
