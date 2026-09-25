@@ -58,8 +58,8 @@ exist.
   ":online" suffix for web search on every request.
 - Memory: "remember I have two cats", "what do you remember",
   "forget cats", "clear my memories".
-- Conversations are saved automatically as text files and can be
-  shared from the app.
+- Conversations are saved automatically as text files to your selected
+  folder and can be shared from the app.
 - Debug log sharing: a bug-report icon in the top bar sends the current
   log file to anyone, so problems can be diagnosed without a cable.
 
@@ -126,8 +126,9 @@ flutter run
 - While an article is being read: "next", "skip", "repeat", or
   "cancel". Starting to talk yourself interrupts her immediately.
 - New conversation: the new-conversation button (or its background
-  control) stops any speech instantly; the finished conversation is
-  still saved to disk first.
+  control) interrupts TTS speech instantly, even mid-sentence - the
+  conversation text is still saved to your selected folder first, so
+  nothing is lost.
 - Replay the last answer with the speaker icon on the response card.
 
 ## Settings quick reference
@@ -146,6 +147,99 @@ flutter run
 | Wake Word | "hey rhasspy" hands-free mic |
 | Background Service | Notification/widget controls (mic, new conversation, Brave, provider) |
 | Settings Backup | Export and import your settings |
+
+## Model routing in detail
+
+The same guide is available inside the app: open Help, then tap
+"ARYA Model Routing".
+
+### What routing means
+
+Every time a question reaches the AI (instead of weather, web search,
+or memory commands), ARYA picks two things: which company or service
+answers (the provider, like OpenRouter or Groq), and which brain it
+uses (the model). The choice appears in the debug log as a line
+starting with "Route:", so you can always see which provider and model
+actually answered.
+
+Routing lives in two places in Settings: the Model section (your main
+provider and model) and the Model Routing section (the auto-route
+switch and its four category rows). Smart Confirmation is about
+checking the question before answering, not about picking a model.
+
+### The main choice: provider and model
+
+Used for every question when auto-route is off (the default), and as
+the fallback for every question when auto-route is on.
+
+- Each provider has a built-in default model if you never choose one.
+- The model list is fetched live from the provider when your API key is
+  saved, so it stays current.
+- "Free Models Only" filters the list you pick from; it does not change
+  routing by itself.
+- Safety net: if the provider rejects a model (renamed or removed),
+  ARYA switches to a working one, saves it, and carries on. If the dead
+  model was free, ARYA prefers another free model, and only if none is
+  left falls back to a paid one - telling you in the spoken answer that
+  the new model uses paid credits. Category rows pointing at the dead
+  model are repaired automatically too.
+
+### Auto-route
+
+Auto-route sorts every question into one of four categories, checking
+in this fixed order: first Coding, then Quick, then Creative, and
+anything left over becomes Reasoning.
+
+- Coding: code, function, bug, python, api, compile, and similar
+  programming words.
+- Quick: what is, who is, when, where, how many, define, weather, time,
+  temperature, capital, meaning, and similar short factual words.
+- Creative: write, story, poem, describe, create, imagine, tell me
+  about, essay, letter, email, and similar.
+- Reasoning: the catch-all - why, explain, compare, analyze, and
+  anything that matched none of the above.
+
+Because Coding is checked first, a mixed question goes to the earliest
+match: "write a python function" is Coding, not Creative.
+
+The four category rows are live buttons. Tap a row, choose a provider
+(providers with no saved API key are marked so you do not pick a
+locked door), then choose a model. The row shows your pick and the
+screen reader announces it. "Use my default model" resets the row to
+your main Model section choice.
+
+With Auto-route on and a category configured, the log "Route:" line
+shows that category's provider and model. Weather, memory, and
+explicit web searches never reach routing - they are handled earlier
+by design.
+
+### Smart Confirmation
+
+Smart Confirmation does not pick a model. Research questions get a
+balanced answer presenting the accepted view and minority views, and
+complex or low-confidence questions trigger a spoken confirmation
+first. It is independent of Auto-route; both can be on.
+
+### Web search options
+
+- Brave Search: web results injected into the AI context when enabled
+  with a key.
+- Research questions only: when on, Brave is only called for
+  research-type questions such as news or studies; everything else goes
+  straight to your model.
+- Web search on every request: appends OpenRouter's `:online` suffix,
+  which costs extra credits even on free models.
+- If Brave is on, the `:online` suffix is skipped - the two are
+  alternatives, not stacked.
+
+### If something seems wrong
+
+- Check the log's "Route:" line - it always shows the provider and
+  model that actually answered.
+- If a model was replaced behind your back, the log says "Saved
+  recovered model ..." or "Repaired routing model ...".
+- If you heard a note about a retired free model and paid credits,
+  ARYA is telling you it had to leave the free tier.
 
 ## Reporting problems
 
