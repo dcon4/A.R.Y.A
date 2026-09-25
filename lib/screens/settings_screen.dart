@@ -727,7 +727,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Step 1: pick the provider for a category (or reset to default).
   Future<void> _showRoutingDialog(
-      String category, String label, VoidCallback refresh) async {
+      String category, String label, StateSetter refresh) async {
     final currentModel = await providers.getRoutingModel(category);
 
     // Mark providers that have no saved API key so the choice is informed.
@@ -747,7 +747,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () async {
                 await providers.setRouting(category, '', '');
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
-                refresh();
+                refresh(() {});
               },
               child: Text(currentModel.isEmpty
                   ? 'Use my default model (currently chosen)'
@@ -774,7 +774,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Step 2: pick the model inside the chosen provider.
   Future<void> _showRoutingModelDialog(String category, String label,
-      String providerId, String providerName, VoidCallback refresh) async {
+      String providerId, String providerName, StateSetter refresh) async {
     final provider = providers.apiProviders.firstWhere(
       (p) => p.id == providerId,
       orElse: () => providers.apiProviders.first,
@@ -796,7 +796,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: () async {
                   await providers.setRouting(category, providerId, m.id);
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  refresh();
+                  refresh(() {});
                 },
                 child: Text(isCurrent ? '${m.label} (current)' : m.label),
               );
@@ -808,7 +808,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _routingCategoryRow(String label, String category, String examples,
-      {required VoidCallback refresh}) {
+      {required StateSetter refresh}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
