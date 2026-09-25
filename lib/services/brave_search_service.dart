@@ -49,9 +49,19 @@ class BraveSearchService {
     }
 
     try {
+      // Brave rejects queries longer than 200 bytes with HTTP 422.
+      var q = query.trim();
+      if (q.length > 180) {
+        final cut = q.lastIndexOf(' ', 180);
+        q = q.substring(0, cut > 60 ? cut : 180);
+      }
+      if (q != query) {
+        _logger.log('BraveSearch', 'Query shortened to: "$q"');
+      }
+
       final uri = Uri.parse('https://api.search.brave.com/res/v1/web/search')
           .replace(queryParameters: {
-        'q': query,
+        'q': q,
         'count': '5',
         'extra_snippets': 'true',
         'search_lang': 'en',
@@ -67,7 +77,9 @@ class BraveSearchService {
       );
 
       if (response.statusCode != 200) {
-        _logger.error('BraveSearch', 'API error HTTP ${response.statusCode}');
+        final body = response.body;
+        _logger.error('BraveSearch',
+            'API error HTTP ${response.statusCode}: ${body.length > 500 ? body.substring(0, 500) : body}');
         return [];
       }
 

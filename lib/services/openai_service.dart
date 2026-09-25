@@ -209,9 +209,29 @@ When the user asks a research question, you must present a balanced view:
 
       if (response.statusCode == 200) {
         _logger.log('OpenAIService', 'API response OK (${response.body.length} chars)');
-        final data = jsonDecode(response.body);
-        final content = data['choices'][0]['message']['content'];
-        return content;
+        var content = _extractContent(response.body);
+        if ((content == null || content.isEmpty) && maxTokens != null) {
+          // Reasoning models can spend the whole max_tokens budget thinking
+          // and return no answer. Retry once with no cap.
+          _logger.log('OpenAIService', 'Empty content with max_tokens=$maxTokens — retrying without cap');
+          final uncapped = await _postChat(
+            baseUrl: resolvedBaseUrl,
+            apiKey: resolvedApiKey,
+            requiresReferer: resolvedRequiresReferer,
+            model: model,
+            messages: messages,
+          );
+          if (uncapped.statusCode == 200) {
+            content = _extractContent(uncapped.body);
+          } else {
+            response = uncapped;
+          }
+        }
+        if (content != null && content.isNotEmpty) return content;
+        if (response.statusCode == 200) {
+          _logger.error('OpenAIService', 'Model returned empty content: ${_debugChoices(response.body)}');
+          return 'The model returned an empty answer. Please ask again, or pick a different model in Settings.';
+        }
       }
 
       // Model no longer exists on this provider — discover a live one and retry once.
@@ -229,10 +249,13 @@ When the user asks a research question, you must present a balanced view:
           );
           if (retry.statusCode == 200) {
             _logger.log('OpenAIService', 'API response OK after model recovery (${retry.body.length} chars)');
-            final data = jsonDecode(retry.body);
-            final content = data['choices'][0]['message']['content'];
+            var content = _extractContent(retry.body);
+            if (content == null || content.isEmpty) {
+              _logger.error('OpenAIService', 'Recovered model returned empty content: ${_debugChoices(retry.body)}');
+              return 'The model returned an empty answer. Please ask again, or pick a different model in Settings.';
+            }
             if (recovery.paidFallback) {
-              return '$content\n\nNote: the free model you were using was retired by the provider. ARYA switched to ${recovery.model}, which uses paid credits. You can pick another free model in Settings.';
+              content = '$content\n\nNote: the free model you were using was retired by the provider. ARYA switched to ${recovery.model}, which uses paid credits. You can pick another free model in Settings.';
             }
             return content;
           }
@@ -258,6 +281,44 @@ When the user asks a research question, you must present a balanced view:
     } catch (e) {
       _logger.error('OpenAIService', 'Request exception', e);
       return 'Sorry, something went wrong. Please check your connection.';
+    }
+  }
+
+  /// Pull the assistant text out of a chat-completions body.
+  /// Returns null when there is no usable text (empty, null, or whitespace).
+  String? _extractContent(String body) {
+    try {
+      final data = jsonDecode(body);
+      final content = data['choices']?[0]?['message']?['content'];
+      String? text;
+      if (content is String) {
+        text = content;
+      } else if (content is List) {
+        // Some models return content as a list of typed parts.
+        text = content
+            .map((p) => p is Map ? (p['text'] ?? '').toString() : p.toString())
+            .join();
+      }
+      if (text == null || text.trim().isEmpty) return null;
+      return text;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Compact diagnostics for an empty-content response.
+  String _debugChoices(String body) {
+    try {
+      final data = jsonDecode(body);
+      final choice = data['choices']?[0];
+      final msg = choice is Map ? choice['message'] : null;
+      final keys = msg is Map ? msg.keys.join(',') : 'n/a';
+      final reasoning = msg is Map
+          ? ((msg['reasoning'] ?? msg['reasoning_content'])?.toString().length ?? 0)
+          : 0;
+      return 'finish=${choice is Map ? choice['finish_reason'] : '?'} keys=$keys reasoningChars=$reasoning';
+    } catch (_) {
+      return 'unparseable body';
     }
   }
 
