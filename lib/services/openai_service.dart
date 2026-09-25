@@ -4,6 +4,7 @@ import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
+import 'package:arya/services/query_classifier.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -160,14 +161,25 @@ When the user asks a research question, you must present a balanced view:
 
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
+      final braveResearchOnly = await BraveSearchService.isResearchOnly();
 
       List<BraveSearchResult>? searchResults;
       if (braveSearch && braveKey.isNotEmpty) {
-        _logger.log('OpenAIService', 'Running Brave Search for: $prompt');
-        final brave = BraveSearchService();
-        searchResults = await brave.search(prompt);
-        if (searchResults.isNotEmpty) {
-          _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
+        var runBrave = true;
+        if (braveResearchOnly) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runBrave = probe.isResearch;
+        }
+        if (runBrave) {
+          _logger.log('OpenAIService', 'Running Brave Search for: $prompt');
+          final brave = BraveSearchService();
+          searchResults = await brave.search(prompt);
+          if (searchResults.isNotEmpty) {
+            _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
+          }
+        } else {
+          _logger.log('OpenAIService', 'Brave skipped — research-only mode, not a research question');
         }
       }
 

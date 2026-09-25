@@ -58,6 +58,10 @@ class QueryClassifier {
     RegExp(r'\b(what (?:is|are) the (?:latest|current|recent) (?:findings|discoveries|research|studies))\b'),
     RegExp(r'\bwhat (?:is|are) the (?:status quo|consensus|established|orthodox)\b'),
     RegExp(r'\bwhat (?:is|are) (?:the )?(?:alternatives?|other approaches?|different views?)\b'),
+    RegExp(r'\b(?:find|search|look up|give me|show me|fetch|get|read)\b[^.?!]{0,80}\b(?:articles?|news|papers?|posts?|blogs?|journals?|sources?|links|studies|publications?)\b'),
+    RegExp(r'\b(?:latest|recent|current|breaking|newest|todays?)\s+(?:news|article|articles|headline|headlines|developments|events|stories)\b'),
+    RegExp(r'\bnews\b[^.?!]{0,40}\b(?:about|on|regarding|surrounding)\b'),
+    RegExp(r"what(?:'s| is| are|'re) (?:happening|new|trending|the latest)"),
   ];
 
   // --- Complexity signals ---

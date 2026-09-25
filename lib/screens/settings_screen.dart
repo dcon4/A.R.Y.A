@@ -1595,6 +1595,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            FutureBuilder<bool>(
+              future: BraveSearchService.isEnabled(),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            "Research questions only",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        FutureBuilder<bool>(
+                          future: BraveSearchService.isResearchOnly(),
+                          builder: (context, snap) {
+                            final on = snap.data ?? false;
+                            return Switch(
+                              value: on,
+                              onChanged: (val) async {
+                                await BraveSearchService.setResearchOnly(val);
+                                setInnerState(() {});
+                              },
+                              activeColor: MyAppTheme.mainFontColor,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      "When on, ARYA only searches the web for research questions, such as news, studies, or what experts say. Everything else goes straight to your AI model with no web search.",
+                      style: TextStyle(
+                        color: Color.fromRGBO(255, 138, 101, 0.8),
+                        fontSize: 13,
+                        fontFamily: 'Cera Pro',
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 16),
             FutureBuilder<String>(
               future: BraveSearchService.getApiKey(),

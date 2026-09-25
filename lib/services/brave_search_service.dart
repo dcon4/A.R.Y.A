@@ -41,6 +41,19 @@ class BraveSearchService {
     await prefs.setBool(_prefsEnabled, enabled);
   }
 
+  static const _prefsResearchOnly = 'brave_research_only';
+
+  /// When true, Brave is only queried for research-type questions.
+  static Future<bool> isResearchOnly() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefsResearchOnly) ?? false;
+  }
+
+  static Future<void> setResearchOnly(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsResearchOnly, value);
+  }
+
   Future<List<BraveSearchResult>> search(String query) async {
     final apiKey = await BraveSearchService.getApiKey();
     if (apiKey.isEmpty) {
