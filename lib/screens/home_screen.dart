@@ -46,6 +46,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Map<String, String>> _messageHistory = [];
   bool _wakeWordPausedForSpeech = false;
   Timer? _speechTimeout;
+  // Utterance stitching: the phone's speech service often declares the
+  // result "final" after only ~1-2 s of silence, ignoring our pauseFor
+  // setting. When that happens we keep collecting words in short re-listen
+  // sessions and only dispatch after _pauseSec seconds of real silence.
+  Timer? _stitchTimer;
+  bool _stitchConfirming = false;
+  String _stitchBase = '';
+  String _stitchSession = '';
+  int _stitchRelistens = 0;
+  static const int _maxStitchRelistens = 30;
+  void Function()? _stitchAction;
+  bool _stitchFinishing = false;
+  bool _confirmedThisTurn = false;
+  DateTime _lastSpeechAt = DateTime.now();
+  int _pauseSec = 12;
+  int _listenSec = 60;
   Completer<void>? _announceCompleter;
   // Serializes speech so overlapping prompts can't orphan each other's
   // completion waiters (which caused 60-second TimeoutException stalls).
@@ -518,6 +534,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> startListening() async {
     _logger.log('HomeScreen', 'Starting voice listening');
     lastWords = '';
+    // Fresh listening turn — abandon any pending stitch confirmation.
+    _stitchTimer?.cancel();
+    _stitchTimer = null;
+    _stitchConfirming = false;
+    _stitchAction = null;
+    _stitchBase = '';
+    _stitchSession = '';
+    _stitchRelistens = 0;
+    _confirmedThisTurn = false;
+    _stitchFinishing = false;
 
     // Stop any previous session before starting a new one to prevent
     // speechToText from getting stuck after repeated use.
@@ -551,6 +577,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final listenSec = prefs.getInt('listening_duration_seconds') ?? 60;
     final pauseSec = prefs.getInt('pause_duration_seconds') ?? 12;
+    _listenSec = listenSec;
+    _pauseSec = pauseSec;
+    _lastSpeechAt = DateTime.now();
 
     await speechToText.listen(
       onResult: onSpeechResult,
@@ -566,6 +595,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> stopListening() async {
     _speechTimeout?.cancel();
     _speechTimeout = null;
+    // Manual stop during a stitch window means "send what I have now".
+    if (_stitchConfirming) {
+      _finishStitchConfirm();
+    }
     _logger.log('HomeScreen', 'Stopped listening - words detected: ${lastWords.length > 0}');
     await speechToText.stop();
     setState(() {
@@ -583,6 +616,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void onSpeechResult(SpeechRecognitionResult result) async {
+    if (_stitchFinishing) {
+      return;
+    }
+
+    if (_stitchConfirming) {
+      _handleStitchResult(result);
+      return;
+    }
+
+    if (!result.finalResult && result.recognizedWords.isNotEmpty) {
+      _lastSpeechAt = DateTime.now();
+    }
+
     setState(() {
       lastWords = result.recognizedWords;
     });
@@ -597,6 +643,166 @@ class _HomeScreenState extends State<HomeScreen> {
       // orphan each other's completion waiters.
       await _interruptSpeech();
 
+      if (_needsStitchConfirm()) {
+        _beginStitchConfirm(() async {
+          await _processSpeech();
+        });
+      } else {
+        await _processSpeech();
+      }
+    }
+  }
+
+  // True when this utterance may have been cut short by the phone's
+  // early end-of-speech detection and should be stitched with any
+  // continuation before we act on it.
+  bool _needsStitchConfirm() {
+    if (_browserMode) return false;
+    final wordCount = lastWords.trim().split(RegExp(r'\s+')).length;
+    // One or two words cannot be split by a mid-utterance pause.
+    if (wordCount < 3) return false;
+    if (_searchState == SearchState.awaitingQuery) return true;
+    // Results/reading dialogs expect short replies (cancel, read all, 1-9)
+    // which must stay instant.
+    if (_searchState != SearchState.idle) return false;
+    if (_isConfirming) return false;
+    return true;
+  }
+
+  void _beginStitchConfirm(void Function() action) {
+    final silence = DateTime.now().difference(_lastSpeechAt);
+    // 15% margin: if the speech service actually honored pauseFor, the
+    // final result arrives right at the limit minus detection jitter.
+    if (silence.inMilliseconds >= _pauseSec * 850) {
+      _logger.log('HomeScreen', 'Silence of ${silence.inSeconds}s already >= ~$_pauseSec s — dispatching without stitch');
+      _confirmedThisTurn = true;
+      action();
+      return;
+    }
+    _stitchFinishing = false;
+    _stitchConfirming = true;
+    _stitchBase = lastWords;
+    _stitchSession = '';
+    _stitchAction = action;
+    _stitchRelistens = 0;
+    _lastSpeechAt = DateTime.now();
+    _logger.log('HomeScreen', 'Possible early cut — stitching (window $_pauseSec s) for: "${_clipWords(lastWords)}"');
+    _resetStitchTimer();
+    _stitchRelisten();
+  }
+
+  void _resetStitchTimer() {
+    _stitchTimer?.cancel();
+    _stitchTimer = Timer(Duration(seconds: _pauseSec), _finishStitchConfirm);
+  }
+
+  Future<void> _stitchRelisten() async {
+    if (!_stitchConfirming || _stitchRelistens >= _maxStitchRelistens) return;
+    _stitchRelistens++;
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!_stitchConfirming) return;
+    try {
+      if (speechToText.isListening) {
+        // The final result can arrive while the session is still winding
+        // down. Give it a moment; the timer still governs if it never ends.
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!_stitchConfirming || speechToText.isListening) return;
+      }
+      if (mounted) {
+        setState(() {
+          _micReallyListening = true;
+        });
+      }
+      await speechToText.listen(
+        onResult: onSpeechResult,
+        listenFor: Duration(seconds: _listenSec),
+        pauseFor: Duration(seconds: _pauseSec),
+      );
+      if (mounted) {
+        setState(() {
+          _micReallyListening = false;
+        });
+      }
+    } catch (e) {
+      _logger.log('HomeScreen', 'Stitch re-listen failed: $e');
+    }
+  }
+
+  void _finishStitchConfirm() {
+    if (!_stitchConfirming) return;
+    final action = _stitchAction;
+    var words = _stitchBase;
+    if (_stitchSession.isNotEmpty) {
+      words = words.isEmpty ? _stitchSession : '$words $_stitchSession';
+    }
+    if (words.isEmpty) words = lastWords;
+    _stitchConfirming = false;
+    _stitchAction = null;
+    _stitchTimer?.cancel();
+    _stitchTimer = null;
+    _stitchRelistens = 0;
+    _stitchBase = '';
+    _stitchSession = '';
+    _confirmedThisTurn = true;
+    // Suppress any stray result the cancel below might still deliver.
+    _stitchFinishing = true;
+    _logger.log('HomeScreen', 'Stitch finished after silence: "${_clipWords(words)}"');
+    try {
+      if (speechToText.isListening) {
+        speechToText.cancel();
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        lastWords = words;
+        _micReallyListening = false;
+      });
+    } else {
+      lastWords = words;
+    }
+    if (action != null) {
+      action();
+    }
+  }
+
+  void _handleStitchResult(SpeechRecognitionResult result) {
+    if (result.finalResult) {
+      final chunk =
+          result.recognizedWords.isNotEmpty ? result.recognizedWords : _stitchSession;
+      if (chunk.isNotEmpty && !_stitchBase.endsWith(chunk)) {
+        _stitchBase = _stitchBase.isEmpty ? chunk : '$_stitchBase $chunk';
+        _lastSpeechAt = DateTime.now();
+        _resetStitchTimer();
+        _logger.log('HomeScreen', 'Stitch segment: "${_clipWords(_stitchBase)}"');
+      }
+      _stitchSession = '';
+      if (mounted) {
+        setState(() {
+          lastWords = _stitchBase;
+        });
+      }
+      _stitchRelisten();
+      return;
+    }
+    if (result.recognizedWords.isNotEmpty) {
+      _stitchSession = result.recognizedWords;
+      _lastSpeechAt = DateTime.now();
+      _resetStitchTimer();
+      if (mounted) {
+        setState(() {
+          lastWords = _stitchBase.isEmpty
+              ? _stitchSession
+              : '$_stitchBase $_stitchSession';
+        });
+      }
+    }
+  }
+
+  String _clipWords(String text) =>
+      text.length > 60 ? '${text.substring(0, 60)}...' : text;
+
+  Future<void> _processSpeech() async {
+    try {
       // Non-search voice commands (weather, memory) first — must work
       // even when browser mode is active so weather never routes to DuckDuckGo.
       final detectedCmd = _detectVoiceCommand(lastWords);
@@ -827,9 +1033,23 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
+      // Fall-through: free text for the AI. Confirm first when the
+      // utterance could have been cut short, unless stitching already
+      // happened this turn or the text is too short to have been cut.
+      final wordCount = lastWords.trim().split(RegExp(r'\s+')).length;
+      if (wordCount >= 3 && !_confirmedThisTurn) {
+        _beginStitchConfirm(() {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            sendMessageToOpenRouter();
+          });
+        });
+        return;
+      }
       Future.delayed(Duration(milliseconds: 500), () {
         sendMessageToOpenRouter();
       });
+    } catch (e) {
+      _logger.error('HomeScreen', '_processSpeech failed', e);
     }
   }
 
@@ -1097,6 +1317,15 @@ class _HomeScreenState extends State<HomeScreen> {
     // Forget any web search / article reading session so the next
     // utterance is treated as a brand-new AI query, not a search command.
     _browserFlow.reset();
+    // Abandon any pending stitch confirmation — the query is void.
+    _stitchTimer?.cancel();
+    _stitchTimer = null;
+    _stitchConfirming = false;
+    _stitchAction = null;
+    _stitchBase = '';
+    _stitchSession = '';
+    _stitchRelistens = 0;
+    _confirmedThisTurn = false;
     try {
       await conversationService.autoSave();
     } catch (_) {
@@ -1136,6 +1365,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _speechTimeout?.cancel();
+    _stitchTimer?.cancel();
     _textInputController.dispose();
     _textFocusNode.dispose();
     super.dispose();
