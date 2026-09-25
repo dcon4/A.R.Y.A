@@ -664,7 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "ARYA automatically picks the best model based on your question. When off, always uses your default model. You can still switch providers manually.",
+              "ARYA sorts each question into one of four categories. Tap a row to choose which provider and model answers that kind of question. Rows showing 'default' use your main Model choice.",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -700,10 +700,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (_autoRouteEnabled) ...[
               const SizedBox(height: 12),
-              _routingCategoryRow("Quick", "quick", "what is, who is, when, weather"),
-              _routingCategoryRow("Reasoning", "reasoning", "why, explain, compare, analyze"),
-              _routingCategoryRow("Creative", "creative", "write, story, poem, describe"),
-              _routingCategoryRow("Coding", "coding", "code, function, bug, python, api"),
+              _routingCategoryRow("Quick", "quick", "what is, who is, when, weather", refresh: setInnerState),
+              _routingCategoryRow("Reasoning", "reasoning", "why, explain, compare, analyze", refresh: setInnerState),
+              _routingCategoryRow("Creative", "creative", "write, story, poem, describe", refresh: setInnerState),
+              _routingCategoryRow("Coding", "coding", "code, function, bug, python, api", refresh: setInnerState),
             ],
           ],
         );
@@ -711,7 +711,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _routingCategoryRow(String label, String category, String examples) {
+  /// Human-readable target for one routing category: "default" when
+  /// nothing is configured, otherwise "Provider / model".
+  Future<String> _routingTargetLabel(String category) async {
+    final model = await providers.getRoutingModel(category);
+    if (model.isEmpty) return 'default';
+    final pid = await providers.getRoutingProviderId(category);
+    if (pid.isEmpty) return model;
+    final provider = providers.apiProviders.firstWhere(
+      (p) => p.id == pid,
+      orElse: () => providers.apiProviders.first,
+    );
+    return '${provider.name} / $model';
+  }
+
+  /// Step 1: pick the provider for a category (or reset to default).
+  Future<void> _showRoutingDialog(
+      String category, String label, VoidCallback refresh) async {
+    final currentModel = await providers.getRoutingModel(category);
+
+    // Mark providers that have no saved API key so the choice is informed.
+    final hasKey = <String, bool>{};
+    for (final p in providers.apiProviders) {
+      hasKey[p.id] = (await providers.getApiKeyForProvider(p.id)).trim().isNotEmpty;
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: Text('$label questions - provider'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () async {
+                await providers.setRouting(category, '', '');
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                refresh();
+              },
+              child: Text(currentModel.isEmpty
+                  ? 'Use my default model (currently chosen)'
+                  : 'Use my default model'),
+            ),
+            ...providers.apiProviders
+                .where((p) => p.id != 'custom')
+                .map((p) {
+              final keyless = hasKey[p.id] != true;
+              return SimpleDialogOption(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _showRoutingModelDialog(
+                      category, label, p.id, p.name, refresh);
+                },
+                child: Text(keyless ? '${p.name} (no API key saved)' : p.name),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Step 2: pick the model inside the chosen provider.
+  Future<void> _showRoutingModelDialog(String category, String label,
+      String providerId, String providerName, VoidCallback refresh) async {
+    final provider = providers.apiProviders.firstWhere(
+      (p) => p.id == providerId,
+      orElse: () => providers.apiProviders.first,
+    );
+    final currentModel = await providers.getRoutingModel(category);
+    final currentProvider = await providers.getRoutingProviderId(category);
+    final showCurrent = currentProvider == providerId && currentModel.isNotEmpty;
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: Text('$label questions - $providerName model'),
+          children: [
+            ...provider.models.map((m) {
+              final isCurrent = showCurrent && m.id == currentModel;
+              return SimpleDialogOption(
+                onPressed: () async {
+                  await providers.setRouting(category, providerId, m.id);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  refresh();
+                },
+                child: Text(isCurrent ? '${m.label} (current)' : m.label),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _routingCategoryRow(String label, String category, String examples,
+      {required VoidCallback refresh}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -734,8 +831,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   examples,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.5),
-                    fontFamily: 'Cera Pro',
                     fontSize: 11,
+                    fontFamily: 'Cera Pro',
                   ),
                 ),
               ],
@@ -747,25 +844,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SizedBox(
               height: 36,
               child: FutureBuilder<String>(
-                future: providers.getRoutingModel(category),
+                future: _routingTargetLabel(category),
                 builder: (context, snapshot) {
-                  final current = snapshot.data ?? '';
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: const Color.fromRGBO(255, 255, 255, 0.08),
+                  final current = snapshot.data ?? 'default';
+                  return Semantics(
+                    button: true,
+                    excludeSemantics: true,
+                    label:
+                        '$label questions go to $current. Double tap to change.',
+                    child: InkWell(
+                      onTap: () => _showRoutingDialog(category, label, refresh),
                       borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Text(
-                        current.isNotEmpty ? current : '(default)',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Cera Pro',
-                          fontSize: 11,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(255, 255, 255, 0.08),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                        alignment: Alignment.center,
+                        child: Text(
+                          current,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Cera Pro',
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                     ),
                   );
