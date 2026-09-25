@@ -83,8 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    BackgroundService.setOnNewConversationCallback(() {
-      _newConversation();
+    BackgroundService.setOnNewConversationCallback(() async {
+      await _newConversation();
       systemSpeak("New conversation started");
     });
 
@@ -1086,6 +1086,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _newConversation() async {
+    // Stop whatever ARYA is reading right now. The conversation itself
+    // is saved below, before the in-memory copy is cleared.
+    await _interruptSpeech();
     try {
       await conversationService.autoSave();
     } catch (_) {
