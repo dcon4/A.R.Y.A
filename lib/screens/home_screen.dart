@@ -299,6 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (lower.startsWith('forget ')) return 'forget';
     if (lower == 'what do you remember' || lower == 'what do you remember about me' || lower == 'list memories') return 'recall';
     if (lower == 'clear my memories' || lower == 'forget everything') return 'clear_memories';
+    if (RegExp(r'^(?:start|begin|open)?\s*(?:a\s+|another\s+)?new\s+(?:conversation|chat|session)(?:\s+please)?\s*$')
+        .hasMatch(lower)) {
+      return 'new_conversation';
+    }
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -356,6 +360,10 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'clear_memories':
         await MemoryService.instance.clearAll();
         await _speakAndWait('All memories cleared');
+        break;
+      case 'new_conversation':
+        await _newConversation();
+        await _speakAndWait("New conversation started");
         break;
       case 'weather':
         final weatherReport = await WeatherService.instance.fetchWeather();
@@ -658,6 +666,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // continuation before we act on it.
   bool _needsStitchConfirm() {
     if (_browserMode) return false;
+    // "New conversation" must act immediately like the button.
+    if (_detectVoiceCommand(lastWords) == 'new_conversation') return false;
     final wordCount = lastWords.trim().split(RegExp(r'\s+')).length;
     // One or two words cannot be split by a mid-utterance pause.
     if (wordCount < 3) return false;
