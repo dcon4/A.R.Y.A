@@ -63,6 +63,16 @@ exist.
 - Debug log sharing: a bug-report icon in the top bar sends the current
   log file to anyone, so problems can be diagnosed without a cable.
 
+## Companion app: RemoteFix
+
+ARYA works best with
+[RemoteFix](https://github.com/dcon4/RemoteFix), another app by the same
+developer. ARYA shows a notification with controls for the microphone,
+a new conversation, Brave Search, and switching providers. RemoteFix
+lets your standard Bluetooth headset buttons (play, pause, next,
+previous) drive those notification controls, so ARYA can be run
+hands-free without touching the phone.
+
 ## Installing
 
 ### Prebuilt APK (recommended)
