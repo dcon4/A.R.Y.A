@@ -216,21 +216,25 @@ When the user asks a research question, you must present a balanced view:
 
       // Model no longer exists on this provider — discover a live one and retry once.
       if (_isModelMissing(response.statusCode, response.body)) {
-        final recovered = await _recoverModel(resolvedProviderId, model);
-        if (recovered != null && recovered != model) {
-          _logger.log('OpenAIService', 'Retrying with recovered model: $recovered');
+        final recovery = await _recoverModel(resolvedProviderId, model);
+        if (recovery != null && recovery.model != model) {
+          _logger.log('OpenAIService', 'Retrying with recovered model: ${recovery.model} (paid fallback: ${recovery.paidFallback})');
           final retry = await _postChat(
             baseUrl: resolvedBaseUrl,
             apiKey: resolvedApiKey,
             requiresReferer: resolvedRequiresReferer,
-            model: recovered,
+            model: recovery.model,
             messages: messages,
             maxTokens: maxTokens,
           );
           if (retry.statusCode == 200) {
             _logger.log('OpenAIService', 'API response OK after model recovery (${retry.body.length} chars)');
             final data = jsonDecode(retry.body);
-            return data['choices'][0]['message']['content'];
+            final content = data['choices'][0]['message']['content'];
+            if (recovery.paidFallback) {
+              return '$content\n\nNote: the free model you were using was retired by the provider. ARYA switched to ${recovery.model}, which uses paid credits. You can pick another free model in Settings.';
+            }
+            return content;
           }
           response = retry;
         }
@@ -295,7 +299,9 @@ When the user asks a research question, you must present a balanced view:
   }
 
   /// Find a live model for this provider, persist it, and return it.
-  Future<String?> _recoverModel(String providerId, String badModel) async {
+  /// If the broken model was free, prefers a free replacement; reports
+  /// [paidFallback] when it had to settle on a paid one.
+  Future<_ModelRecovery?> _recoverModel(String providerId, String badModel) async {
     try {
       final apiKey = await providers.getApiKeyForProvider(providerId);
       if (apiKey.isEmpty) return null;
@@ -321,41 +327,74 @@ When the user asks a research question, you must present a balanced view:
           break;
       }
 
+      final wasFree = _modelIsFree(providerId, badModel);
+
       if (models.isEmpty) {
         final provider = providers.apiProviders.firstWhere(
           (p) => p.id == providerId,
           orElse: () => providers.apiProviders.first,
         );
         if (provider.defaultModel.isNotEmpty && provider.defaultModel != badModel) {
-          await _persistModel(providerId, provider.defaultModel);
-          return provider.defaultModel;
+          await _persistModel(providerId, provider.defaultModel, badModel);
+          return _ModelRecovery(
+            provider.defaultModel,
+            wasFree && !_modelIsFree(providerId, provider.defaultModel),
+          );
+        }
+        return null;
+      }
+
+      // Prefer non-guard / non-whisper chat models.
+      const blocked = ['whisper', 'prompt-guard', 'safeguard', 'moderation', 'audio'];
+      String? pickFrom(List<Map<String, dynamic>> list) {
+        for (final m in list) {
+          final id = (m['id'] ?? '').toString();
+          final lower = id.toLowerCase();
+          if (id.isEmpty || id == badModel) continue;
+          if (blocked.any((b) => lower.contains(b))) continue;
+          return id;
         }
         return null;
       }
 
       String? chosen;
-      // Prefer non-guard / non-whisper chat models.
-      const blocked = ['whisper', 'prompt-guard', 'safeguard', 'moderation', 'audio'];
-      for (final m in models) {
-        final id = (m['id'] ?? '').toString();
-        final lower = id.toLowerCase();
-        if (blocked.any((b) => lower.contains(b))) continue;
-        if (id == badModel) continue;
-        chosen = id;
-        break;
+      if (wasFree) {
+        chosen = pickFrom(models.where((m) => m['is_free'] == true).toList());
+        if (chosen == null) {
+          _logger.log('OpenAIService', 'No free model left on $providerId — falling back to paid');
+        }
       }
+      chosen ??= pickFrom(models);
       chosen ??= (models.first['id'] ?? '').toString();
       if (chosen.isEmpty) return null;
 
-      await _persistModel(providerId, chosen);
-      return chosen;
+      final info = models.where((m) => (m['id'] ?? '').toString() == chosen);
+      final chosenIsFree = info.isNotEmpty
+          ? info.first['is_free'] == true
+          : _modelIsFree(providerId, chosen);
+
+      await _persistModel(providerId, chosen, badModel);
+      return _ModelRecovery(chosen, wasFree && !chosenIsFree);
     } catch (e) {
       _logger.error('OpenAIService', 'Model recovery failed', e);
       return null;
     }
   }
 
-  Future<void> _persistModel(String providerId, String model) async {
+  /// Free-status per provider: OpenRouter free variants carry ":free",
+  /// Groq's developer tier is free, the others bill per usage.
+  bool _modelIsFree(String providerId, String modelId) {
+    switch (providerId) {
+      case 'openrouter':
+        return modelId.contains(':free');
+      case 'groq':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _persistModel(String providerId, String model, String badModel) async {
     final prefs = await SharedPreferences.getInstance();
     // Only overwrite the global model when this is the active provider,
     // or when the stored model is the broken one.
@@ -364,6 +403,15 @@ When the user asks a research question, you must present a balanced view:
     if (currentProvider == providerId || currentModel.isEmpty || _looksLikeBrokenPair(providerId, currentModel)) {
       await prefs.setString('api_model', model);
       await prefs.setString('api_provider', providerId);
+    }
+    // Repair any per-category routing pair that still points at the broken model.
+    for (final category in ['quick', 'reasoning', 'creative', 'coding']) {
+      final rp = prefs.getString('routing_${category}_provider_id') ?? '';
+      final rm = prefs.getString('routing_${category}_model') ?? '';
+      if (rp == providerId && rm == badModel) {
+        await prefs.setString('routing_${category}_model', model);
+        _logger.log('OpenAIService', 'Repaired $category routing model -> $model');
+      }
     }
     clearCachedSettings();
     _logger.log('OpenAIService', 'Saved recovered model $model for $providerId');
@@ -376,20 +424,39 @@ When the user asks a research question, you must present a balanced view:
   }
 }
 
+/// Result of model recovery: the replacement model, plus whether a free
+/// model had to be swapped for a paid one.
+class _ModelRecovery {
+  final String model;
+  final bool paidFallback;
+  const _ModelRecovery(this.model, this.paidFallback);
+}
+
 /// Thin wrapper so OpenaiService can recover models without a circular import graph issue.
 class _ModelFetcher {
   Future<List<Map<String, dynamic>>> fetchOpenRouterModels(String key) =>
-      _fetch('https://openrouter.ai/api/v1/models', key);
+      _fetch('https://openrouter.ai/api/v1/models', key, (m) {
+        if ((m['id'] ?? '').toString().contains(':free')) return true;
+        final pricing = m['pricing'];
+        if (pricing is Map && pricing['prompt'] != null) {
+          return double.tryParse(pricing['prompt'].toString()) == 0.0;
+        }
+        return false;
+      });
   Future<List<Map<String, dynamic>>> fetchOpenAIModels(String key) =>
-      _fetch('https://api.openai.com/v1/models', key);
+      _fetch('https://api.openai.com/v1/models', key, (_) => false);
   Future<List<Map<String, dynamic>>> fetchGroqModels(String key) =>
-      _fetch('https://api.groq.com/openai/v1/models', key);
+      _fetch('https://api.groq.com/openai/v1/models', key, (_) => true);
   Future<List<Map<String, dynamic>>> fetchDeepSeekModels(String key) =>
-      _fetch('https://api.deepseek.com/models', key);
+      _fetch('https://api.deepseek.com/models', key, (_) => false);
   Future<List<Map<String, dynamic>>> fetchCerebrasModels(String key) =>
-      _fetch('https://api.cerebras.ai/v1/models', key);
+      _fetch('https://api.cerebras.ai/v1/models', key, (_) => false);
 
-  Future<List<Map<String, dynamic>>> _fetch(String url, String key) async {
+  Future<List<Map<String, dynamic>>> _fetch(
+    String url,
+    String key,
+    bool Function(dynamic raw) isFree,
+  ) async {
     try {
       final response = await http.get(
         Uri.parse(url),
@@ -402,6 +469,7 @@ class _ModelFetcher {
           .map((m) => {
                 'id': m['id'] ?? '',
                 'name': m['name'] ?? m['id'] ?? '',
+                'is_free': isFree(m),
               })
           .where((m) => (m['id'] as String).isNotEmpty)
           .toList();
