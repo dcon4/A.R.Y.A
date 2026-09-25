@@ -427,6 +427,21 @@ class BrowserFlow {
     _readingGen++;
   }
 
+  /// Fully exit search/reading mode (e.g. "New conversation"). Bumps the
+  /// generation again to kill any queued continuation, then forgets the
+  /// results so the next utterance is treated as a normal AI query.
+  void reset() {
+    _readingGen++;
+    _allResults = [];
+    _pageOffset = 0;
+    _currentResultIndex = 0;
+    _currentPageChunks = [];
+    _currentChunkIndex = 0;
+    _readingAllSequentially = false;
+    _isReadingPage = false;
+    _logger.log('BrowserFlow', 'Reset — back to normal chat');
+  }
+
   /// Read-all keeps going on its own: one short transition line, then the
   /// next article. No "say next or skip" prompt between articles.
   Future<void> _advanceToNextResult() async {

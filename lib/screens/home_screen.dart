@@ -78,6 +78,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     initSpeechToText();
     initTextToSpeech();
+    // BrowserFlow's injected dependencies must be set before any call to
+    // reset(), including "New conversation" before a search ever ran.
+    _browserFlow.tts = flutterTts;
+    _browserFlow.logger = _logger;
     BackgroundService.setOnStartMicCallback(() {
       if (speechToText.isNotListening) {
         startListening();
@@ -1090,12 +1094,20 @@ class _HomeScreenState extends State<HomeScreen> {
     // Stop whatever ARYA is reading right now. The conversation itself
     // is saved below, before the in-memory copy is cleared.
     await _interruptSpeech();
+    // Forget any web search / article reading session so the next
+    // utterance is treated as a brand-new AI query, not a search command.
+    _browserFlow.reset();
     try {
       await conversationService.autoSave();
     } catch (_) {
       // Silently handle auto-save errors
     }
     setState(() {
+      _browserMode = false;
+      _searchState = SearchState.idle;
+      _readingAllSequentially = false;
+      _selectedResultIndex = -1;
+      _searchResults = [];
       _messageHistory.clear();
       generatedContent = null;
       lastWords = '';
@@ -1107,6 +1119,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     conversationService.clear();
     _clearResponseChunks();
+    _logger.log('HomeScreen', 'New conversation started — search and reading state cleared');
     _showSnackBar('New conversation started');
   }
 
