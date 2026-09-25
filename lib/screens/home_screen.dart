@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:arya/models/memory_entry.dart';
+import 'package:arya/screens/help_screen.dart';
 import 'package:arya/screens/settings_screen.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:arya/services/api_providers.dart';
@@ -1281,6 +1282,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.help_outline, color: MyAppTheme.mainFontColor),
+              title: const Text(
+                "Help",
+                style: TextStyle(color: Colors.white, fontFamily: 'Cera Pro'),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HelpScreen()),
                 );
               },
             ),
