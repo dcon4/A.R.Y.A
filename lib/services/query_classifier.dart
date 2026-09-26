@@ -28,6 +28,11 @@ class QueryClassification {
 
 class QueryClassifier {
   static final QueryClassifier instance = QueryClassifier._();
+
+  /// Spoken when Smart Confirmation recognises a research question.
+  /// Overridable via the "research_announcement" preference.
+  static const String defaultResearchAnnouncement =
+      'I will look at both the accepted view and any minority or dissenting perspectives.';
   QueryClassifier._();
 
   // --- Research signals ---
@@ -266,7 +271,7 @@ class QueryClassifier {
   }
 
   /// Build a plain-language summary of what ARYA understood.
-  String buildSummary(QueryClassification classification, String query) {
+  Future<String> buildSummary(QueryClassification classification, String query) async {
     final buffer = StringBuffer();
 
     // Acknowledge what we heard
@@ -279,7 +284,9 @@ class QueryClassifier {
     switch (classification.category) {
       case 'research':
         buffer.write('This looks like a research question. ');
-        buffer.write('I will look at both the accepted view and any minority or dissenting perspectives. ');
+        final prefs = await SharedPreferences.getInstance();
+        final custom = (prefs.getString('research_announcement') ?? '').trim();
+        buffer.write('${custom.isNotEmpty ? custom : defaultResearchAnnouncement} ');
         break;
       case 'coding':
         buffer.write('This is a coding question. ');

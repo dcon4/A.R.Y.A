@@ -221,6 +221,11 @@ Smart Confirmation does not pick a model. Research questions get a
 balanced answer presenting the accepted view and minority views, and
 complex or low-confidence questions trigger a spoken confirmation
 first. It is independent of Auto-route; both can be on.
+Settings has a Research section with two editable boxes: the
+announcement spoken when a research question is recognised, and the
+exact instructions appended to the system prompt for research so the
+model stays balanced. Clear a box to restore its default text and tap
+Save to apply.
 
 ### Web search options
 

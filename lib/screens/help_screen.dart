@@ -323,6 +323,11 @@ class RoutingHelpScreen extends StatelessWidget {
                 'confirm or redirect instead of waiting for a long wrong '
                 'answer. It is independent of Auto-route; both can be '
                 'on.'),
+            _bullet('Settings has a Research section with two editable '
+                'boxes: what ARYA says to you when a research question is '
+                'recognised, and the exact instructions sent to the AI to '
+                'keep the answer balanced. Clear a box to return to the '
+                'default text, and tap Save to apply'),
 
             _heading('Web search options'),
             _bullet('Brave Search: web results injected into the AI '

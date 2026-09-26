@@ -94,9 +94,10 @@ When responding:
 Remember: You are ARYA, the user's personal AI assistant.
 ''';
 
-  static const String _researchPromptExtension = '''
-
-ADDITIONAL INSTRUCTIONS FOR RESEARCH QUESTIONS:
+  /// Extra instructions appended to the system prompt for research
+  /// questions so the model presents a balanced answer. Shown in
+  /// Settings; the "research_prompt_extension" preference overrides it.
+  static const String defaultResearchPrompt = '''ADDITIONAL INSTRUCTIONS FOR RESEARCH QUESTIONS:
 When the user asks a research question, you must present a balanced view:
 1. First state the accepted/mainstream view with its key evidence.
 2. Then present the minority, dissenting, or alternative view with its key evidence.
@@ -110,7 +111,11 @@ When the user asks a research question, you must present a balanced view:
     final prefs = await SharedPreferences.getInstance();
     final base = prefs.getString('system_prompt') ?? defaultSystemPrompt;
     if (isResearch) {
-      return '$base$_researchPromptExtension';
+      final custom = (prefs.getString('research_prompt_extension') ?? '').trim();
+      if (custom.isNotEmpty) {
+        return '$base\n\n$custom';
+      }
+      return '$base\n\n$defaultResearchPrompt';
     }
     return base;
   }

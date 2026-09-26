@@ -6,6 +6,7 @@ import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
+import 'package:arya/services/query_classifier.dart';
 import 'package:arya/services/save_directory_picker.dart';
 import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
@@ -29,6 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _customModelController = TextEditingController();
   final TextEditingController _customBaseUrlController = TextEditingController();
   final TextEditingController _systemPromptController = TextEditingController();
+  final TextEditingController _researchAnnouncementController = TextEditingController();
+  final TextEditingController _researchPromptController = TextEditingController();
   final TextEditingController _weatherZipController = TextEditingController();
   bool _isSaved = false;
   bool _obscureKey = true;
@@ -71,6 +74,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isCustomModel = savedUseCustom || !provider.models.any((m) => m.id == savedModel);
     final savedCustomBaseUrl = prefs.getString('api_custom_base_url') ?? '';
     final savedSystemPrompt = prefs.getString('system_prompt') ?? '';
+    final savedResearchAnnouncement = prefs.getString('research_announcement') ?? '';
+    final savedResearchPrompt = prefs.getString('research_prompt_extension') ?? '';
 
     setState(() {
       _selectedProviderId = savedProviderId;
@@ -87,6 +92,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
       _weatherZipController.text = prefs.getString('weather_zip_code') ?? '';
+      // Show what is actually in effect: the saved text, or the default.
+      _researchAnnouncementController.text = savedResearchAnnouncement.isNotEmpty
+          ? savedResearchAnnouncement
+          : QueryClassifier.defaultResearchAnnouncement;
+      _researchPromptController.text = savedResearchPrompt.isNotEmpty
+          ? savedResearchPrompt
+          : OpenaiService.defaultResearchPrompt.trim();
     });
   }
 
@@ -109,6 +121,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     await prefs.setString('system_prompt', _systemPromptController.text.trim());
+    await prefs.setString(
+        'research_announcement', _researchAnnouncementController.text.trim());
+    await prefs.setString(
+        'research_prompt_extension', _researchPromptController.text.trim());
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -182,6 +198,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _apiKeyController.dispose();
     _customModelController.dispose();
     _customBaseUrlController.dispose();
+    _researchAnnouncementController.dispose();
+    _researchPromptController.dispose();
     super.dispose();
   }
 
@@ -1811,6 +1829,151 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildResearchSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          "Research",
+          style: TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Two customisable texts used when Smart Confirmation recognises a research question. Change either one, then tap Save.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "What ARYA says to you",
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Spoken when a research question is recognised, before the confirmation question. The box shows the current wording; clear it to return to the default.",
+          style: TextStyle(
+            color: Colors.white70,
+            fontFamily: 'Cera Pro',
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _researchAnnouncementController,
+          maxLines: 3,
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+          ),
+          decoration: InputDecoration(
+            hintText: QueryClassifier.defaultResearchAnnouncement,
+            hintStyle: TextStyle(
+              color: Colors.grey[600],
+              fontFamily: 'Cera Pro',
+            ),
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: MyAppTheme.mainFontColor,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          "Instructions sent to the AI",
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Appended after the system prompt whenever the question is research, so the model presents a balanced answer. The box shows exactly what is sent; clear it to return to the built-in instructions.",
+          style: TextStyle(
+            color: Colors.white70,
+            fontFamily: 'Cera Pro',
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _researchPromptController,
+          maxLines: 10,
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+          ),
+          decoration: InputDecoration(
+            hintText: "Research instructions for the AI...",
+            hintStyle: TextStyle(
+              color: Colors.grey[600],
+              fontFamily: 'Cera Pro',
+            ),
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: MyAppTheme.mainFontColor,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
   Widget _buildWeatherSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2389,6 +2552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             _buildSmartFreeSection(),
+            _buildResearchSection(),
             _buildWeatherSection(),
             _buildWebSearchToggle(),
             _buildTtsSection(),

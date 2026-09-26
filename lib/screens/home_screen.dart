@@ -1091,7 +1091,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
         if (classification.needsConfirmation) {
-          final summary = classifier.buildSummary(classification, lastWords);
+          final summary = await classifier.buildSummary(classification, lastWords);
           _logger.log('HomeScreen', 'Smart Free: confirming query (${classification.category}, research=${classification.isResearch})');
           setState(() {
             _pendingClassification = classification;
