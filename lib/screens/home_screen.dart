@@ -11,6 +11,7 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/research_assistant_service.dart';
 import 'package:arya/services/weather_service.dart';
 import 'package:arya/services/web_search_service.dart';
 import 'package:arya/services/wake_word_service.dart';
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
   QueryClassification? _pendingClassification;
   String _pendingQuery = '';
   bool _isConfirming = false;
+  bool _localSearchPending = false;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
 
@@ -303,6 +305,10 @@ class _HomeScreenState extends State<HomeScreen> {
         .hasMatch(lower)) {
       return 'new_conversation';
     }
+    if (lower.startsWith('local search') ||
+        lower.startsWith('ask my documents')) {
+      return 'local_search';
+    }
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -318,6 +324,19 @@ class _HomeScreenState extends State<HomeScreen> {
       return 'web_search';
     }
     return null;
+  }
+
+  String _localSearchQuestion(String text) {
+    final trimmed = text.trim();
+    final lower = trimmed.toLowerCase();
+    for (final prefix in ['local search', 'ask my documents']) {
+      if (lower.startsWith(prefix)) {
+        var rest = trimmed.substring(prefix.length);
+        rest = rest.replaceFirst(RegExp(r'^[\s,:;\-–]+'), '');
+        return rest.trim();
+      }
+    }
+    return '';
   }
 
   Future<bool> _handleVoiceCommand(String text) async {
@@ -369,6 +388,21 @@ class _HomeScreenState extends State<HomeScreen> {
         final weatherReport = await WeatherService.instance.fetchWeather();
         await _speakAndWait(weatherReport);
         break;
+      case 'local_search':
+        if (!await ResearchAssistantService.isEnabled()) {
+          await _speakAndWait("Local search is turned off in Settings.");
+          break;
+        }
+        final question = _localSearchQuestion(text);
+        if (question.isEmpty) {
+          setState(() {
+            _localSearchPending = true;
+          });
+          await _speakAndWait("What would you like me to search for.");
+        } else {
+          await _runLocalSearch(question);
+        }
+        break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
         if (!(prefs.getBool('web_search_enabled') ?? false)) {
@@ -410,6 +444,49 @@ class _HomeScreenState extends State<HomeScreen> {
       startListening();
     }
     return true;
+  }
+
+  Future<void> _runLocalSearch(String question) async {
+    if (!await ResearchAssistantService.isEnabled()) {
+      await _speakAndWait("Local search is turned off in Settings.");
+      return;
+    }
+    final trimmed = question.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _localSearchPending = true;
+      });
+      await _speakAndWait("What would you like me to search for.");
+      return;
+    }
+    final reachable = await ResearchAssistantService.instance.checkReachable();
+    if (!reachable) {
+      await _speakAndWait(
+          "Your computer is not reachable. Check that it is on and on the "
+          "same wifi, then try again.");
+      return;
+    }
+    final result = await ResearchAssistantService.instance.ask(trimmed);
+    final spoken = _localSearchSpeech(result);
+    if (spoken.length <= _maxTtsChunkSize) {
+      await _speakAndWait(spoken);
+    } else {
+      for (final chunk in _splitAtSentences(spoken, _maxTtsChunkSize)) {
+        await _speakAndWait(chunk);
+      }
+    }
+  }
+
+  String _localSearchSpeech(LocalSearchResult result) {
+    if (!result.ok) return result.error;
+    final buffer = StringBuffer(result.answer ?? '');
+    final sources = result.sources.take(3).toList();
+    if (sources.isNotEmpty) {
+      buffer.write(' Found in ');
+      buffer.write(sources.map((s) => '${s.folder}, ${s.location}').join('. '));
+      buffer.write('.');
+    }
+    return buffer.toString();
   }
 
   // --- Search Helper ---
@@ -672,6 +749,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // One or two words cannot be split by a mid-utterance pause.
     if (wordCount < 3) return false;
     if (_searchState == SearchState.awaitingQuery) return true;
+    if (_localSearchPending) return true;
     // Results/reading dialogs expect short replies (cancel, read all, 1-9)
     // which must stay instant.
     if (_searchState != SearchState.idle) return false;
@@ -813,6 +891,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _processSpeech() async {
     try {
+      if (_localSearchPending) {
+        if (_detectVoiceCommand(lastWords) == 'new_conversation') {
+          _localSearchPending = false;
+          await _handleVoiceCommand(lastWords);
+          return;
+        }
+        _localSearchPending = false;
+        final lower = lastWords.toLowerCase().trim();
+        if (lower == 'cancel' || lower == 'stop') {
+          await _speakAndWait("Cancelled.");
+          startListening();
+          return;
+        }
+        await _runLocalSearch(lastWords);
+        startListening();
+        return;
+      }
       // Non-search voice commands (weather, memory) first — must work
       // even when browser mode is active so weather never routes to DuckDuckGo.
       final detectedCmd = _detectVoiceCommand(lastWords);
@@ -1351,6 +1446,7 @@ class _HomeScreenState extends State<HomeScreen> {
       generatedContent = null;
       lastWords = '';
       _isConfirming = false;
+      _localSearchPending = false;
       _pendingClassification = null;
       _pendingQuery = '';
       _previousUserQuery = '';

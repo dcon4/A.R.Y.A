@@ -118,6 +118,20 @@ class HelpScreen extends StatelessWidget {
             _body('If ARYA is reading and you want her to stop, just start '
                 'talking.'),
 
+            _heading('Local search'),
+            _body('Ask questions about your own documents on this '
+                'computer, over your home wifi. The Research Assistant '
+                'must be running on the computer.'),
+            _bullet('"local search" followed by your question, for '
+                'example "local search where is my passport"'),
+            _bullet('"ask my documents" works the same way'),
+            _bullet('If you say only the command, ARYA asks what to '
+                'search for and listens for your question'),
+            _bullet('ARYA says the answer, then names where it was '
+                'found'),
+            _body('Turn it on and set the computer address under '
+                'Settings, Local Search.'),
+
             _heading('Conversations'),
             _bullet('Say "new conversation" by voice for the same effect '
                 'as the new-conversation button - ARYA saves the chat, '
@@ -140,6 +154,8 @@ class HelpScreen extends StatelessWidget {
             _bullet('Weather Settings: your US ZIP code'),
             _bullet('Text to Speech: voice and speed'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('Local Search: on or off, the computer address, '
+                'and which model to use'),
             _bullet('Memory: what ARYA stores about you'),
             _bullet('Wake Word: hands-free "hey rhasspy"'),
             _bullet('Settings Backup: export and import everything'),

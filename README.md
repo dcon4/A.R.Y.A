@@ -56,6 +56,10 @@ exist.
 - Optional web grounding: Brave Search results injected into the
   prompt (with a "Research questions only" mode), or OpenRouter's
   ":online" suffix for web search on every request.
+- Local search: ask questions about the documents on your own computer
+  over your home wifi - say "local search" followed by your question,
+  or "ask my documents". ARYA answers out loud and names where the
+  answer was found. No password; only works at home.
 - Memory: "remember I have two cats", "what do you remember",
   "forget cats", "clear my memories".
 - Conversations are saved automatically as text files to your selected
@@ -127,6 +131,10 @@ flutter run
   search", or "cancel".
 - While an article is being read: "next", "skip", "repeat", or
   "cancel". Starting to talk yourself interrupts her immediately.
+- Local search: "local search where is my passport" or "ask my
+  documents" - ARYA asks the Research Assistant on your computer and
+  speaks the answer plus the source. Say just the command to be asked
+  for your question.
 - New conversation: say "new conversation" by voice, or use the
   new-conversation button (or its background control) - it interrupts
   TTS speech instantly, even mid-sentence - the conversation text is
@@ -145,6 +153,7 @@ flutter run
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
 | Text to Speech | Voice, speed, and related playback options |
 | Brave Search | Web results injected into the prompt; optional research-only mode |
+| Local Search | On/off, your computer's address, and which model to use |
 | Memory | How ARYA stores and recalls facts you tell her |
 | Wake Word | "hey rhasspy" hands-free mic |
 | Background Service | Notification/widget controls (mic, new conversation, Brave, provider) |

@@ -7,6 +7,7 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/research_assistant_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
 import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
@@ -33,6 +34,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _researchAnnouncementController = TextEditingController();
   final TextEditingController _researchPromptController = TextEditingController();
   final TextEditingController _weatherZipController = TextEditingController();
+  final TextEditingController _localSearchAddressController = TextEditingController();
+  bool _localSearchEnabled = false;
+  String _localSearchModelId = '';
+  String _localSearchApiKey = '';
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -76,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final savedSystemPrompt = prefs.getString('system_prompt') ?? '';
     final savedResearchAnnouncement = prefs.getString('research_announcement') ?? '';
     final savedResearchPrompt = prefs.getString('research_prompt_extension') ?? '';
+    final localSearchApiKey = await providers.getApiKeyForProvider('openrouter');
 
     setState(() {
       _selectedProviderId = savedProviderId;
@@ -99,6 +105,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _researchPromptController.text = savedResearchPrompt.isNotEmpty
           ? savedResearchPrompt
           : OpenaiService.defaultResearchPrompt.trim();
+      _localSearchEnabled = prefs.getBool('local_search_enabled') ?? false;
+      _localSearchAddressController.text =
+          prefs.getString('local_search_address') ?? '';
+      _localSearchModelId = prefs.getString('local_search_model') ?? '';
+      _localSearchApiKey = localSearchApiKey;
     });
   }
 
@@ -125,6 +136,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'research_announcement', _researchAnnouncementController.text.trim());
     await prefs.setString(
         'research_prompt_extension', _researchPromptController.text.trim());
+    await prefs.setBool('local_search_enabled', _localSearchEnabled);
+    await prefs.setString(
+        'local_search_address', _localSearchAddressController.text.trim());
+    await prefs.setString('local_search_model', _localSearchModelId);
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -200,6 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _customBaseUrlController.dispose();
     _researchAnnouncementController.dispose();
     _researchPromptController.dispose();
+    _localSearchAddressController.dispose();
     super.dispose();
   }
 
@@ -899,6 +915,160 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLocalSearchSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Local Search",
+          style: TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Ask questions about the documents on this computer, over your home wifi only. Say 'local search' followed by your question, or 'ask my documents'. No password is used and nothing works away from home.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                "Turn local search on",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Cera Pro',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: _localSearchEnabled,
+              onChanged: (val) {
+                ResearchAssistantService.setEnabled(val);
+                setState(() {
+                  _localSearchEnabled = val;
+                });
+              },
+              activeColor: MyAppTheme.mainFontColor,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _localSearchAddressController,
+          style: const TextStyle(color: Colors.white, fontFamily: 'Cera Pro'),
+          decoration: InputDecoration(
+            hintText: ResearchAssistantService.defaultAddress,
+            hintStyle: TextStyle(color: Colors.grey[600]),
+            helperText: "Address of your computer's Research Assistant.",
+            helperStyle: TextStyle(color: Colors.grey[600]),
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.save, color: MyAppTheme.mainFontColor),
+              onPressed: () async {
+                await ResearchAssistantService.setAddress(
+                    _localSearchAddressController.text);
+                if (mounted) {
+                  setState(() {});
+                  _showSnack(context, 'Address saved');
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Model for local search",
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Chosen from your OpenRouter models (free only when that filter is on). The computer tells ARYA which model it actually used.",
+          style: TextStyle(
+            color: Colors.white70,
+            fontFamily: 'Cera Pro',
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_localSearchModelId.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              "Current choice: $_localSearchModelId",
+              style: const TextStyle(
+                color: Colors.white70,
+                fontFamily: 'Cera Pro',
+                fontSize: 13,
+              ),
+            ),
+          ),
+        if (_localSearchApiKey.isNotEmpty)
+          ModelSelector(
+            key: const ValueKey('local-search-model-selector'),
+            providerId: 'openrouter',
+            apiKey: _localSearchApiKey,
+            selectedModelId: _localSearchModelId,
+            onModelSelected: (modelId) {
+              setState(() {
+                _localSearchModelId = modelId;
+              });
+              _saveSettings();
+            },
+          )
+        else
+          const Text(
+            "Add your OpenRouter key in the Model section to pick a model. Until then, the computer uses its own model choice.",
+            style: TextStyle(
+              color: Colors.white70,
+              fontFamily: 'Cera Pro',
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        if (_localSearchModelId.isNotEmpty)
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _localSearchModelId = '';
+              });
+              _saveSettings();
+            },
+            child: const Text(
+              "Use the computer's own model",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontFamily: 'Cera Pro',
+                fontSize: 13,
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -2558,6 +2728,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildTtsSection(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
+            const SizedBox(height: 32),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            _buildLocalSearchSection(),
             const SizedBox(height: 32),
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
