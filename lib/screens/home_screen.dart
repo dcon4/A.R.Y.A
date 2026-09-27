@@ -461,13 +461,42 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final reachable = await ResearchAssistantService.instance.checkReachable();
     if (!reachable) {
-      await _speakAndWait(
+      const message =
           "Your computer is not reachable. Check that it is on and on the "
-          "same wifi, then try again.");
+          "same wifi, then try again.";
+      setState(() {
+        generatedContent = message;
+      });
+      await _speakAndWait(message);
       return;
     }
+    setState(() {
+      isLoading = true;
+    });
     final result = await ResearchAssistantService.instance.ask(trimmed);
+    final screenText = _localSearchScreenText(result);
     final spoken = _localSearchSpeech(result);
+    setState(() {
+      generatedContent = screenText;
+      isLoading = false;
+    });
+    if (result.ok && (result.answer ?? '').trim().isNotEmpty) {
+      _lastAiResponse = screenText;
+      _previousUserQuery = trimmed;
+      _previousAiResponse = screenText;
+      _messageHistory.add({'role': 'user', 'content': trimmed});
+      _messageHistory.add({'role': 'assistant', 'content': screenText});
+      conversationService.addEntry(ConversationEntry(
+        userQuery: trimmed,
+        aiResponse: screenText,
+        model: result.model.isNotEmpty ? result.model : 'local search',
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (_) {
+        _logger.log('LocalSearch', 'Conversation auto-save failed');
+      }
+    }
     if (spoken.length <= _maxTtsChunkSize) {
       await _speakAndWait(spoken);
     } else {
@@ -484,6 +513,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (sources.isNotEmpty) {
       buffer.write(' Found in ');
       buffer.write(sources.map((s) => '${s.folder}, ${s.location}').join('. '));
+      buffer.write('.');
+    }
+    return buffer.toString();
+  }
+
+  String _localSearchScreenText(LocalSearchResult result) {
+    if (!result.ok) return result.error;
+    final buffer = StringBuffer(result.answer ?? '');
+    final sources = result.sources.take(5).toList();
+    if (sources.isNotEmpty) {
+      buffer.write('\n\nFound in: ');
+      buffer.write(sources.map((s) => '${s.folder}, ${s.location}').join('; '));
       buffer.write('.');
     }
     return buffer.toString();
