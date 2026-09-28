@@ -252,6 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> systemSpeak(String content) async {
     _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
+    _armWakeWhileSpeaking();
     if (content.length <= _maxTtsChunkSize) {
       _clearResponseChunks();
       await flutterTts.speak(content);
@@ -684,6 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakNow(String text, int gen) async {
     // Superseded by a barge-in while queued — drop it.
     if (gen != _speakGen) return;
+    _armWakeWhileSpeaking();
     final completer = Completer<void>();
     _announceCompleter = completer;
     try {
@@ -720,6 +722,23 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await flutterTts.stop();
     } catch (_) {}
+  }
+
+  /// Re-arm the wake word while a reply is being spoken so the user can
+  /// interrupt a long answer with "hey rhasspy". The 2-second delay gives
+  /// the just-finished listening turn time to settle, and matches the
+  /// echo guard used when speech finishes. The wake handler itself only
+  /// acts when the mic is not already listening, so this cannot steal the
+  /// microphone from an active recognition session.
+  void _armWakeWhileSpeaking() {
+    if (!_wakeWordPausedForSpeech) return;
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_wakeWordPausedForSpeech) {
+        _wakeWordPausedForSpeech = false;
+        WakeWordService.instance.resume();
+        _logger.verbose('HomeScreen', 'Wake word re-armed during speech');
+      }
+    });
   }
 
   Future<void> _speakProviderAnnouncement(SharedPreferences prefs) async {
@@ -760,12 +779,19 @@ class _HomeScreenState extends State<HomeScreen> {
       await speechToText.initialize();
     }
 
-    // Stop any ongoing TTS so it doesn't get interrupted mid-sentence
-    // by the announcement speech or by a new response later. Skip when a
-    // prompt is mid-speech — killing it orphaned its completion waiter and
-    // stalled the flow for 60 seconds.
-    _clearResponseChunks();
-    if (_announceCompleter == null) {
+    // Stop any ongoing TTS so the mic gets a quiet room. An awaited
+    // utterance (prompt, local search answer) is interrupted properly:
+    // its completion waiter is released and any queued chunks are
+    // dropped, so the waiting flow continues instead of stalling.
+    if (_announceCompleter != null) {
+      _logger.verbose('HomeScreen',
+          'Barge-in — stopping awaited speech so the mic can listen');
+      await _interruptSpeech();
+    } else {
+      // Also bump the generation: a queued chunk can slip in during the
+      // microtask gap between two awaited utterances, and this drops it.
+      _speakGen++;
+      _clearResponseChunks();
       await flutterTts.stop();
     }
 

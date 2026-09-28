@@ -90,8 +90,12 @@ class HelpScreen extends StatelessWidget {
             _bullet('"what is the capital of Australia"'),
             _bullet('"write me a haiku about rain"'),
             _bullet('"explain how tide tables work"'),
-            _body('ARYA answers out loud. Start talking at any moment and '
-                'she stops immediately so you can take over.'),
+            _body('ARYA answers out loud. To cut a long answer short - '
+                'from a normal question or a local search - say "hey '
+                'rhasspy", tap the microphone, or just start talking; '
+                'she stops at once so you can ask a follow-up. The full '
+                'reply is still saved with the conversation, so nothing '
+                'is lost when you start a new conversation.'),
 
             _heading('Weather'),
             _body('Set your US ZIP code under Settings, Weather Settings. '

@@ -124,6 +124,11 @@ flutter run
   detection is on.
 - Ask anything: "what's the capital of Australia", "write me a haiku
   about rain", "explain how tide tables work".
+- Long answers - from a normal question or a local search - can be
+  interrupted: say "hey rhasspy", tap the mic, or just start talking
+  and ARYA stops mid-sentence so you can ask a follow-up. The reply
+  is still saved in full, so nothing is lost when you start a new
+  conversation.
 - Weather: "what's the weather" or "forecast".
 - Web search: "search for solar powered trailers" - ARYA reads the
   result titles, then you can say a number to open one, "read all" to
