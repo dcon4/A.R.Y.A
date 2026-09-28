@@ -78,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _pendingQuery = '';
   bool _isConfirming = false;
   bool _localSearchPending = false;
+  int _localSearchTurnsRemaining = 0;
   Future<void> Function()? _retryAction;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
@@ -445,6 +446,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _handleLocalSearchCommand(String text) async {
     if (!await ResearchAssistantService.isEnabled()) {
+      _localSearchTurnsRemaining = 0;
       await _speakAndWait("Local search is turned off in Settings.");
       return;
     }
@@ -452,10 +454,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (question.isEmpty) {
       setState(() {
         _localSearchPending = true;
+        _retryAction = null;
       });
       await _speakAndWait("What would you like me to search for.");
     } else {
-      await _runLocalSearch(question);
+      await _runLocalSearch(question, isTrigger: true);
     }
   }
 
@@ -474,14 +477,15 @@ class _HomeScreenState extends State<HomeScreen> {
         pendingQuestion = null;
       }
     }
-    if (turns.length > 5) {
-      return turns.sublist(turns.length - 5);
+    if (turns.length > 3) {
+      return turns.sublist(turns.length - 3);
     }
     return turns;
   }
 
-  Future<void> _runLocalSearch(String question) async {
+  Future<void> _runLocalSearch(String question, {bool isTrigger = false}) async {
     if (!await ResearchAssistantService.isEnabled()) {
+      _localSearchTurnsRemaining = 0;
       await _speakAndWait("Local search is turned off in Settings.");
       return;
     }
@@ -509,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = message;
         isLoading = false;
-        _retryAction = () => _runLocalSearch(trimmed);
+        _retryAction = () => _runLocalSearch(trimmed, isTrigger: isTrigger);
       });
       await _speakAndWait(message);
       return;
@@ -521,7 +525,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       generatedContent = screenText;
       isLoading = false;
-      _retryAction = result.ok ? null : () => _runLocalSearch(trimmed);
+      _retryAction =
+          result.ok ? null : () => _runLocalSearch(trimmed, isTrigger: isTrigger);
+      if (result.ok && isTrigger) {
+        _localSearchTurnsRemaining = 3;
+      }
     });
     if (result.ok && (result.answer ?? '').trim().isNotEmpty) {
       _lastAiResponse = screenText;
@@ -1017,6 +1025,16 @@ class _HomeScreenState extends State<HomeScreen> {
           startListening();
           return;
         }
+        await _runLocalSearch(lastWords, isTrigger: true);
+        startListening();
+        return;
+      }
+      if (_localSearchTurnsRemaining > 0 &&
+          _detectVoiceCommand(lastWords) == null &&
+          !_browserMode) {
+        _localSearchTurnsRemaining--;
+        _logger.log('HomeScreen',
+            'Local search continuation (turns left: $_localSearchTurnsRemaining)');
         await _runLocalSearch(lastWords);
         startListening();
         return;
@@ -1287,6 +1305,15 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
+      if (!_browserMode &&
+          _localSearchTurnsRemaining > 0 &&
+          _detectVoiceCommand(lastWords) == null) {
+        _localSearchTurnsRemaining--;
+        _logger.log('HomeScreen',
+            'Local search continuation (turns left: $_localSearchTurnsRemaining)');
+        await _runLocalSearch(lastWords);
+        return;
+      }
 
       // Smart Free: classify query and optionally confirm before answering
       final prefs = await SharedPreferences.getInstance();
@@ -1443,7 +1470,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await _handleVoiceCommand(text);
         return;
       }
-      await _runLocalSearch(text);
+      await _runLocalSearch(text, isTrigger: true);
       return;
     }
     if (_detectVoiceCommand(text) == 'local_search') {
@@ -1583,6 +1610,7 @@ class _HomeScreenState extends State<HomeScreen> {
       lastWords = '';
       _isConfirming = false;
       _localSearchPending = false;
+      _localSearchTurnsRemaining = 0;
       _retryAction = null;
       _pendingClassification = null;
       _pendingQuery = '';

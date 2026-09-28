@@ -135,8 +135,10 @@ flutter run
   documents" - ARYA asks the Research Assistant on your computer and
   speaks the answer plus the source. Say just the command to be asked
   for your question. Typing the same words in the text box works the
-  same way. Follow-ups work too: ask "what about his other books?"
-  and the last few searches are sent along so the meaning is clear.
+  same way. Follow-ups work too: after a search, the next three
+  questions automatically continue as local searches (say "new
+  conversation" to stop sooner), and the last three turns are sent
+  along so "what about his other books?" makes sense.
 - New conversation: say "new conversation" by voice, or use the
   new-conversation button (or its background control) - it interrupts
   TTS speech instantly, even mid-sentence - the conversation text is
