@@ -181,8 +181,49 @@ class ModelFetcherService {
         _logger.error('ModelFetcher', 'Cerebras API error: ${response.statusCode}');
         return [];
       }
+} catch (e) {
+        _logger.error('ModelFetcher', 'Failed to fetch Cerebras models', e);
+        return [];
+      }
+    }
+  }
+
+  /// Fetch models from NVIDIA NIM (public list, no key required)
+  Future<List<Map<String, dynamic>>> fetchNvidiaNimModels(
+      [String apiKey = '']) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from NVIDIA NIM...');
+
+      final headers = <String, String>{};
+      if (apiKey.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $apiKey';
+      }
+      final response = await http
+          .get(
+            Uri.parse('https://integrate.api.nvidia.com/v1/models'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'is_free': false, // NIM is paid per token
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} NIM models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'NIM API error: ${response.statusCode}');
+        return [];
+      }
     } catch (e) {
-      _logger.error('ModelFetcher', 'Failed to fetch Cerebras models', e);
+      _logger.error('ModelFetcher', 'Failed to fetch NIM models', e);
       return [];
     }
   }
