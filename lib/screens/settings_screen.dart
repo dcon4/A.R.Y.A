@@ -37,7 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _localSearchAddressController = TextEditingController();
   bool _localSearchEnabled = false;
   String _localSearchModelId = '';
-  String _localSearchApiKey = '';
+  String _localSearchProviderId = '';
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -109,7 +109,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _localSearchAddressController.text =
           prefs.getString('local_search_address') ?? '';
       _localSearchModelId = prefs.getString('local_search_model') ?? '';
-      _localSearchApiKey = localSearchApiKey;
+      _localSearchProviderId = prefs.getString('local_search_provider') ?? '';
+      // Older versions only offered OpenRouter models; derive the provider
+      // from the saved model id so the dropdown shows the right list.
+      if (_localSearchProviderId.isEmpty && _localSearchModelId.isNotEmpty) {
+        _localSearchProviderId = providers.apiProviders
+                .any((p) => p.models.any((m) => m.id == _localSearchModelId))
+            ? providers.apiProviders
+                .firstWhere(
+                    (p) => p.models.any((m) => m.id == _localSearchModelId))
+                .id
+            : 'openrouter';
+      }
     });
   }
 
@@ -140,6 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setString(
         'local_search_address', _localSearchAddressController.text.trim());
     await prefs.setString('local_search_model', _localSearchModelId);
+    await prefs.setString('local_search_provider', _localSearchProviderId);
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -226,6 +238,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'groq': return 'gsk_...';
       case 'deepseek': return 'sk-...';
       case 'cerebras': return 'cerebras_...';
+      case 'nim': return 'nvapi-...';
+      case 'zen': return 'sk-...';
+      case 'kilocode': return 'API key';
+      case 'cloudflare': return 'API key';
       default: return 'API key';
     }
   }
@@ -237,6 +253,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'groq': return 'Get your free API key at console.groq.com/keys. Fast inference for open models.';
       case 'deepseek': return 'Get your API key at platform.deepseek.com/api-keys.';
       case 'cerebras': return 'Get your API key at cloud.cerebras.ai. Fast inference for open models via OpenAI-compatible API.';
+      case 'nim': return 'Get your API key at build.nvidia.com. NVIDIA NIM runs open models, paid per token.';
+      case 'zen': return 'Get your API key at opencode.ai/auth. OpenCode Zen has free models - each one shows what it does with your text.';
+      case 'kilocode': return 'Get your API key at kilocode.org. Kilo Code provides access to various open-source models.';
+      case 'cloudflare': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -600,7 +620,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_selectedProviderId != 'custom' && _apiKeyController.text.isNotEmpty)
+        if (_selectedProviderId != 'custom' &&
+            (_apiKeyController.text.isNotEmpty ||
+                _selectedProviderId == 'nim' ||
+                _selectedProviderId == 'zen' ||
+                _selectedProviderId == 'cloudflare'))
           ModelSelector(
             key: ValueKey(_selectedProviderId),
             providerId: _selectedProviderId,
@@ -1006,7 +1030,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 4),
         const Text(
-          "Chosen from your OpenRouter models (free only when that filter is on). The computer tells ARYA which model it actually used.",
+          "Choose which provider on your computer answers your document questions. The computer holds the keys - the phone only sends your choice, and the computer tells ARYA which model it actually used.",
           style: TextStyle(
             color: Colors.white70,
             fontFamily: 'Cera Pro',
@@ -1015,45 +1039,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        if (_localSearchModelId.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              "Current choice: $_localSearchModelId",
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _localSearchProviderId,
+              isExpanded: true,
+              dropdownColor: Colors.grey[900],
               style: const TextStyle(
-                color: Colors.white70,
+                color: Colors.white,
                 fontFamily: 'Cera Pro',
-                fontSize: 13,
+                fontSize: 15,
               ),
+              items: [
+                const DropdownMenuItem(
+                  value: '',
+                  child: Text("Use the computer's own choice"),
+                ),
+                ...providers.apiProviders
+                    .where((p) =>
+                        providers.localSearchProviderIds.contains(p.id))
+                    .map((p) => DropdownMenuItem(
+                          value: p.id,
+                          child: Text(p.name),
+                        )),
+              ],
+              onChanged: (newId) {
+                if (newId == null) return;
+                setState(() {
+                  _localSearchProviderId = newId;
+                  if (newId.isEmpty) {
+                    _localSearchModelId = '';
+                  } else {
+                    final newProvider = providers.apiProviders
+                        .firstWhere((x) => x.id == newId);
+                    if (!newProvider.models
+                        .any((m) => m.id == _localSearchModelId)) {
+                      _localSearchModelId = newProvider.defaultModel;
+                    }
+                  }
+                });
+                _saveSettings();
+              },
             ),
           ),
-        if (_localSearchApiKey.isNotEmpty)
-          ModelSelector(
-            key: const ValueKey('local-search-model-selector'),
-            providerId: 'openrouter',
-            apiKey: _localSearchApiKey,
-            selectedModelId: _localSearchModelId,
-            onModelSelected: (modelId) {
-              setState(() {
-                _localSearchModelId = modelId;
-              });
-              _saveSettings();
-            },
-          )
-        else
-          const Text(
-            "Add your OpenRouter key in the Model section to pick a model. Until then, the computer uses its own model choice.",
-            style: TextStyle(
+        ),
+        if (_localSearchProviderId.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Builder(builder: (context) {
+            final localProvider = providers.apiProviders
+                .firstWhere((x) => x.id == _localSearchProviderId);
+            final localModels =
+                List<providers.ApiModel>.from(localProvider.models);
+            if (_localSearchModelId.isNotEmpty &&
+                !localModels.any((m) => m.id == _localSearchModelId)) {
+              localModels.insert(
+                  0,
+                  providers.ApiModel(
+                      id: _localSearchModelId,
+                      label: '$_localSearchModelId (saved)'));
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _localSearchModelId.isEmpty
+                      ? null
+                      : _localSearchModelId,
+                  isExpanded: true,
+                  hint: const Text("Choose a model"),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 15,
+                  ),
+                  items: localModels
+                      .map((m) => DropdownMenuItem(
+                            value: m.id,
+                            child: Text(m.label),
+                          ))
+                      .toList(),
+                  onChanged: (newModel) {
+                    if (newModel == null) return;
+                    setState(() {
+                      _localSearchModelId = newModel;
+                    });
+                    _saveSettings();
+                  },
+                ),
+              ),
+            );
+          }),
+        ],
+        if (_localSearchModelId.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            "Current choice: $_localSearchModelId",
+            style: const TextStyle(
               color: Colors.white70,
               fontFamily: 'Cera Pro',
               fontSize: 13,
-              height: 1.4,
             ),
           ),
-        if (_localSearchModelId.isNotEmpty)
           TextButton(
             onPressed: () {
               setState(() {
+                _localSearchProviderId = '';
                 _localSearchModelId = '';
               });
               _saveSettings();
@@ -1067,6 +1171,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+        ],
         const SizedBox(height: 8),
       ],
     );

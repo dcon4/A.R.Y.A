@@ -59,7 +59,13 @@ class _ModelSelectorState extends State<ModelSelector> {
   }
 
   Future<void> _fetchModels() async {
-    if (widget.apiKey.isEmpty) {
+    // NVIDIA NIM and Cloudflare publish their model lists openly, and
+    // OpenCode Zen is served from the built-in registry - neither needs
+    // a phone-side key.
+    final keyRequired = widget.providerId != 'nim' &&
+        widget.providerId != 'zen' &&
+        widget.providerId != 'cloudflare';
+    if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
         _error = 'Enter an API key to fetch available models';
       });
@@ -90,12 +96,32 @@ class _ModelSelectorState extends State<ModelSelector> {
         case 'cerebras':
           models = await _fetcher.fetchCerebrasModels(widget.apiKey);
           break;
+        case 'nim':
+          models = await _fetcher.fetchNvidiaNimModels(widget.apiKey);
+          break;
+        case 'cloudflare':
+          models = await _fetcher.fetchCloudflareModels(widget.apiKey);
+          break;
+        case 'zen':
+          // Fixed list from the provider registry, so the privacy note
+          // stays next to every Zen model.
+          final zenProvider = providers.apiProviders
+              .firstWhere((p) => p.id == 'zen',
+                  orElse: () => providers.apiProviders.first);
+          models = zenProvider.models
+              .map((m) => {
+                    'id': m.id,
+                    'name': m.label,
+                    'is_free': m.label.contains('(free)'),
+                    'supports_vision': false,
+                  })
+              .toList();
+          break;
+        case 'kilocode':
+          models = await _fetcher.fetchKiloCodeModels(widget.apiKey);
+          break;
         default:
           _error = 'Model fetching not supported for this provider';
-      }
-
-      if (models.isEmpty && _error == null) {
-        _error = 'No models found. Check your API key.';
       }
 
       setState(() {

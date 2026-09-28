@@ -14,6 +14,7 @@ class ApiProvider {
   final String defaultModel;
   final List<ApiModel> models;
   final bool requiresReferer;
+  final bool supportsWebSearch;
 
   const ApiProvider({
     required this.id,
@@ -22,6 +23,7 @@ class ApiProvider {
     required this.defaultModel,
     required this.models,
     this.requiresReferer = false,
+    this.supportsWebSearch = false,
   });
 
   String get prefKey => '${id}_api_key';
@@ -40,6 +42,7 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://openrouter.ai/api/v1',
     defaultModel: '~openai/gpt-mini-latest',
     requiresReferer: true,
+    supportsWebSearch: true,
     models: const [
       ApiModel(id: 'openai/gpt-oss-20b:free', label: 'GPT OSS 20B (FREE)'),
       ApiModel(id: 'openai/gpt-oss-120b:free', label: 'GPT OSS 120B (FREE)'),
@@ -115,6 +118,71 @@ final List<ApiProvider> apiProviders = [
       ApiModel(id: 'llama-3.3-70b', label: 'Llama 3.3 70B'),
       ApiModel(id: 'llama-3.1-8b', label: 'Llama 3.1 8B'),
       ApiModel(id: 'llama-3.1-70b', label: 'Llama 3.1 70B'),
+    ],
+  ),
+  ApiProvider(
+    id: 'nim',
+    name: 'NVIDIA NIM',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    defaultModel: 'openai/gpt-oss-20b',
+    models: const [
+      ApiModel(
+          id: 'openai/gpt-oss-20b',
+          label: 'GPT OSS 20B (NVIDIA NIM) - confirmed working on this account'),
+    ],
+  ),
+  ApiProvider(
+    id: 'zen',
+    name: 'OpenCode Zen',
+    baseUrl: 'https://opencode.ai/zen/v1',
+    defaultModel: 'space-bunny-free',
+    models: const [
+      ApiModel(
+          id: 'space-bunny-free',
+          label: 'Space Bunny (free) - keeps no copy of your text, never trains on it'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kilo_code',
+    name: 'Kilo Code',
+    baseUrl: 'https://api.kilocode.org/v1',
+    defaultModel: 'kilocode/llama-3.1-8b-instruct-free',
+    models: const [
+      ApiModel(
+          id: 'kilocode/llama-3.1-8b-instruct-free',
+          label: 'Llama 3.1 8B Instruct (free) - good all-round answers'),
+      ApiModel(
+          id: 'kilocode/mistral-7b-instruct-free',
+          label: 'Mistral 7B Instruct (free) - strong writing'),
+      ApiModel(
+          id: 'kilocode/phi-3.5-mini',
+          label: 'Phi 3.5 Mini (paid) - smaller, faster model'),
+      ApiModel(
+          id: 'kilocode/llama-3.1-8b-instruct',
+          label: 'Llama 3.1 8B Instruct (paid) - good all-round answers'),
+      ApiModel(
+          id: 'kilocode/mistral-7b-instruct',
+          label: 'Mistral 7B Instruct (paid) - strong writing'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kiloworks_ai',
+    name: 'Cloudflare Workers AI',
+    baseUrl: 'https://api.cloudflare.com/ai/v1',
+    defaultModel: '@cf/llama-3.1-8b-instruct-q4k',
+    models: const [
+      ApiModel(
+          id: '@cf/gemma-2b-it-q4k',
+          label: 'Gemma 2B IT Q4K (free)'),
+      ApiModel(
+          id: '@cf/llama-3.1-8b-instruct-q4k',
+          label: 'Llama 3.1 8B Instruct Q4K (free)'),
+      ApiModel(
+          id: '@cf/mistral-7b-instruct-q4k',
+          label: 'Mistral 7B Instruct Q4K (free)'),
+      ApiModel(
+          id: '@cf/phi-3.5-mini-free',
+          label: 'Phi 3.5 Mini (free) - smaller, faster model'),
     ],
   ),
   ApiProvider(
@@ -201,6 +269,25 @@ bool getRequiresRefererForProvider(String providerId) {
   );
   return provider.requiresReferer;
 }
+
+bool providerSupportsWebSearch(String providerId) {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  return provider.supportsWebSearch;
+}
+
+/// Providers the computer's Research Assistant can answer with.
+/// Kept in the same order as the Research Assistant's own registry.
+const List<String> localSearchProviderIds = [
+  'openrouter',
+  'groq',
+  'nim',
+  'zen',
+  'kilo_code',
+  'kiloworks_ai',
+];
 
 // --- Preference accessors ---
 

@@ -187,6 +187,83 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from Cloudflare Workers AI (public list, no key required)
+  Future<List<Map<String, dynamic>>> fetchCloudflareModels(
+      [String apiKey = '']) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Cloudflare Workers AI...');
+
+      final headers = <String, String>{};
+      if (apiKey.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $apiKey';
+      }
+      final response = await http
+          .get(
+            Uri.parse('https://api.cloudflare.com/ai/v1/models'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['name'] ?? m['id'] ?? 'Unknown',
+            'is_free': true, // Cloudflare free tier models
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Cloudflare models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Cloudflare API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Cloudflare models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Kilo Code (requires API key)
+  Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Kilo Code...');
+
+      final response = await http.get(
+        Uri.parse('https://api.kilocode.org/v1/models'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'created': m['created'] ?? 0,
+            // Kilo Code has both free and paid models
+            'is_free': m['id']?.toString().contains('-free') ?? false,
+            'supports_vision': (m['id'] as String).contains('vision'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Kilo Code models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Kilo Code API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Kilo Code models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,

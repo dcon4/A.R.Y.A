@@ -85,6 +85,18 @@ class ResearchAssistantService {
     await prefs.setString('local_search_model', value.trim());
   }
 
+  /// Which of the computer's providers the chosen model belongs to.
+  /// Empty means the computer picks its own provider and model.
+  static Future<String> getProvider() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getString('local_search_provider') ?? '').trim();
+  }
+
+  static Future<void> setProvider(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('local_search_provider', value.trim());
+  }
+
   Future<bool> checkReachable() async {
     try {
       final address = await getAddress();
@@ -106,12 +118,14 @@ class ResearchAssistantService {
   }) async {
     final address = await getAddress();
     final model = await getModel();
+    final provider = await getProvider();
     _logger.log(
-        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" model=${model.isEmpty ? 'server default' : model} history=${history.length}');
+        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" model=${model.isEmpty ? 'server default' : model} provider=${provider.isEmpty ? 'auto' : provider} history=${history.length}');
 
     try {
       final body = <String, dynamic>{'question': question};
       if (model.isNotEmpty) body['model'] = model;
+      if (provider.isNotEmpty) body['provider'] = provider;
       if (history.isNotEmpty) body['history'] = history;
 
       final response = await http
