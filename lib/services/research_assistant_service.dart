@@ -8,12 +8,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 class LocalSearchSource {
   final String file;
   final String folder;
+  final String title;
   final String location;
   final double score;
 
   const LocalSearchSource({
     required this.file,
     required this.folder,
+    required this.title,
     required this.location,
     required this.score,
   });
@@ -184,9 +186,18 @@ class ResearchAssistantService {
     final sources = <LocalSearchSource>[];
     for (final item in raw) {
       if (item is! Map) continue;
+      final file = (item['file'] ?? '').toString();
+      var title = (item['title'] ?? '').toString().trim();
+      if (title.isEmpty) {
+        var base = file.split('/').last;
+        final dot = base.lastIndexOf('.');
+        if (dot > 0) base = base.substring(0, dot);
+        title = base.replaceAll('_', ' ');
+      }
       sources.add(LocalSearchSource(
-        file: (item['file'] ?? '').toString(),
+        file: file,
         folder: (item['folder'] ?? '').toString(),
+        title: title,
         location: (item['location'] ?? '').toString(),
         score: double.tryParse('${item['score'] ?? 0}') ?? 0,
       ));

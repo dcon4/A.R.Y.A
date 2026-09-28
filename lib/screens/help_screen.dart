@@ -123,7 +123,8 @@ class HelpScreen extends StatelessWidget {
                 'computer, over your home wifi. The Research Assistant '
                 'must be running on the computer.'),
             _bullet('"local search" followed by your question, for '
-                'example "local search where is my passport"'),
+                'example "local search where is my passport" - typing '
+                'the same words works too'),
             _bullet('"ask my documents" works the same way'),
             _bullet('If you say only the command, ARYA asks what to '
                 'search for and listens for your question'),

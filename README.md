@@ -134,7 +134,8 @@ flutter run
 - Local search: "local search where is my passport" or "ask my
   documents" - ARYA asks the Research Assistant on your computer and
   speaks the answer plus the source. Say just the command to be asked
-  for your question.
+  for your question. Typing the same words in the text box works the
+  same way.
 - New conversation: say "new conversation" by voice, or use the
   new-conversation button (or its background control) - it interrupts
   TTS speech instantly, even mid-sentence - the conversation text is

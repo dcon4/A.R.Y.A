@@ -389,19 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await _speakAndWait(weatherReport);
         break;
       case 'local_search':
-        if (!await ResearchAssistantService.isEnabled()) {
-          await _speakAndWait("Local search is turned off in Settings.");
-          break;
-        }
-        final question = _localSearchQuestion(text);
-        if (question.isEmpty) {
-          setState(() {
-            _localSearchPending = true;
-          });
-          await _speakAndWait("What would you like me to search for.");
-        } else {
-          await _runLocalSearch(question);
-        }
+        await _handleLocalSearchCommand(text);
         break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
@@ -444,6 +432,22 @@ class _HomeScreenState extends State<HomeScreen> {
       startListening();
     }
     return true;
+  }
+
+  Future<void> _handleLocalSearchCommand(String text) async {
+    if (!await ResearchAssistantService.isEnabled()) {
+      await _speakAndWait("Local search is turned off in Settings.");
+      return;
+    }
+    final question = _localSearchQuestion(text);
+    if (question.isEmpty) {
+      setState(() {
+        _localSearchPending = true;
+      });
+      await _speakAndWait("What would you like me to search for.");
+    } else {
+      await _runLocalSearch(question);
+    }
   }
 
   Future<void> _runLocalSearch(String question) async {
@@ -506,14 +510,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _localSearchSourceLine(LocalSearchSource source) {
+    return [
+      source.folder,
+      source.title,
+      source.location,
+    ].where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
   String _localSearchSpeech(LocalSearchResult result) {
     if (!result.ok) return result.error;
     final buffer = StringBuffer(result.answer ?? '');
-    final sources = result.sources.take(3).toList();
-    if (sources.isNotEmpty) {
-      buffer.write(' Found in ');
-      buffer.write(sources.map((s) => '${s.folder}, ${s.location}').join('. '));
-      buffer.write('.');
+    if (result.sources.isNotEmpty) {
+      buffer.write(' Sources: ');
+      for (var i = 0; i < result.sources.length; i++) {
+        buffer.write(
+            'Source ${i + 1}: ${_localSearchSourceLine(result.sources[i])}. ');
+      }
     }
     return buffer.toString();
   }
@@ -521,11 +534,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _localSearchScreenText(LocalSearchResult result) {
     if (!result.ok) return result.error;
     final buffer = StringBuffer(result.answer ?? '');
-    final sources = result.sources.take(5).toList();
-    if (sources.isNotEmpty) {
-      buffer.write('\n\nFound in: ');
-      buffer.write(sources.map((s) => '${s.folder}, ${s.location}').join('; '));
-      buffer.write('.');
+    if (result.sources.isNotEmpty) {
+      buffer.write('\n\nSources:');
+      for (var i = 0; i < result.sources.length; i++) {
+        buffer.write(
+            '\n${i + 1}. ${_localSearchSourceLine(result.sources[i])}');
+      }
     }
     return buffer.toString();
   }
@@ -1349,13 +1363,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _sendTextMessage() {
+  Future<void> _sendTextMessage() async {
     final text = _textInputController.text.trim();
     if (text.isEmpty) return;
 
     _logger.log('HomeScreen', 'Sending typed text: "${text.length > 60 ? text.substring(0, 60) + "..." : text}"');
-    lastWords = text;
     _textInputController.clear();
+
+    if (_localSearchPending) {
+      _localSearchPending = false;
+      final lower = text.toLowerCase();
+      if (lower == 'cancel' || lower == 'stop') {
+        await _speakAndWait("Cancelled.");
+        return;
+      }
+      if (_detectVoiceCommand(text) == 'new_conversation') {
+        await _handleVoiceCommand(text);
+        return;
+      }
+      await _runLocalSearch(text);
+      return;
+    }
+    if (_detectVoiceCommand(text) == 'local_search') {
+      await _handleLocalSearchCommand(text);
+      return;
+    }
+    lastWords = text;
     sendMessageToOpenRouter();
   }
 
