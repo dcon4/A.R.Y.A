@@ -280,6 +280,22 @@ When the user asks a research question, you must present a balanced view:
         }
       }
 
+      // Rate limited (429) — try other providers with keys
+      if (response.statusCode == 429) {
+        _logger.log('OpenAIService', 'Rate limited (429) on $resolvedProviderId, trying fallback providers...');
+        final fallback = await _tryFallbackProviders(
+          resolvedProviderId,
+          model,
+          messages,
+          maxTokens,
+          webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online'),
+        );
+        if (fallback != null) {
+          _logger.log('OpenAIService', 'Fallback provider succeeded');
+          return fallback;
+        }
+      }
+
       {
         _logger.error('OpenAIService', 'API error HTTP ${response.statusCode}');
         _logger.verbose('OpenAIService', 'Response body: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
@@ -470,6 +486,72 @@ When the user asks a research question, you must present a balanced view:
       default:
         return false;
     }
+  }
+
+  /// Try other providers with API keys when rate limited (429).
+  Future<String?> _tryFallbackProviders(
+    String currentProviderId,
+    String model,
+    List<Map<String, String>> messages,
+    int? maxTokens,
+    bool webSearch,
+  ) async {
+    // Get all providers with valid API keys (except current)
+    final allProviders = providers.apiProviders.where((p) => p.id != currentProviderId);
+    for (final p in allProviders) {
+      final apiKey = await providers.getApiKeyForProvider(p.id);
+      if (apiKey.isEmpty) continue;
+      if (p.id == 'custom') {
+        final url = await providers.getBaseUrlForProvider('custom');
+        if (url.isEmpty) continue;
+      }
+
+      _logger.log('OpenAIService', 'Trying fallback provider: ${p.id}');
+      try {
+        var fallbackModel = p.defaultModel;
+        // If the original model exists on this provider, use it
+        final hasModel = p.models.any((m) => m.id == model);
+        if (hasModel) {
+          fallbackModel = model;
+        }
+
+        // Add :online if web search and provider supports it
+        var finalModel = fallbackModel;
+        if (webSearch && p.supportsWebSearch && !fallbackModel.contains(':online')) {
+          finalModel = '$fallbackModel:online';
+        }
+
+        final baseUrl = await providers.getBaseUrlForProvider(p.id);
+        final requiresReferer = providers.getRequiresRefererForProvider(p.id);
+        final apiKey = await providers.getApiKeyForProvider(p.id);
+
+        final response = await _postChat(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          requiresReferer: requiresReferer,
+          model: finalModel,
+          messages: messages,
+          maxTokens: maxTokens,
+        );
+
+        if (response.statusCode == 200) {
+          var content = _extractContent(response.body);
+          if (content != null && content.isNotEmpty) {
+            _logger.log('OpenAIService', 'Fallback to ${p.id} succeeded');
+            // Persist the working provider/model
+            await providers.setSelectedProviderId(p.id);
+            await providers.setModel(finalModel);
+            return '$content\n\nNote: ARYA switched to ${p.name} (${finalModel}) because your primary provider was rate limited.';
+          }
+        } else if (response.statusCode == 429) {
+          _logger.log('OpenAIService', 'Fallback ${p.id} also rate limited, trying next...');
+          continue;
+        }
+      } catch (e) {
+        _logger.log('OpenAIService', 'Fallback ${p.id} error: $e');
+      }
+    }
+    return null;
   }
 
   Future<void> _persistModel(String providerId, String model, String badModel) async {
