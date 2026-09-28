@@ -100,15 +100,19 @@ class ResearchAssistantService {
     }
   }
 
-  Future<LocalSearchResult> ask(String question) async {
+  Future<LocalSearchResult> ask(
+    String question, {
+    List<Map<String, String>> history = const [],
+  }) async {
     final address = await getAddress();
     final model = await getModel();
     _logger.log(
-        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" model=${model.isEmpty ? 'server default' : model}');
+        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" model=${model.isEmpty ? 'server default' : model} history=${history.length}');
 
     try {
       final body = <String, dynamic>{'question': question};
       if (model.isNotEmpty) body['model'] = model;
+      if (history.isNotEmpty) body['history'] = history;
 
       final response = await http
           .post(
@@ -129,8 +133,10 @@ class ResearchAssistantService {
       final data = jsonDecode(response.body);
       final sources = _parseSources(data['sources']);
       final servedModel = (data['model'] ?? '').toString();
+      final echoed = data['history'];
+      final keptTurns = echoed is List ? echoed.length : 0;
       _logger.log('LocalSearch',
-          'Answer ok=${data['ok'] == true} sources=${sources.length} model=$servedModel');
+          'Answer ok=${data['ok'] == true} sources=${sources.length} model=$servedModel history kept=$keptTurns of ${history.length}');
 
       if (data['ok'] != true) {
         var error = (data['error'] ?? '').toString();

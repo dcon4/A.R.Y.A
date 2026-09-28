@@ -459,6 +459,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  List<Map<String, String>> _recentHistoryTurns() {
+    final turns = <Map<String, String>>[];
+    String? pendingQuestion;
+    for (final entry in _messageHistory) {
+      final role = entry['role'] ?? '';
+      final content = entry['content'] ?? '';
+      if (role == 'user') {
+        pendingQuestion = content;
+      } else if (role == 'assistant' &&
+          pendingQuestion != null &&
+          content.isNotEmpty) {
+        turns.add({'question': pendingQuestion, 'answer': content});
+        pendingQuestion = null;
+      }
+    }
+    if (turns.length > 5) {
+      return turns.sublist(turns.length - 5);
+    }
+    return turns;
+  }
+
   Future<void> _runLocalSearch(String question) async {
     if (!await ResearchAssistantService.isEnabled()) {
       await _speakAndWait("Local search is turned off in Settings.");
@@ -493,7 +514,8 @@ class _HomeScreenState extends State<HomeScreen> {
       await _speakAndWait(message);
       return;
     }
-    final result = await ResearchAssistantService.instance.ask(trimmed);
+    final result = await ResearchAssistantService.instance
+        .ask(trimmed, history: _recentHistoryTurns());
     final screenText = _localSearchScreenText(result);
     final spoken = _localSearchSpeech(result);
     setState(() {

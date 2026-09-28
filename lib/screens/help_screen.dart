@@ -130,6 +130,9 @@ class HelpScreen extends StatelessWidget {
                 'search for and listens for your question'),
             _bullet('ARYA says the answer, then names where it was '
                 'found'),
+            _bullet('Ask a follow-up such as "what about his other '
+                'books?" - ARYA remembers the last few searches and '
+                'understands "his" and "it"'),
             _body('Turn it on and set the computer address under '
                 'Settings, Local Search.'),
 
