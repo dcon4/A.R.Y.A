@@ -529,14 +529,29 @@ class _HomeScreenState extends State<HomeScreen> {
     ].where((part) => part.trim().isNotEmpty).join(', ');
   }
 
+  String _localSearchExcerpt(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.length <= 400) return trimmed;
+    final cut = trimmed.substring(0, 400);
+    final lastSpace = cut.lastIndexOf(' ');
+    final head = lastSpace > 300 ? cut.substring(0, lastSpace) : cut;
+    return '${head.trimRight()}...';
+  }
+
   String _localSearchSpeech(LocalSearchResult result) {
     if (!result.ok) return result.error;
     final buffer = StringBuffer(result.answer ?? '');
     if (result.sources.isNotEmpty) {
       buffer.write(' Sources: ');
       for (var i = 0; i < result.sources.length; i++) {
+        final source = result.sources[i];
         buffer.write(
-            'Source ${i + 1}: ${_localSearchSourceLine(result.sources[i])}. ');
+            'Source ${i + 1}: ${_localSearchSourceLine(source)}. ');
+        final excerpt = _localSearchExcerpt(source.text);
+        if (excerpt.isNotEmpty) {
+          buffer.write('Passage: $excerpt ');
+        }
       }
     }
     return buffer.toString();
@@ -548,8 +563,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result.sources.isNotEmpty) {
       buffer.write('\n\nSources:');
       for (var i = 0; i < result.sources.length; i++) {
-        buffer.write(
-            '\n${i + 1}. ${_localSearchSourceLine(result.sources[i])}');
+        final source = result.sources[i];
+        buffer.write('\n${i + 1}. ${_localSearchSourceLine(source)}');
+        final excerpt = _localSearchExcerpt(source.text);
+        if (excerpt.isNotEmpty) {
+          buffer.write('\n   Passage: $excerpt');
+        }
       }
     }
     return buffer.toString();

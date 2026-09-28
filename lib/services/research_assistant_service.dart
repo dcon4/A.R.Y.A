@@ -10,6 +10,7 @@ class LocalSearchSource {
   final String folder;
   final String title;
   final String location;
+  final String text;
   final double score;
 
   const LocalSearchSource({
@@ -17,6 +18,7 @@ class LocalSearchSource {
     required this.folder,
     required this.title,
     required this.location,
+    required this.text,
     required this.score,
   });
 }
@@ -201,6 +203,7 @@ class ResearchAssistantService {
         folder: (item['folder'] ?? '').toString(),
         title: title,
         location: (item['location'] ?? '').toString(),
+        text: (item['text'] ?? '').toString().trim(),
         score: double.tryParse('${item['score'] ?? 0}') ?? 0,
       ));
     }
