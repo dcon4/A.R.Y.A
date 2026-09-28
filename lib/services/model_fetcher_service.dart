@@ -181,10 +181,9 @@ class ModelFetcherService {
         _logger.error('ModelFetcher', 'Cerebras API error: ${response.statusCode}');
         return [];
       }
-} catch (e) {
-        _logger.error('ModelFetcher', 'Failed to fetch Cerebras models', e);
-        return [];
-      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Cerebras models', e);
+      return [];
     }
   }
 
@@ -368,4 +367,3 @@ class ModelFetcherService {
     return sorted;
   }
 }
-// trigger rebuild
