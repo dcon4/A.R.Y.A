@@ -78,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _pendingQuery = '';
   bool _isConfirming = false;
   bool _localSearchPending = false;
+  Future<void> Function()? _retryAction;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
 
@@ -470,10 +471,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (trimmed.isEmpty) {
       setState(() {
         _localSearchPending = true;
+        _retryAction = null;
       });
       await _speakAndWait("What would you like me to search for.");
       return;
     }
+    setState(() {
+      isLoading = true;
+      _retryAction = null;
+    });
     final reachable = await ResearchAssistantService.instance.checkReachable();
     if (!reachable) {
       const message =
@@ -481,19 +487,19 @@ class _HomeScreenState extends State<HomeScreen> {
           "same wifi, then try again.";
       setState(() {
         generatedContent = message;
+        isLoading = false;
+        _retryAction = () => _runLocalSearch(trimmed);
       });
       await _speakAndWait(message);
       return;
     }
-    setState(() {
-      isLoading = true;
-    });
     final result = await ResearchAssistantService.instance.ask(trimmed);
     final screenText = _localSearchScreenText(result);
     final spoken = _localSearchSpeech(result);
     setState(() {
       generatedContent = screenText;
       isLoading = false;
+      _retryAction = result.ok ? null : () => _runLocalSearch(trimmed);
     });
     if (result.ok && (result.answer ?? '').trim().isNotEmpty) {
       _lastAiResponse = screenText;
@@ -1296,6 +1302,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = 'Error: $e';
         isLoading = false;
+        _retryAction = sendMessageToOpenRouter;
       });
     }
   }
@@ -1327,6 +1334,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       setState(() {
         isLoading = true;
+        _retryAction = null;
       });
 
       // Recall relevant memories
@@ -1357,6 +1365,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = response;
         isLoading = false;
+        _retryAction = null;
       });
 
       // Log the conversation entry
@@ -1389,6 +1398,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = 'Error: $e';
         isLoading = false;
+        _retryAction = () => _sendQueryToAI(query, classification: classification);
       });
     }
   }
@@ -1551,6 +1561,7 @@ class _HomeScreenState extends State<HomeScreen> {
       lastWords = '';
       _isConfirming = false;
       _localSearchPending = false;
+      _retryAction = null;
       _pendingClassification = null;
       _pendingQuery = '';
       _previousUserQuery = '';
@@ -2089,6 +2100,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 1.5,
                             ),
                           ),
+                          if (_retryAction != null) ...[
+                            SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final action = _retryAction;
+                                if (action == null) return;
+                                setState(() {
+                                  _retryAction = null;
+                                });
+                                await action();
+                              },
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text(
+                                "Retry",
+                                style: TextStyle(fontFamily: 'Cera Pro'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+                                foregroundColor: MyAppTheme.mainFontColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

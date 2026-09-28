@@ -205,6 +205,10 @@ class HelpScreen extends StatelessWidget {
             _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
 
             _heading('If something goes wrong'),
+            _body('If an answer fails - a busy model or a dropped '
+                'connection - a Retry button appears under the answer. '
+                'Tap it to send the same request again without '
+                'repeating or retyping it.'),
             _body('Tap the bug-report icon in the top bar and choose how '
                 'to send the log file, such as email or messaging. '
                 'Detailed logging is on by default, so the log shows '

@@ -141,6 +141,8 @@ flutter run
   TTS speech instantly, even mid-sentence - the conversation text is
   still saved to your selected folder first, so nothing is lost.
 - Replay the last answer with the speaker icon on the response card.
+- If a request fails (busy model or dropped connection), a Retry button
+  appears under the answer - tap it to send the same request again.
 
 ## Settings quick reference
 
