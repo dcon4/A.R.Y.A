@@ -326,6 +326,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
+  bool _hasLocalSearchPrefix(String text) {
+    final lower = text.trim().toLowerCase();
+    return lower.startsWith('local search') ||
+        lower.startsWith('ask my documents');
+  }
+
   String _localSearchQuestion(String text) {
     final trimmed = text.trim();
     final lower = trimmed.toLowerCase();
@@ -333,6 +339,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (lower.startsWith(prefix)) {
         var rest = trimmed.substring(prefix.length);
         rest = rest.replaceFirst(RegExp(r'^[\s,:;\-–]+'), '');
+        rest = rest.replaceFirst(RegExp(r'[\s,.;:!?–-]+$'), '');
+        if (rest.trim().isEmpty) return '';
         return rest.trim();
       }
     }
@@ -455,7 +463,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await _speakAndWait("Local search is turned off in Settings.");
       return;
     }
-    final trimmed = question.trim();
+    var trimmed = _localSearchQuestion(question);
+    if (!_hasLocalSearchPrefix(question)) {
+      trimmed = question.trim();
+    }
     if (trimmed.isEmpty) {
       setState(() {
         _localSearchPending = true;

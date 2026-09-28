@@ -184,6 +184,7 @@ class ResearchAssistantService {
   List<LocalSearchSource> _parseSources(dynamic raw) {
     if (raw is! List) return <LocalSearchSource>[];
     final sources = <LocalSearchSource>[];
+    final seenTitles = <String>{};
     for (final item in raw) {
       if (item is! Map) continue;
       final file = (item['file'] ?? '').toString();
@@ -194,6 +195,7 @@ class ResearchAssistantService {
         if (dot > 0) base = base.substring(0, dot);
         title = base.replaceAll('_', ' ');
       }
+      if (!seenTitles.add(title.toLowerCase())) continue;
       sources.add(LocalSearchSource(
         file: file,
         folder: (item['folder'] ?? '').toString(),
