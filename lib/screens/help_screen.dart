@@ -237,6 +237,11 @@ class HelpScreen extends StatelessWidget {
                 'to send the log file, such as email or messaging. '
                 'Detailed logging is on by default, so the log shows '
                 'exactly what happened.'),
+            _body('If local search keeps saying the computer is not '
+                'reachable although it is on, allow unrestricted battery '
+                'for A.R.Y.A: Settings, Apps, A.R.Y.A, Battery, '
+                'Unrestricted. Battery saving can cut network '
+                'connections.'),
 
             _heading('About'),
             _body('A.R.Y.A - Adaptive Real-time Yielding Assistant. '

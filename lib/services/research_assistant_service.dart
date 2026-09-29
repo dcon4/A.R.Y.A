@@ -100,18 +100,26 @@ class ResearchAssistantService {
   }
 
   Future<bool> checkReachable() async {
-    try {
-      final address = await getAddress();
-      final response = await http
-          .get(Uri.parse('$address/api/status'))
-          .timeout(const Duration(seconds: 6));
-      if (response.statusCode != 200) return false;
-      final data = jsonDecode(response.body);
-      return data['ok'] == true;
-    } catch (e) {
-      _logger.log('LocalSearch', 'Status check failed: $e');
-      return false;
+    final address = await getAddress();
+    // 10s per try, one retry after 2 seconds: a single dropped first
+    // packet must not read as "the computer is not reachable".
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse('$address/api/status'))
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) return false;
+        final data = jsonDecode(response.body);
+        return data['ok'] == true;
+      } catch (e) {
+        _logger.log('LocalSearch',
+            'Status check attempt $attempt failed (${e.runtimeType}): $e');
+        if (attempt == 1) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
     }
+    return false;
   }
 
   Future<LocalSearchResult> ask(
@@ -130,15 +138,7 @@ class ResearchAssistantService {
       if (provider.isNotEmpty) body['provider'] = provider;
       if (history.isNotEmpty) body['history'] = history;
 
-      final response = await http
-          .post(
-            Uri.parse('$address/api/ask'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          // 300s: the local model needs ~10s to load after the PC boots,
-          // and a cold disk adds more on top of the answer time.
-          .timeout(const Duration(seconds: 300));
+      final response = await _postAskWithRetry(Uri.parse('$address/api/ask'), body);
 
       if (response.statusCode == 400) {
         return _failure('The question was empty.', <LocalSearchSource>[]);
@@ -186,18 +186,50 @@ final data = jsonDecode(response.body);
         model: servedModel,
         provider: servedProvider,
       );
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      _logger.error('LocalSearch', 'Ask timed out after both attempts (${e.runtimeType})', e);
       return _failure(
           'Your computer is not reachable. Check that it is on and on the '
           'same wifi, then try again.',
           <LocalSearchSource>[]);
     } catch (e) {
-      _logger.error('LocalSearch', 'Ask failed', e);
+      _logger.error('LocalSearch', 'Ask failed (${e.runtimeType})', e);
       return _failure(
           'Your computer is not reachable. Check that it is on and on the '
           'same wifi, then try again.',
           <LocalSearchSource>[]);
     }
+  }
+
+  /// POST the ask request. A connection-level failure (dropped packet,
+  /// refused socket, timeout) is retried once after a 2 second pause
+  /// before the "not reachable" message is produced. Every attempt is
+  /// logged with the exact exception type so the debug log can tell
+  /// connect-refused from timeout from anything else.
+  Future<http.Response> _postAskWithRetry(
+      Uri uri, Map<String, dynamic> body) async {
+    Object? lastError;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(body),
+            )
+            // 300s: the local model needs ~10s to load after the PC boots,
+            // and a cold disk adds more on top of the answer time.
+            .timeout(const Duration(seconds: 300));
+      } catch (e) {
+        lastError = e;
+        _logger.log('LocalSearch',
+            'Ask attempt $attempt failed (${e.runtimeType}): $e');
+        if (attempt < 2) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+    }
+    throw lastError ?? Exception('ask failed');
   }
 
   LocalSearchResult _failure(String error, List<LocalSearchSource> sources) {

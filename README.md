@@ -64,7 +64,10 @@ exist.
   answer was found. No password; only works at home. The provider list
   includes "Local model (this computer)" so answers can come from a
   model running on the PC itself - private, nothing sent online,
-  slower, and the computer must be on.
+  slower, and the computer must be on. If the computer seems
+  unreachable although it is on, set A.R.Y.A's battery use to
+  Unrestricted (Settings, Apps, A.R.Y.A, Battery) - battery saving can
+  cut network connections.
 - Memory: "remember I have two cats", "what do you remember",
   "forget cats", "clear my memories".
 - Conversations are saved automatically as text files to your selected
