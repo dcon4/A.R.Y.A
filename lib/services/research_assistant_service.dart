@@ -29,6 +29,7 @@ class LocalSearchResult {
   final String error;
   final List<LocalSearchSource> sources;
   final String model;
+  final String provider;
 
   const LocalSearchResult({
     required this.ok,
@@ -36,6 +37,7 @@ class LocalSearchResult {
     required this.error,
     required this.sources,
     required this.model,
+    required this.provider,
   });
 }
 
@@ -144,13 +146,14 @@ class ResearchAssistantService {
             'The computer answered with an error.', <LocalSearchSource>[]);
       }
 
-      final data = jsonDecode(response.body);
+final data = jsonDecode(response.body);
       final sources = _parseSources(data['sources']);
       final servedModel = (data['model'] ?? '').toString();
+      final servedProvider = (data['provider'] ?? '').toString();
       final echoed = data['history'];
       final keptTurns = echoed is List ? echoed.length : 0;
       _logger.log('LocalSearch',
-          'Answer ok=${data['ok'] == true} sources=${sources.length} model=$servedModel history kept=$keptTurns of ${history.length}');
+          'Answer ok=${data['ok'] == true} sources=${sources.length} model=$servedModel provider=$servedProvider history kept=$keptTurns of ${history.length}');
 
       if (data['ok'] != true) {
         var error = (data['error'] ?? '').toString();
@@ -165,10 +168,12 @@ class ResearchAssistantService {
           error: error,
           sources: sources,
           model: servedModel,
+          provider: servedProvider,
         );
       }
 
       final answer = (data['answer'] ?? '').toString();
+      final servedProvider = (data['provider'] ?? '').toString();
       if (answer.trim().isEmpty) {
         return _failure('The computer returned an empty answer.', sources);
       }
@@ -178,6 +183,7 @@ class ResearchAssistantService {
         error: '',
         sources: sources,
         model: servedModel,
+        provider: servedProvider,
       );
     } on TimeoutException {
       return _failure(

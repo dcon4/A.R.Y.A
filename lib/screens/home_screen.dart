@@ -542,6 +542,8 @@ class _HomeScreenState extends State<HomeScreen> {
         userQuery: trimmed,
         aiResponse: screenText,
         model: result.model.isNotEmpty ? result.model : 'local search',
+        provider: result.provider.isNotEmpty ? result.provider : 'local search',
+        routingCategory: 'local_search',
       ));
       try {
         await conversationService.autoSave();
@@ -655,20 +657,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'reasoning';
   }
 
-  Future<({String providerId, String model})> _resolveRoute(String query) async {
+  Future<({String providerId, String model, String routingCategory})> _resolveRoute(String query) async {
     final prefs = await SharedPreferences.getInstance();
     final autoRoute = prefs.getBool('auto_route_enabled') ?? false;
     if (!autoRoute) {
       final pid = await getSelectedProviderId();
       final m = await getModel();
-      return (providerId: pid, model: m);
+      return (providerId: pid, model: m, routingCategory: 'manual');
     }
     final category = _classifyQuery(query);
     final pid = await getRoutingProviderId(category);
     final m = await getRoutingModel(category);
     final resolvedPid = pid.isNotEmpty ? pid : await getSelectedProviderId();
     final resolvedModel = m.isNotEmpty ? m : (await getModel());
-    return (providerId: resolvedPid, model: resolvedModel);
+    return (providerId: resolvedPid, model: resolvedModel, routingCategory: category);
   }
 
   Future<void> _speakAndWait(String text) {
@@ -1455,6 +1457,8 @@ class _HomeScreenState extends State<HomeScreen> {
           userQuery: query,
           aiResponse: response,
           model: route.model,
+          provider: route.providerId,
+          routingCategory: route.routingCategory,
         ));
 
         // Auto-save if enabled

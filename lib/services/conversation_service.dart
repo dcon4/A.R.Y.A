@@ -6,12 +6,16 @@ class ConversationEntry {
   final String userQuery;
   final String aiResponse;
   final String model;
+  final String provider;
+  final String routingCategory;
   final DateTime timestamp;
 
   ConversationEntry({
     required this.userQuery,
     required this.aiResponse,
     required this.model,
+    this.provider = '',
+    this.routingCategory = '',
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }
@@ -79,9 +83,15 @@ class ConversationService {
   String buildContent(String subject) {
     final firstModel =
         _entries.isNotEmpty ? _entries.first.model : 'unknown';
+    final firstProvider =
+        _entries.isNotEmpty ? _entries.first.provider : 'unknown';
+    final firstRoutingCategory =
+        _entries.isNotEmpty ? _entries.first.routingCategory : 'unknown';
     final buffer = StringBuffer();
     buffer.writeln('Subject: $subject');
     buffer.writeln('Model: $firstModel');
+    buffer.writeln('Provider: $firstProvider');
+    buffer.writeln('Routing: $firstRoutingCategory');
     buffer.writeln('Date: ${_formatDateTime(DateTime.now())}');
     buffer.writeln('---');
     buffer.writeln('');
@@ -90,7 +100,7 @@ class ConversationService {
       buffer.writeln('--- User ---');
       buffer.writeln(entry.userQuery);
       buffer.writeln('');
-      buffer.writeln('--- ARYA (${entry.model}) ---');
+      buffer.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
       buffer.writeln(entry.aiResponse);
       buffer.writeln('');
     }
@@ -158,7 +168,7 @@ class ConversationService {
     content.writeln('--- User ---');
     content.writeln(entry.userQuery);
     content.writeln('');
-    content.writeln('--- ARYA (${entry.model}) ---');
+    content.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
     content.writeln(entry.aiResponse);
     content.writeln('');
     await file.writeAsString(content.toString(), mode: FileMode.append);
