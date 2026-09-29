@@ -173,7 +173,6 @@ final data = jsonDecode(response.body);
       }
 
       final answer = (data['answer'] ?? '').toString();
-      final servedProvider = (data['provider'] ?? '').toString();
       if (answer.trim().isEmpty) {
         return _failure('The computer returned an empty answer.', sources);
       }
@@ -206,6 +205,7 @@ final data = jsonDecode(response.body);
       error: error,
       sources: sources,
       model: '',
+      provider: '',
     );
   }
 
