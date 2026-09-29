@@ -127,6 +127,11 @@ When the user asks a research question, you must present a balanced view:
 
   final _logger = DebugLogger();
 
+  /// What actually served the last request. May differ from the planned
+  /// route when a rate-limit fallback or a model recovery kicked in.
+  String lastServedProviderId = '';
+  String lastServedModel = '';
+
   Future<String?> chatGPTAPI(
     String prompt, {
     List<Map<String, String>>? history,
@@ -192,6 +197,9 @@ When the user asks a research question, you must present a balanced view:
       if (webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online')) {
         model = '$model:online';
       }
+
+      lastServedProviderId = resolvedProviderId;
+      lastServedModel = model;
 
       _logger.log('OpenAIService', 'Sending request to $resolvedBaseUrl model=$model');
 
@@ -266,6 +274,7 @@ When the user asks a research question, you must present a balanced view:
           );
           if (retry.statusCode == 200) {
             _logger.log('OpenAIService', 'API response OK after model recovery (${retry.body.length} chars)');
+            lastServedModel = recovery.model;
             var content = _extractContent(retry.body);
             if (content == null || content.isEmpty) {
               _logger.error('OpenAIService', 'Recovered model returned empty content: ${_debugChoices(retry.body)}');
@@ -288,7 +297,7 @@ When the user asks a research question, you must present a balanced view:
           model,
           messages,
           maxTokens,
-          webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online'),
+          webSearch,
         );
         if (fallback != null) {
           _logger.log('OpenAIService', 'Fallback provider succeeded');
@@ -488,7 +497,20 @@ When the user asks a research question, you must present a balanced view:
     }
   }
 
+  /// Providers that serve capable models without metered billing. Used to
+  /// order fallback candidates free-first so a switch rarely spends credits.
+  static const List<String> _freeTierProviderIds = [
+    'groq',
+    'cerebras',
+    'nim',
+    'zen',
+    'kilo_code',
+    'kiloworks_ai',
+  ];
+
   /// Try other providers with API keys when rate limited (429).
+  /// [webSearch] is the raw user intent — each candidate decides for itself
+  /// whether it can honour it, because only some support the `:online` suffix.
   Future<String?> _tryFallbackProviders(
     String currentProviderId,
     String model,
@@ -496,9 +518,22 @@ When the user asks a research question, you must present a balanced view:
     int? maxTokens,
     bool webSearch,
   ) async {
-    // Get all providers with valid API keys (except current)
-    final allProviders = providers.apiProviders.where((p) => p.id != currentProviderId);
-    for (final p in allProviders) {
+    // Free-tier providers first (registry order preserved inside each group).
+    final allProviders =
+        providers.apiProviders.where((p) => p.id != currentProviderId);
+    final candidates = [
+      ...allProviders.where((p) => _freeTierProviderIds.contains(p.id)),
+      ...allProviders.where((p) => !_freeTierProviderIds.contains(p.id)),
+    ];
+
+    // Cap the attempts: each try can take up to 60s and a voice user is
+    // waiting. Three is enough to get past a single rate-limited provider.
+    var attempts = 0;
+    for (final p in candidates) {
+      if (attempts >= 3) {
+        _logger.log('OpenAIService', 'Fallback attempt cap (3) reached — giving up');
+        break;
+      }
       final apiKey = await providers.getApiKeyForProvider(p.id);
       if (apiKey.isEmpty) continue;
       if (p.id == 'custom') {
@@ -508,23 +543,25 @@ When the user asks a research question, you must present a balanced view:
 
       _logger.log('OpenAIService', 'Trying fallback provider: ${p.id}');
       try {
-        var fallbackModel = p.defaultModel;
-        // If the original model exists on this provider, use it
-        final hasModel = p.models.any((m) => m.id == model);
-        if (hasModel) {
-          fallbackModel = model;
-        }
+        // Match against the bare model name — the original may carry a
+        // ":online" suffix added by the web-search pass above.
+        final bareModel = model.replaceFirst(RegExp(r':online$'), '');
+        final fallbackModel = _pickFallbackModel(p, bareModel);
 
-        // Add :online if web search and provider supports it
+        // Honour the raw web-search intent per candidate.
         var finalModel = fallbackModel;
-        if (webSearch && p.supportsWebSearch && !fallbackModel.contains(':online')) {
-          finalModel = '$fallbackModel:online';
+        if (webSearch && p.supportsWebSearch && !finalModel.contains(':online')) {
+          finalModel = '$finalModel:online';
+        }
+        if (finalModel.isEmpty) {
+          _logger.log('OpenAIService', 'Fallback ${p.id} has no model configured, skipping');
+          continue;
         }
 
         final baseUrl = await providers.getBaseUrlForProvider(p.id);
         final requiresReferer = providers.getRequiresRefererForProvider(p.id);
-        final apiKey = await providers.getApiKeyForProvider(p.id);
 
+        attempts++;
         final response = await _postChat(
           baseUrl: baseUrl,
           apiKey: apiKey,
@@ -535,23 +572,97 @@ When the user asks a research question, you must present a balanced view:
         );
 
         if (response.statusCode == 200) {
-          var content = _extractContent(response.body);
+          final content = _extractContent(response.body);
           if (content != null && content.isNotEmpty) {
-            _logger.log('OpenAIService', 'Fallback to ${p.id} succeeded');
-            // Persist the working provider/model
-            await providers.setSelectedProviderId(p.id);
-            await providers.setModel(finalModel);
-            return '$content\n\nNote: ARYA switched to ${p.name} (${finalModel}) because your primary provider was rate limited.';
+            _logger.log('OpenAIService', 'Fallback to ${p.id} ($finalModel) succeeded');
+            // Persist the working provider/model everywhere, including the
+            // per-category routing pairs that still point at the blocked one.
+            await _persistFallbackChoice(currentProviderId, model, p.id, finalModel);
+            lastServedProviderId = p.id;
+            lastServedModel = finalModel;
+            var answer =
+                '$content\n\nNote: ARYA switched to ${p.name} ($finalModel) because your primary provider was rate limited.';
+            if (_isPaidChoice(p, finalModel)) {
+              answer +=
+                  ' Heads up: $finalModel uses paid credits. You can pick another model in Settings.';
+            }
+            return answer;
           }
+          _logger.log('OpenAIService', 'Fallback ${p.id} returned empty content, trying next...');
         } else if (response.statusCode == 429) {
           _logger.log('OpenAIService', 'Fallback ${p.id} also rate limited, trying next...');
-          continue;
+        } else {
+          _logger.log('OpenAIService', 'Fallback ${p.id} HTTP ${response.statusCode}, trying next...');
         }
       } catch (e) {
         _logger.log('OpenAIService', 'Fallback ${p.id} error: $e');
       }
     }
     return null;
+  }
+
+  /// Pick the model a fallback candidate should use: the original model when
+  /// the provider carries it, otherwise that provider's first free model,
+  /// otherwise the provider default.
+  String _pickFallbackModel(providers.ApiProvider p, String bareModel) {
+    if (p.models.any((m) => m.id == bareModel)) return bareModel;
+    for (final m in p.models) {
+      final label = m.label.toLowerCase();
+      if (m.id.contains(':free') || (label.contains('free') && !label.contains('paid'))) {
+        return m.id;
+      }
+    }
+    return p.defaultModel;
+  }
+
+  /// True when the chosen model bills paid credits. Free-tier providers and
+  /// custom endpoints count as free (flat-rate or self-hosted).
+  bool _isPaidChoice(providers.ApiProvider p, String modelId) {
+    if (_freeTierProviderIds.contains(p.id) || p.id == 'custom') return false;
+    final bare = modelId.replaceFirst(RegExp(r':online$'), '');
+    final matches = p.models.where((m) => m.id == bare);
+    if (matches.isNotEmpty) {
+      final label = matches.first.label.toLowerCase();
+      if (label.contains('paid')) return true;
+      if (label.contains('free')) return false;
+    }
+    if (p.id == 'openrouter') return !modelId.contains(':free');
+    if (p.id == 'openai' || p.id == 'deepseek') return true;
+    return false;
+  }
+
+  /// Persist a successful fallback: the global provider/model plus every
+  /// per-category routing pair that still points at the blocked provider,
+  /// so smart routing does not keep hitting the same rate limit.
+  Future<void> _persistFallbackChoice(
+    String failedProviderId,
+    String failedModel,
+    String newProviderId,
+    String newModel,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_provider', newProviderId);
+    await prefs.setString('api_model', newModel);
+    final bareNew = newModel.replaceFirst(RegExp(r':online$'), '');
+    final newProvider = providers.apiProviders.firstWhere(
+      (p) => p.id == newProviderId,
+      orElse: () => providers.apiProviders.first,
+    );
+    for (final category in ['quick', 'reasoning', 'creative', 'coding']) {
+      final rp = prefs.getString('routing_${category}_provider_id') ?? '';
+      if (rp != failedProviderId) continue;
+      final rm = prefs.getString('routing_${category}_model') ?? '';
+      final bareRm = rm.replaceFirst(RegExp(r':online$'), '');
+      // Keep the category's own model when the new provider carries it,
+      // otherwise point it at the model that just worked.
+      final keepModel = bareRm.isNotEmpty && newProvider.models.any((m) => m.id == bareRm);
+      final targetModel = keepModel ? bareRm : bareNew;
+      await prefs.setString('routing_${category}_provider_id', newProviderId);
+      await prefs.setString('routing_${category}_model', targetModel);
+      _logger.log('OpenAIService', 'Repaired $category routing -> $newProviderId / $targetModel');
+    }
+    clearCachedSettings();
+    _logger.log('OpenAIService', 'Persisted fallback $newProviderId / $newModel (was $failedProviderId / $failedModel)');
   }
 
   Future<void> _persistModel(String providerId, String model, String badModel) async {

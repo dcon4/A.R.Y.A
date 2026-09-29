@@ -1423,7 +1423,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Determine route (provider + model)
       final route = await _resolveRoute(query);
-      _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
+      _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model} (routing: ${route.routingCategory})');
 
       final isResearch = classification?.isResearch ?? false;
 
@@ -1438,6 +1438,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
+      if (openaiService.lastServedProviderId.isNotEmpty &&
+          (openaiService.lastServedProviderId != route.providerId ||
+              openaiService.lastServedModel != route.model)) {
+        _logger.log('HomeScreen',
+            'Served by ${openaiService.lastServedProviderId} / ${openaiService.lastServedModel} (route was ${route.providerId} / ${route.model})');
+      }
 
       setState(() {
         generatedContent = response;
@@ -1456,8 +1462,12 @@ class _HomeScreenState extends State<HomeScreen> {
         conversationService.addEntry(ConversationEntry(
           userQuery: query,
           aiResponse: response,
-          model: route.model,
-          provider: route.providerId,
+          model: openaiService.lastServedModel.isNotEmpty
+              ? openaiService.lastServedModel
+              : route.model,
+          provider: openaiService.lastServedProviderId.isNotEmpty
+              ? openaiService.lastServedProviderId
+              : route.providerId,
           routingCategory: route.routingCategory,
         ));
 
