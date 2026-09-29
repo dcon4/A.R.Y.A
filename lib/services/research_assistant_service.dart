@@ -30,6 +30,7 @@ class LocalSearchResult {
   final List<LocalSearchSource> sources;
   final String model;
   final String provider;
+  final String scope;
 
   const LocalSearchResult({
     required this.ok,
@@ -38,6 +39,7 @@ class LocalSearchResult {
     required this.sources,
     required this.model,
     required this.provider,
+    this.scope = '',
   });
 }
 
@@ -122,18 +124,24 @@ class ResearchAssistantService {
     return false;
   }
 
+  /// Ask the computer's Research Assistant.
+  /// [scope] picks the search mode: 'public' searches the non-sensitive
+  /// folders (the answer may come from a cloud model), 'private' searches
+  /// only the private Keep folder and is always answered by the local
+  /// model on the PC.
   Future<LocalSearchResult> ask(
     String question, {
     List<Map<String, String>> history = const [],
+    String scope = 'public',
   }) async {
     final address = await getAddress();
     final model = await getModel();
     final provider = await getProvider();
     _logger.log(
-        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" model=${model.isEmpty ? 'server default' : model} provider=${provider.isEmpty ? 'auto' : provider} history=${history.length}');
+        'LocalSearch', 'Ask "${question.length > 60 ? question.substring(0, 60) : question}" scope=$scope model=${model.isEmpty ? 'server default' : model} provider=${provider.isEmpty ? 'auto' : provider} history=${history.length}');
 
     try {
-      final body = <String, dynamic>{'question': question};
+      final body = <String, dynamic>{'question': question, 'scope': scope};
       if (model.isNotEmpty) body['model'] = model;
       if (provider.isNotEmpty) body['provider'] = provider;
       if (history.isNotEmpty) body['history'] = history;
@@ -155,7 +163,7 @@ final data = jsonDecode(response.body);
       final echoed = data['history'];
       final keptTurns = echoed is List ? echoed.length : 0;
       _logger.log('LocalSearch',
-          'Answer ok=${data['ok'] == true} sources=${sources.length} model=$servedModel provider=$servedProvider history kept=$keptTurns of ${history.length}');
+          'Answer ok=${data['ok'] == true} scope=${(data['scope'] ?? '').toString()} sources=${sources.length} model=$servedModel provider=$servedProvider history kept=$keptTurns of ${history.length}');
 
       if (data['ok'] != true) {
         var error = (data['error'] ?? '').toString();
@@ -171,6 +179,7 @@ final data = jsonDecode(response.body);
           sources: sources,
           model: servedModel,
           provider: servedProvider,
+          scope: (data['scope'] ?? '').toString(),
         );
       }
 
@@ -185,6 +194,7 @@ final data = jsonDecode(response.body);
         sources: sources,
         model: servedModel,
         provider: servedProvider,
+        scope: (data['scope'] ?? '').toString(),
       );
     } on TimeoutException catch (e) {
       _logger.error('LocalSearch', 'Ask timed out after both attempts (${e.runtimeType})', e);

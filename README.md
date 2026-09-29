@@ -61,7 +61,10 @@ exist.
 - Local search: ask questions about the documents on your own computer
   over your home wifi - say "local search" followed by your question,
   or "ask my documents". ARYA answers out loud and names where the
-  answer was found. No password; only works at home. The provider list
+  answer was found. No password; only works at home. A second command,
+  "private search", looks only in your private folder and is always
+  answered by the model on the PC - the question and passages never
+  leave the computer. The provider list
   includes "Local model (this computer)" so answers can come from a
   model running on the PC itself - private, nothing sent online,
   slower, and the computer must be on. If the computer seems

@@ -79,6 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isConfirming = false;
   bool _localSearchPending = false;
   int _localSearchTurnsRemaining = 0;
+  // Search scope of the current local-search session: 'public' (the
+  // non-sensitive folders, cloud answer allowed) or 'private' (only the
+  // private Keep folder, always answered by the local model on the PC).
+  String _localSearchScope = 'public';
   Future<void> Function()? _retryAction;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
@@ -315,6 +319,9 @@ class _HomeScreenState extends State<HomeScreen> {
         lower.startsWith('ask my documents')) {
       return 'local_search';
     }
+    // Must come before the web-search keywords below: "private search"
+    // also contains the word "search".
+    if (lower.startsWith('private search')) return 'private_search';
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -335,13 +342,14 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasLocalSearchPrefix(String text) {
     final lower = text.trim().toLowerCase();
     return lower.startsWith('local search') ||
-        lower.startsWith('ask my documents');
+        lower.startsWith('ask my documents') ||
+        lower.startsWith('private search');
   }
 
   String _localSearchQuestion(String text) {
     final trimmed = text.trim();
     final lower = trimmed.toLowerCase();
-    for (final prefix in ['local search', 'ask my documents']) {
+    for (final prefix in ['local search', 'ask my documents', 'private search']) {
       if (lower.startsWith(prefix)) {
         var rest = trimmed.substring(prefix.length);
         rest = rest.replaceFirst(RegExp(r'^[\s,:;\-–]+'), '');
@@ -405,6 +413,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'local_search':
         await _handleLocalSearchCommand(text);
         break;
+      case 'private_search':
+        await _handleLocalSearchCommand(text, scope: 'private');
+        break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
         if (!(prefs.getBool('web_search_enabled') ?? false)) {
@@ -448,7 +459,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return true;
   }
 
-  Future<void> _handleLocalSearchCommand(String text) async {
+  Future<void> _handleLocalSearchCommand(String text,
+      {String scope = 'public'}) async {
+    // Remember the mode before the pending prompt: a bare "private
+    // search" gets its question in a later turn and must stay private.
+    _localSearchScope = scope;
     if (!await ResearchAssistantService.isEnabled()) {
       _localSearchTurnsRemaining = 0;
       await _speakAndWait("Local search is turned off in Settings.");
@@ -487,7 +502,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return turns;
   }
 
-  Future<void> _runLocalSearch(String question, {bool isTrigger = false}) async {
+  Future<void> _runLocalSearch(String question,
+      {bool isTrigger = false, String scope = ''}) async {
+    final searchScope = scope.isNotEmpty ? scope : _localSearchScope;
+    if (isTrigger) _localSearchScope = searchScope;
+    _logger.log(
+        'LocalSearch', 'Running search scope=$searchScope trigger=$isTrigger');
     if (!await ResearchAssistantService.isEnabled()) {
       _localSearchTurnsRemaining = 0;
       await _speakAndWait("Local search is turned off in Settings.");
@@ -517,20 +537,30 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = message;
         isLoading = false;
-        _retryAction = () => _runLocalSearch(trimmed, isTrigger: isTrigger);
+        _retryAction = () => _runLocalSearch(trimmed,
+            isTrigger: isTrigger, scope: searchScope);
       });
       await _speakAndWait(message);
       return;
     }
     final result = await ResearchAssistantService.instance
-        .ask(trimmed, history: _recentHistoryTurns());
-    final screenText = _localSearchScreenText(result);
-    final spoken = _localSearchSpeech(result);
+        .ask(trimmed, history: _recentHistoryTurns(), scope: searchScope);
+    final answerScreen = _localSearchScreenText(result);
+    final answerSpoken = _localSearchSpeech(result);
+    // Name the mode back to the user on a private search.
+    final privateOk = result.ok && searchScope == 'private';
+    final screenText = privateOk
+        ? 'Private search, answered locally.\n\n$answerScreen'
+        : answerScreen;
+    final spoken =
+        privateOk ? 'Private search, answered locally. $answerSpoken' : answerSpoken;
     setState(() {
       generatedContent = screenText;
       isLoading = false;
-      _retryAction =
-          result.ok ? null : () => _runLocalSearch(trimmed, isTrigger: isTrigger);
+      _retryAction = result.ok
+          ? null
+          : () => _runLocalSearch(trimmed,
+              isTrigger: isTrigger, scope: searchScope);
       if (result.ok && isTrigger) {
         _localSearchTurnsRemaining = 3;
       }
@@ -546,7 +576,8 @@ class _HomeScreenState extends State<HomeScreen> {
         aiResponse: screenText,
         model: result.model.isNotEmpty ? result.model : 'local search',
         provider: result.provider.isNotEmpty ? result.provider : 'local search',
-        routingCategory: 'local_search',
+        routingCategory:
+            searchScope == 'private' ? 'private_search' : 'local_search',
       ));
       try {
         await conversationService.autoSave();
@@ -1516,8 +1547,9 @@ class _HomeScreenState extends State<HomeScreen> {
       await _runLocalSearch(text, isTrigger: true);
       return;
     }
-    if (_detectVoiceCommand(text) == 'local_search') {
-      await _handleLocalSearchCommand(text);
+    final textCmd = _detectVoiceCommand(text);
+    if (textCmd == 'local_search' || textCmd == 'private_search') {
+      await _handleVoiceCommand(text);
       return;
     }
     lastWords = text;
@@ -1654,6 +1686,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _isConfirming = false;
       _localSearchPending = false;
       _localSearchTurnsRemaining = 0;
+      _localSearchScope = 'public';
       _retryAction = null;
       _pendingClassification = null;
       _pendingQuery = '';

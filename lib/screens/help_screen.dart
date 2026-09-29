@@ -130,6 +130,15 @@ class HelpScreen extends StatelessWidget {
                 'example "local search where is my passport" - typing '
                 'the same words works too'),
             _bullet('"ask my documents" works the same way'),
+            _bullet('"local search" looks at your everyday documents and '
+                'never searches the Internet - the answer itself may be '
+                'written by a cloud model, which is fine for these '
+                'folders'),
+            _bullet('"private search" followed by your question looks '
+                'only in your private folder and is always answered by '
+                'the model on the computer - the question and the found '
+                'passages never leave the PC, and ARYA says "Private '
+                'search, answered locally" first'),
             _bullet('If you say only the command, ARYA asks what to '
                 'search for and listens for your question'),
             _bullet('ARYA says the answer, then names where it was '
