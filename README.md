@@ -36,9 +36,11 @@ exist.
 - Wake word: say "hey rhasspy" to open the mic without touching the
   phone (on-device detection, runs offline).
 - Multiple AI providers: OpenRouter, OpenAI, Groq, DeepSeek, Cerebras,
-  or a custom OpenAI-compatible endpoint. Model lists are fetched live
-  from each provider; a "Free Models Only" filter helps you stay on
-  free tiers.
+  NVIDIA NIM, OpenCode Zen, Kilo Code, Cloudflare Workers AI, or a
+  custom OpenAI-compatible endpoint. Model lists are fetched live from
+  each provider; a "Free Models Only" filter helps you stay on free
+  tiers. If a provider is rate limited, ARYA automatically switches to
+  another saved provider - free ones first - and says so.
 - Auto-route: questions are sorted into Coding, Quick, Creative, or
   Reasoning, and each category can use its own provider and model. If a
   model ever disappears, ARYA swaps in a working one - preferring free
@@ -63,7 +65,8 @@ exist.
 - Memory: "remember I have two cats", "what do you remember",
   "forget cats", "clear my memories".
 - Conversations are saved automatically as text files to your selected
-  folder and can be shared from the app.
+  folder and can be shared from the app. Every saved reply records the
+  provider, model, and routing category that produced it.
 - Voice command: say "new conversation" to start a fresh chat - the
   same as the button, and the current chat is saved first.
 - Debug log sharing: a bug-report icon in the top bar sends the current
@@ -164,7 +167,7 @@ flutter run
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
 | Text to Speech | Voice, speed, and related playback options |
 | Brave Search | Web results injected into the prompt; optional research-only mode |
-| Local Search | On/off, your computer's address, and which model to use |
+| Local Search | On/off, your computer's address, and the provider/model to use |
 | Memory | How ARYA stores and recalls facts you tell her |
 | Wake Word | "hey rhasspy" hands-free mic |
 | Background Service | Notification/widget controls (mic, new conversation, Brave, provider) |
@@ -181,7 +184,8 @@ Every time a question reaches the AI (instead of weather, web search,
 or memory commands), ARYA picks two things: which company or service
 answers (the provider, like OpenRouter or Groq), and which brain it
 uses (the model). The choice appears in the debug log as a line
-starting with "Route:", so you can always see which provider and model
+starting with "Route:". When a different provider answers instead -
+because the first one was busy - a "Served by" line shows what
 actually answered.
 
 Routing lives in two places in Settings: the Model section (your main
@@ -205,6 +209,12 @@ the fallback for every question when auto-route is on.
   left falls back to a paid one - telling you in the spoken answer that
   the new model uses paid credits. Category rows pointing at the dead
   model are repaired automatically too.
+- Rate limit: if a provider answers "too many requests", ARYA tries
+  your other saved providers automatically - free ones first, up to
+  three attempts - saves the one that worked (repairing any category
+  rows that pointed at the busy provider), and adds a note naming the
+  switch, with a paid-credits warning when it had to leave the free
+  tier.
 
 ### Auto-route
 
@@ -261,8 +271,10 @@ Save to apply.
 
 ### If something seems wrong
 
-- Check the log's "Route:" line - it always shows the provider and
-  model that actually answered.
+- Check the log's "Route:" line for the planned choice and the "Served
+  by" line for what actually answered when they differ.
+- If you heard "ARYA switched to ..." the main provider was rate
+  limited and another saved provider answered instead.
 - If a model was replaced behind your back, the log says "Saved
   recovered model ..." or "Repaired routing model ...".
 - If you heard a note about a retired free model and paid credits,

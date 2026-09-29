@@ -154,6 +154,9 @@ class HelpScreen extends StatelessWidget {
                 'first, so nothing is lost'),
             _bullet('The save button exports the current conversation so '
                 'you can share it'),
+            _bullet('Every saved reply notes the provider, model, and '
+                'routing category that produced it, so a shared '
+                'transcript shows where each answer came from'),
             _bullet('The speaker icon on the last answer replays it'),
 
             _heading('Settings at a glance'),
@@ -167,7 +170,7 @@ class HelpScreen extends StatelessWidget {
             _bullet('Text to Speech: voice and speed'),
             _bullet('Brave Search: web results for research questions'),
             _bullet('Local Search: on or off, the computer address, '
-                'and which model to use'),
+                'and which provider and model to use'),
             _bullet('Memory: what ARYA stores about you'),
             _bullet('Wake Word: hands-free "hey rhasspy"'),
             _bullet('Settings Backup: export and import everything'),
@@ -220,6 +223,11 @@ class HelpScreen extends StatelessWidget {
                 'connection - a Retry button appears under the answer. '
                 'Tap it to send the same request again without '
                 'repeating or retyping it.'),
+            _body('If a provider is busy - it answers "too many '
+                'requests" - ARYA switches to another provider you have '
+                'saved a key for, trying free ones first. Nothing is '
+                'needed from you: the answer ends with a short note '
+                'naming the provider it switched to.'),
             _body('Tap the bug-report icon in the top bar and choose how '
                 'to send the log file, such as email or messaging. '
                 'Detailed logging is on by default, so the log shows '
@@ -287,8 +295,11 @@ class RoutingHelpScreen extends StatelessWidget {
                 'things: which company or service answers (the provider, '
                 'like OpenRouter or Groq), and which brain it uses (the '
                 'model). The choice is written to the debug log as a line '
-                'starting with "Route:", so you can always see afterwards '
-                'which provider and model actually answered.'),
+                'starting with "Route:". If a different provider answers '
+                'instead - because the first one was busy - a "Served by" '
+                'line shows what actually answered, and the saved '
+                'conversation records the provider, model, and routing '
+                'category behind every reply.'),
             _body('Routing settings live in two places in Settings: the '
                 'Model section for your main provider and model choice, '
                 'and the Model Routing section for the auto-route switch '
@@ -315,6 +326,13 @@ class RoutingHelpScreen extends StatelessWidget {
                 'spoken answer that the new model uses paid credits. '
                 'Category rows pointing at the dead model are repaired '
                 'automatically too.'),
+            _bullet('Rate limit: if a provider says "too many requests", '
+                'ARYA automatically tries your other saved providers, '
+                'free ones first, up to three attempts. It saves the one '
+                'that worked - including any category rows that pointed '
+                'at the busy provider - and the answer ends with a note '
+                'naming the switch, plus a paid-credits warning if it '
+                'had to use a paid model.'),
 
             _heading('Auto-route'),
             _body('Auto-route sorts every question into one of four '
@@ -388,8 +406,12 @@ class RoutingHelpScreen extends StatelessWidget {
                 'suffix, extra credits'),
 
             _heading('If something seems wrong'),
-            _bullet('Check the log "Route:" line - it always shows the '
-                'provider and model that actually answered'),
+            _bullet('Check the log "Route:" line for the planned choice, '
+                'and the "Served by" line for what actually answered when '
+                'they differ'),
+            _bullet('If you heard "ARYA switched to ..." the main '
+                'provider was rate limited and another saved provider '
+                'answered instead'),
             _bullet('If a model was replaced behind your back, the log '
                 'says "Saved recovered model ..." or "Repaired routing '
                 'model ..."'),
