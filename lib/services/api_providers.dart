@@ -168,7 +168,7 @@ final List<ApiProvider> apiProviders = [
   ApiProvider(
     id: 'kiloworks_ai',
     name: 'Cloudflare Workers AI',
-    baseUrl: 'https://api.cloudflare.com/ai/v1',
+    baseUrl: 'https://api.cloudflare.com/client/v4/accounts',
     defaultModel: '@cf/llama-3.1-8b-instruct-q4k',
     models: const [
       ApiModel(
@@ -268,6 +268,12 @@ Future<String> getBaseUrlForProvider(String providerId) async {
   if (provider.id == 'custom') {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('api_custom_base_url') ?? '';
+  }
+  if (provider.id == 'cloudflare' || provider.id == 'kiloworks_ai') {
+    final prefs = await SharedPreferences.getInstance();
+    final accountId = prefs.getString('cloudflare_account_id') ?? '';
+    if (accountId.isEmpty) return provider.baseUrl;
+    return '${provider.baseUrl}/$accountId/ai/v1';
   }
   return provider.baseUrl;
 }

@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _researchPromptController = TextEditingController();
   final TextEditingController _weatherZipController = TextEditingController();
   final TextEditingController _localSearchAddressController = TextEditingController();
+  final TextEditingController _cloudflareAccountIdController = TextEditingController();
   bool _localSearchEnabled = false;
   String _localSearchModelId = '';
   String _localSearchProviderId = '';
@@ -98,6 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
       _weatherZipController.text = prefs.getString('weather_zip_code') ?? '';
+      _cloudflareAccountIdController.text = prefs.getString('cloudflare_account_id') ?? '';
       // Show what is actually in effect: the saved text, or the default.
       _researchAnnouncementController.text = savedResearchAnnouncement.isNotEmpty
           ? savedResearchAnnouncement
@@ -140,6 +142,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (provider.id == 'custom') {
       await prefs.setString('api_custom_base_url', _customBaseUrlController.text.trim());
+    }
+    if (provider.id == 'cloudflare' || provider.id == 'kiloworks_ai') {
+      await prefs.setString('cloudflare_account_id', _cloudflareAccountIdController.text.trim());
     }
 
     await prefs.setString('system_prompt', _systemPromptController.text.trim());
@@ -436,6 +441,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
             fontFamily: 'Cera Pro',
           ),
           labelText: "Base URL",
+          labelStyle: const TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontFamily: 'Cera Pro',
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: MyAppTheme.mainFontColor,
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloudflareAccountIdField() {
+    if (_selectedProviderId != 'cloudflare' && _selectedProviderId != 'kiloworks_ai') {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: TextField(
+        controller: _cloudflareAccountIdController,
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Cera Pro',
+          fontSize: 15,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+          hintText: "Your Cloudflare account ID (from dash.cloudflare.com)",
+          hintStyle: TextStyle(
+            color: Colors.grey[600],
+            fontFamily: 'Cera Pro',
+          ),
+          labelText: "Cloudflare Account ID",
           labelStyle: const TextStyle(
             color: MyAppTheme.mainFontColor,
             fontFamily: 'Cera Pro',
@@ -2812,6 +2871,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildProviderSelector(),
             _buildApiKeyField(),
             _buildCustomBaseUrlField(),
+            _buildCloudflareAccountIdField(),
             _buildSaveButton(),
             const SizedBox(height: 32),
             _buildSystemPromptSection(),
