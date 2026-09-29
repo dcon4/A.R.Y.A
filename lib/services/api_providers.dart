@@ -91,12 +91,12 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'openai/gpt-oss-20b',
     models: const [
-      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (Groq)'),
-      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (Groq)'),
-      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Groq)'),
-      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B'),
-      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant'),
-      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (legacy)'),
+      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (free)'),
+      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (free)'),
+      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (free)'),
+      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B (free)'),
+      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (free)'),
+      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (free)'),
     ],
   ),
   ApiProvider(
@@ -128,7 +128,7 @@ final List<ApiProvider> apiProviders = [
     models: const [
       ApiModel(
           id: 'openai/gpt-oss-20b',
-          label: 'GPT OSS 20B (NVIDIA NIM) - confirmed working on this account'),
+          label: 'GPT OSS 20B (free) - confirmed working on this account'),
     ],
   ),
   ApiProvider(

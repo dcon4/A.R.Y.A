@@ -112,7 +112,7 @@ class _ModelSelectorState extends State<ModelSelector> {
               .map((m) => {
                     'id': m.id,
                     'name': m.label,
-                    'is_free': m.label.contains('(free)'),
+                    'is_free': m.label.toLowerCase().contains('(free)'),
                     'supports_vision': false,
                   })
               .toList();
