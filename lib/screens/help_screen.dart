@@ -143,6 +143,11 @@ class HelpScreen extends StatelessWidget {
                 'follow-ups sooner'),
             _body('Turn it on and set the computer address under '
                 'Settings, Local Search.'),
+            _bullet('Choose provider "Local model (this computer)" to '
+                'have answers come from a model running on the PC itself '
+                '- nothing is sent online, it is private by design. It '
+                'is a little slower, and the computer must be on and the '
+                'model loaded'),
 
             _heading('Conversations'),
             _bullet('Say "new conversation" by voice for the same effect '

@@ -136,7 +136,9 @@ class ResearchAssistantService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 120));
+          // 300s: the local model needs ~10s to load after the PC boots,
+          // and a cold disk adds more on top of the answer time.
+          .timeout(const Duration(seconds: 300));
 
       if (response.statusCode == 400) {
         return _failure('The question was empty.', <LocalSearchSource>[]);

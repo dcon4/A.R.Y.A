@@ -123,9 +123,12 @@ class _HomeScreenState extends State<HomeScreen> {
     BackgroundService.setOnRotateProviderCallback(() async {
       final prefs = await SharedPreferences.getInstance();
       final currentId = prefs.getString('api_provider') ?? 'openrouter';
-      final currentIndex = apiProviders.indexWhere((p) => p.id == currentId);
-      final nextIndex = (currentIndex + 1) % apiProviders.length;
-      final next = apiProviders[nextIndex];
+      // 'local' is local-search only - its address exists on the PC, never
+      // on the phone, so it must never become the general-chat provider.
+      final selectable = apiProviders.where((p) => p.id != 'local').toList();
+      final currentIndex = selectable.indexWhere((p) => p.id == currentId);
+      final nextIndex = (currentIndex + 1) % selectable.length;
+      final next = selectable[nextIndex];
       await prefs.setString('api_provider', next.id);
       if (next.defaultModel.isNotEmpty) {
         await prefs.setString('api_model', next.defaultModel);

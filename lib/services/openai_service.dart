@@ -405,6 +405,9 @@ When the user asks a research question, you must present a balanced view:
   /// If the broken model was free, prefers a free replacement; reports
   /// [paidFallback] when it had to settle on a paid one.
   Future<_ModelRecovery?> _recoverModel(String providerId, String badModel) async {
+    // The local model is only reachable through the computer's Research
+    // Assistant (local search) - never as a general-chat provider.
+    if (providerId == 'local') return null;
     try {
       final apiKey = await providers.getApiKeyForProvider(providerId);
       if (apiKey.isEmpty) return null;
@@ -519,8 +522,10 @@ When the user asks a research question, you must present a balanced view:
     bool webSearch,
   ) async {
     // Free-tier providers first (registry order preserved inside each group).
-    final allProviders =
-        providers.apiProviders.where((p) => p.id != currentProviderId);
+    // 'local' is excluded: its address only exists on the computer, so it can
+    // never answer a phone-side chat request.
+    final allProviders = providers.apiProviders
+        .where((p) => p.id != currentProviderId && p.id != 'local');
     final candidates = [
       ...allProviders.where((p) => _freeTierProviderIds.contains(p.id)),
       ...allProviders.where((p) => !_freeTierProviderIds.contains(p.id)),

@@ -245,8 +245,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'cerebras': return 'cerebras_...';
       case 'nim': return 'nvapi-...';
       case 'zen': return 'sk-...';
-      case 'kilocode': return 'API key';
-      case 'cloudflare': return 'API key';
+      case 'kilo_code': return 'API key';
+      case 'kiloworks_ai': return 'API key';
       default: return 'API key';
     }
   }
@@ -260,8 +260,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'cerebras': return 'Get your API key at cloud.cerebras.ai. Fast inference for open models via OpenAI-compatible API.';
       case 'nim': return 'Get your API key at build.nvidia.com. NVIDIA NIM runs open models, paid per token.';
       case 'zen': return 'Get your API key at opencode.ai/auth. OpenCode Zen has free models - each one shows what it does with your text.';
-      case 'kilocode': return 'Get your API key at kilocode.org. Kilo Code provides access to various open-source models.';
-      case 'cloudflare': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
+      case 'kilo_code': return 'Get your API key at kilocode.org. Kilo Code provides access to various open-source models.';
+      case 'kiloworks_ai': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -309,7 +309,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontFamily: 'Cera Pro',
                 fontSize: 15,
               ),
-              items: providers.apiProviders.map((p) {
+              items: providers.apiProviders
+                  .where((p) => p.id != 'local')
+                  .map((p) {
                 return DropdownMenuItem(
                   value: p.id,
                   child: Text(p.name),
@@ -683,7 +685,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             (_apiKeyController.text.isNotEmpty ||
                 _selectedProviderId == 'nim' ||
                 _selectedProviderId == 'zen' ||
-                _selectedProviderId == 'cloudflare'))
+                _selectedProviderId == 'kiloworks_ai'))
           ModelSelector(
             key: ValueKey(_selectedProviderId),
             providerId: _selectedProviderId,
@@ -871,7 +873,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : 'Use my default model'),
             ),
             ...providers.apiProviders
-                .where((p) => p.id != 'custom')
+                .where((p) => p.id != 'custom' && p.id != 'local')
                 .map((p) {
               final keyless = hasKey[p.id] != true;
               return SimpleDialogOption(

@@ -64,7 +64,7 @@ class _ModelSelectorState extends State<ModelSelector> {
     // a phone-side key.
     final keyRequired = widget.providerId != 'nim' &&
         widget.providerId != 'zen' &&
-        widget.providerId != 'cloudflare';
+        widget.providerId != 'kiloworks_ai';
     if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
         _error = 'Enter an API key to fetch available models';
@@ -99,7 +99,7 @@ class _ModelSelectorState extends State<ModelSelector> {
         case 'nim':
           models = await _fetcher.fetchNvidiaNimModels(widget.apiKey);
           break;
-        case 'cloudflare':
+        case 'kiloworks_ai':
           models = await _fetcher.fetchCloudflareModels(widget.apiKey);
           break;
         case 'zen':
@@ -117,7 +117,7 @@ class _ModelSelectorState extends State<ModelSelector> {
                   })
               .toList();
           break;
-        case 'kilocode':
+        case 'kilo_code':
           models = await _fetcher.fetchKiloCodeModels(widget.apiKey);
           break;
         default:

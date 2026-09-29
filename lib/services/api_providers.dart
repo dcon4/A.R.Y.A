@@ -186,6 +186,17 @@ final List<ApiProvider> apiProviders = [
     ],
   ),
   ApiProvider(
+    id: 'local',
+    name: 'Local model (this computer)',
+    baseUrl: '',
+    defaultModel: 'gemma3:1b',
+    models: const [
+      ApiModel(
+          id: 'gemma3:1b',
+          label: 'Local: private, runs on this computer, nothing sent online'),
+    ],
+  ),
+  ApiProvider(
     id: 'custom',
     name: 'Custom',
     baseUrl: '',
@@ -221,6 +232,10 @@ Future<String> getRoutingModel(String category) async {
 }
 
 Future<void> setRouting(String category, String providerId, String model) async {
+  // 'local' only ever answers local-search questions through the computer's
+  // Research Assistant - its address does not exist on the phone, so it must
+  // never be routable for general chat.
+  if (providerId == 'local') return;
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString(_routingPrefProvider(category), providerId);
   await prefs.setString(_routingPrefModel(category), model);
@@ -296,6 +311,8 @@ bool providerSupportsWebSearch(String providerId) {
 
 /// Providers the computer's Research Assistant can answer with.
 /// Kept in the same order as the Research Assistant's own registry.
+/// 'local' is the model running on the PC itself - local search only,
+/// never offered for general chat (its address only exists on the PC).
 const List<String> localSearchProviderIds = [
   'openrouter',
   'groq',
@@ -303,6 +320,7 @@ const List<String> localSearchProviderIds = [
   'zen',
   'kilo_code',
   'kiloworks_ai',
+  'local',
 ];
 
 // --- Preference accessors ---

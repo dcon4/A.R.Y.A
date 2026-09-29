@@ -61,7 +61,10 @@ exist.
 - Local search: ask questions about the documents on your own computer
   over your home wifi - say "local search" followed by your question,
   or "ask my documents". ARYA answers out loud and names where the
-  answer was found. No password; only works at home.
+  answer was found. No password; only works at home. The provider list
+  includes "Local model (this computer)" so answers can come from a
+  model running on the PC itself - private, nothing sent online,
+  slower, and the computer must be on.
 - Memory: "remember I have two cats", "what do you remember",
   "forget cats", "clear my memories".
 - Conversations are saved automatically as text files to your selected
