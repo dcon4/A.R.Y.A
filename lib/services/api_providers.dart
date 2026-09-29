@@ -241,6 +241,11 @@ Future<String> getSelectedProviderId() async {
   return prefs.getString(_prefsProvider) ?? 'openrouter';
 }
 
+Future<void> setSelectedProviderId(String providerId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_prefsProvider, providerId);
+}
+
 Future<String> getApiKeyForProvider(String providerId) async {
   final provider = apiProviders.firstWhere(
     (p) => p.id == providerId,
