@@ -246,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'cerebras': return 'cerebras_...';
       case 'nim': return 'nvapi-...';
       case 'zen': return 'sk-...';
-      case 'kilo_code': return 'API key';
+      case 'kilo_code': return 'API key (optional)';
       case 'kiloworks_ai': return 'API key';
       default: return 'API key';
     }
@@ -261,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'cerebras': return 'Get your API key at cloud.cerebras.ai. Fast inference for open models via OpenAI-compatible API.';
       case 'nim': return 'Get your API key at build.nvidia.com. NVIDIA NIM runs open models, paid per token.';
       case 'zen': return 'Get your API key at opencode.ai/auth. OpenCode Zen has free models - each one shows what it does with your text.';
-      case 'kilo_code': return 'Get your API key at kilocode.org. Kilo Code provides access to various open-source models.';
+      case 'kilo_code': return 'No key needed for the free tier - leave the key blank to use Kilo\'s anonymous free models, or get a key at kilo.ai.';
       case 'kiloworks_ai': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }

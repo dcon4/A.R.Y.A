@@ -61,10 +61,11 @@ class _ModelSelectorState extends State<ModelSelector> {
   Future<void> _fetchModels() async {
     // NVIDIA NIM and Cloudflare publish their model lists openly, and
     // OpenCode Zen is served from the built-in registry - neither needs
-    // a phone-side key.
+    // a phone-side key. Kilo's gateway list is open too (anonymous tier).
     final keyRequired = widget.providerId != 'nim' &&
         widget.providerId != 'zen' &&
-        widget.providerId != 'kiloworks_ai';
+        widget.providerId != 'kiloworks_ai' &&
+        widget.providerId != 'kilo_code';
     if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
         _error = 'Enter an API key to fetch available models';
@@ -100,7 +101,19 @@ class _ModelSelectorState extends State<ModelSelector> {
           models = await _fetcher.fetchNvidiaNimModels(widget.apiKey);
           break;
         case 'kiloworks_ai':
-          models = await _fetcher.fetchCloudflareModels(widget.apiKey);
+          // Cloudflare's public model list endpoint was retired, so the
+          // picker uses the verified list from the provider registry.
+          final cfProvider = providers.apiProviders
+              .firstWhere((p) => p.id == 'kiloworks_ai',
+                  orElse: () => providers.apiProviders.first);
+          models = cfProvider.models
+              .map((m) => {
+                    'id': m.id,
+                    'name': m.label,
+                    'is_free': m.label.toLowerCase().contains('(free)'),
+                    'supports_vision': false,
+                  })
+              .toList();
           break;
         case 'zen':
           // Fixed list from the provider registry, so the privacy note

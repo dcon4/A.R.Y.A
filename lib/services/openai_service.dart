@@ -160,8 +160,15 @@ When the user asks a research question, you must present a balanced view:
       }
 
       if (resolvedApiKey.isEmpty) {
-        _logger.log('OpenAIService', 'API call blocked - no API key set');
-        return 'Please add your API key in Settings first.';
+        // Kilo's gateway serves its free tier without a key, so an empty
+        // key there means "use the anonymous free tier" instead of a block.
+        if (resolvedProviderId == 'kilo_code') {
+          resolvedApiKey = 'anonymous';
+          _logger.log('OpenAIService', 'Kilo Code: no key set — using the anonymous free tier');
+        } else {
+          _logger.log('OpenAIService', 'API call blocked - no API key set');
+          return 'Please add your API key in Settings first.';
+        }
       }
 
       var model = overrideModel ?? await getModel();
@@ -254,14 +261,31 @@ When the user asks a research question, you must present a balanced view:
       }
       messages.add({'role': 'user', 'content': prompt});
 
-      var response = await _postChat(
-        baseUrl: resolvedBaseUrl,
-        apiKey: resolvedApiKey,
-        requiresReferer: resolvedRequiresReferer,
-        model: model,
-        messages: messages,
-        maxTokens: maxTokens,
-      );
+      http.Response response;
+      try {
+        response = await _postChat(
+          baseUrl: resolvedBaseUrl,
+          apiKey: resolvedApiKey,
+          requiresReferer: resolvedRequiresReferer,
+          model: model,
+          messages: messages,
+          maxTokens: maxTokens,
+        );
+      } catch (e) {
+        // The phone could not reach this provider at all (DNS, wifi,
+        // server down). Another provider with a key may still answer.
+        _logger.log('OpenAIService',
+            'First attempt failed (${e.runtimeType}) — trying fallback providers');
+        final fallback = await _tryFallbackProviders(
+          resolvedProviderId,
+          model,
+          messages,
+          maxTokens,
+          webSearch,
+        );
+        if (fallback != null) return fallback;
+        rethrow;
+      }
 
       if (response.statusCode == 200) {
         _logger.log('OpenAIService', 'API response OK (${response.body.length} chars)');
@@ -402,7 +426,8 @@ When the user asks a research question, you must present a balanced view:
         lower.contains('does not exist') ||
         lower.contains('not a valid model') ||
         lower.contains('invalid model') ||
-        lower.contains('unknown model');
+        lower.contains('unknown model') ||
+        lower.contains('no such model');
   }
 
   Future<http.Response> _postChat({
@@ -441,7 +466,9 @@ When the user asks a research question, you must present a balanced view:
     if (providerId == 'local') return null;
     try {
       final apiKey = await providers.getApiKeyForProvider(providerId);
-      if (apiKey.isEmpty) return null;
+      // Kilo's model list is public (anonymous tier), so an empty key is
+      // fine there; every other provider needs a key to list models.
+      if (apiKey.isEmpty && providerId != 'kilo_code') return null;
 
       List<Map<String, dynamic>> models = [];
       // Import kept local via ModelFetcher through a light dependency.
@@ -461,6 +488,10 @@ When the user asks a research question, you must present a balanced view:
           break;
         case 'cerebras':
           models = await fetcher.fetchCerebrasModels(apiKey);
+          break;
+        case 'kilo_code':
+          models = await fetcher.fetchKiloCodeModels(
+              apiKey.isEmpty ? 'anonymous' : apiKey);
           break;
       }
 
@@ -526,6 +557,8 @@ When the user asks a research question, you must present a balanced view:
         return modelId.contains(':free');
       case 'groq':
         return true;
+      case 'kilo_code':
+        return modelId.contains('free');
       default:
         return false;
     }
@@ -571,7 +604,9 @@ When the user asks a research question, you must present a balanced view:
         break;
       }
       final apiKey = await providers.getApiKeyForProvider(p.id);
-      if (apiKey.isEmpty) continue;
+      // Kilo's gateway accepts the anonymous free tier when no key is set.
+      final candidateKey = apiKey.isEmpty && p.id == 'kilo_code' ? 'anonymous' : apiKey;
+      if (candidateKey.isEmpty) continue;
       if (p.id == 'custom') {
         final url = await providers.getBaseUrlForProvider('custom');
         if (url.isEmpty) continue;
@@ -600,7 +635,7 @@ When the user asks a research question, you must present a balanced view:
         attempts++;
         final response = await _postChat(
           baseUrl: baseUrl,
-          apiKey: apiKey,
+          apiKey: candidateKey,
           requiresReferer: requiresReferer,
           model: finalModel,
           messages: messages,
@@ -758,6 +793,9 @@ class _ModelFetcher {
       _fetch('https://api.deepseek.com/models', key, (_) => false);
   Future<List<Map<String, dynamic>>> fetchCerebrasModels(String key) =>
       _fetch('https://api.cerebras.ai/v1/models', key, (_) => false);
+  Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String key) =>
+      _fetch('https://api.kilo.ai/api/gateway/models', key,
+          (m) => (m['id'] ?? '').toString().toLowerCase().contains('free'));
 
   Future<List<Map<String, dynamic>>> _fetch(
     String url,

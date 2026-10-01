@@ -145,44 +145,47 @@ final List<ApiProvider> apiProviders = [
   ApiProvider(
     id: 'kilo_code',
     name: 'Kilo Code',
-    baseUrl: 'https://api.kilocode.org/v1',
-    defaultModel: 'kilocode/llama-3.1-8b-instruct-free',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    defaultModel: 'kilo-auto/free',
     models: const [
       ApiModel(
-          id: 'kilocode/llama-3.1-8b-instruct-free',
-          label: 'Llama 3.1 8B Instruct (free) - good all-round answers'),
+          id: 'kilo-auto/free',
+          label: 'Kilo Auto Free - routes to the best free model (free)'),
       ApiModel(
-          id: 'kilocode/mistral-7b-instruct-free',
-          label: 'Mistral 7B Instruct (free) - strong writing'),
+          id: 'qwen/qwen3.8-27b:free',
+          label: 'Qwen 3.8 27B (free) - strong reasoning'),
       ApiModel(
-          id: 'kilocode/phi-3.5-mini',
-          label: 'Phi 3.5 Mini (paid) - smaller, faster model'),
+          id: 'nvidia/nemotron-3-super-120b-a12b:free',
+          label: 'Nemotron 3 Super 120B (free) - large, capable'),
       ApiModel(
-          id: 'kilocode/llama-3.1-8b-instruct',
-          label: 'Llama 3.1 8B Instruct (paid) - good all-round answers'),
-      ApiModel(
-          id: 'kilocode/mistral-7b-instruct',
-          label: 'Mistral 7B Instruct (paid) - strong writing'),
+          id: 'openrouter/free',
+          label: 'OpenRouter Free - auto-picks a free model (free)'),
     ],
   ),
   ApiProvider(
     id: 'kiloworks_ai',
     name: 'Cloudflare Workers AI',
     baseUrl: 'https://api.cloudflare.com/client/v4/accounts',
-    defaultModel: '@cf/llama-3.1-8b-instruct-q4k',
+    defaultModel: '@cf/meta/llama-3.1-8b-instruct-fp8',
     models: const [
       ApiModel(
-          id: '@cf/gemma-2b-it-q4k',
-          label: 'Gemma 2B IT Q4K (free)'),
+          id: '@cf/meta/llama-3.1-8b-instruct-fp8',
+          label: 'Llama 3.1 8B FP8 - good all-round answers'),
       ApiModel(
-          id: '@cf/llama-3.1-8b-instruct-q4k',
-          label: 'Llama 3.1 8B Instruct Q4K (free)'),
+          id: '@cf/zai-org/glm-4.7-flash',
+          label: 'GLM 4.7 Flash - fast, cheap'),
       ApiModel(
-          id: '@cf/mistral-7b-instruct-q4k',
-          label: 'Mistral 7B Instruct Q4K (free)'),
+          id: '@cf/qwen/qwq-32b',
+          label: 'QwQ 32B - reasoning model'),
       ApiModel(
-          id: '@cf/phi-3.5-mini-free',
-          label: 'Phi 3.5 Mini (free) - smaller, faster model'),
+          id: '@cf/openai/gpt-oss-120b',
+          label: 'GPT OSS 120B - strong, larger model'),
+      ApiModel(
+          id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+          label: 'Llama 3.3 70B Fast - larger, optimized for speed'),
+      ApiModel(
+          id: '@cf/qwen/qwen3-30b-a3b-fp8',
+          label: 'Qwen3 30B A3B FP8 - efficient mixture-of-experts'),
     ],
   ),
   ApiProvider(
