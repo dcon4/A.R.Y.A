@@ -177,6 +177,10 @@ When the user asks a research question, you must present a balanced view:
         return 'Please set a base URL for your custom provider in Settings.';
       }
 
+      // Search-box query for grounding: strip voice commands and chat
+      // filler so we never search a whole conversational sentence.
+      final groundingQuery = _groundingQuery(prompt, history);
+
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
@@ -191,9 +195,9 @@ When the user asks a research question, you must present a balanced view:
           runBrave = probe.isResearch;
         }
         if (runBrave) {
-          _logger.log('OpenAIService', 'Running Brave Search for: $prompt');
+          _logger.log('OpenAIService', 'Running Brave Search for: $groundingQuery');
           final brave = BraveSearchService();
-          searchResults = await brave.search(prompt);
+          searchResults = await brave.search(groundingQuery);
           if (searchResults.isNotEmpty) {
             _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
           }
@@ -213,8 +217,9 @@ When the user asks a research question, you must present a balanced view:
           runSearxng = probe.isResearch;
         }
         if (runSearxng) {
-          _logger.log('OpenAIService', 'Running SearXNG search for: $prompt');
-          final hits = await SearxngSearchService.instance.search(prompt, count: 5);
+          _logger.log('OpenAIService', 'Running SearXNG search for: $groundingQuery');
+          final hits =
+              await SearxngSearchService.instance.search(groundingQuery, count: 5);
           searchResults = hits
               .map((r) =>
                   BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
@@ -379,6 +384,64 @@ When the user asks a research question, you must present a balanced view:
       _logger.error('OpenAIService', 'Request exception', e);
       return 'Sorry, something went wrong. Please check your connection.';
     }
+  }
+
+  /// Build a search-box query from a possibly-chatty voice prompt.
+  /// Strips command prefixes ("research ...") and conversational filler
+  /// ("please look again", "check the recent news"), and falls back to
+  /// the previous real question when little is left - otherwise a
+  /// follow-up like "check the recent news" would be searched verbatim
+  /// and hand the model generic news homepages instead of the topic.
+  String _groundingQuery(String prompt, List<Map<String, String>>? history) {
+    var q = prompt.trim();
+    q = q.replaceFirst(
+        RegExp(r'^(research|web search|search for|search|find|look up)\b[\s,:-]*',
+            caseSensitive: false),
+        '');
+    q = q.replaceFirst(
+        RegExp(r'^(no|yes|okay|ok)\b[\s,:-]*', caseSensitive: false), '');
+    const filler = [
+      'please look again',
+      'please check again',
+      'please try again',
+      'look again',
+      'try again',
+      'search again',
+      'check again',
+      'check the recent news',
+      'check the latest news',
+      'check recent news',
+      'check the news',
+      'search the recent news',
+      'search the latest news',
+      "it's been in the news recently",
+      'been in the news recently',
+      'in the news recently',
+      'look for recent news',
+    ];
+    for (final f in filler) {
+      q = q.replaceFirst(RegExp(RegExp.escape(f), caseSensitive: false), '');
+    }
+    q = q.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    q = q.replaceAll(RegExp(r'^[,.:;\s]+'), '').replaceAll(RegExp(r'[,.:;\s]+$'), '');
+
+    if (q.split(' ').where((w) => w.isNotEmpty).length < 5) {
+      final prev = _previousUserQuestion(history);
+      if (prev.isNotEmpty) q = prev;
+    }
+    return q.isEmpty ? prompt : q;
+  }
+
+  /// The last substantive thing the user asked in this conversation.
+  String _previousUserQuestion(List<Map<String, String>>? history) {
+    if (history == null) return '';
+    for (final m in history.reversed) {
+      if (m['role'] == 'user') {
+        final t = (m['content'] ?? '').trim();
+        if (t.split(' ').length >= 5) return t;
+      }
+    }
+    return '';
   }
 
   /// Pull the assistant text out of a chat-completions body.

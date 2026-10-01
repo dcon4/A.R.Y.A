@@ -130,7 +130,9 @@ class BraveSearchService {
     final buffer = StringBuffer();
     buffer.writeln('Here are search results that you should use to answer the user\'s question. '
         'Cite sources by referring to the numbered items below. '
-        'If the search results do not contain the answer, say so honestly.');
+        'If the search results do not contain the answer, say so honestly. '
+        'The results are current and may be newer than your training data - '
+        'about recent events, trust them over what you remember.');
     buffer.writeln('');
     for (var i = 0; i < results.length; i++) {
       final r = results[i];
