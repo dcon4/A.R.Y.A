@@ -119,6 +119,8 @@ class HelpScreen extends StatelessWidget {
             _bullet('"next" or "skip" while reading to move on'),
             _bullet('"new search" to start a different search'),
             _bullet('"cancel" to exit search mode'),
+            _bullet('Results come from DuckDuckGo, or from your own '
+                'SearXNG server if you chose that source in Settings'),
             _body('If ARYA is reading and you want her to stop, just start '
                 'talking.'),
 
@@ -404,11 +406,16 @@ class RoutingHelpScreen extends StatelessWidget {
             _bullet('Research questions only: when on, Brave is only '
                 'called for research-type questions such as news or '
                 'studies; everything else goes straight to your model'),
+            _bullet('SearXNG: optional, runs on your own computer. '
+                'ARYA asks it for web results and feeds them to the AI, '
+                'just like Brave - no key, no cost. When both are on, '
+                'Brave runs first and SearXNG fills in when Brave is '
+                'off or finds nothing'),
             _bullet('Web search on every request: appends OpenRouter\'s '
                 ':online suffix, which costs extra credits even on free '
                 'models'),
-            _bullet('If Brave is on, the :online suffix is skipped - the '
-                'two are alternatives, not stacked'),
+            _bullet('If Brave or SearXNG injection is on, the :online '
+                'suffix is skipped - they are alternatives, not stacked'),
 
             _heading('Quick reference'),
             _bullet('Provider and Model: the brain that answers, also the '
@@ -421,6 +428,8 @@ class RoutingHelpScreen extends StatelessWidget {
             _bullet('Smart Confirmation: confirmation and balanced '
                 'research answers'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('SearXNG: your own computer\'s search results, '
+                'optional and free'),
             _bullet('Web search on every request: OpenRouter :online '
                 'suffix, extra credits'),
 

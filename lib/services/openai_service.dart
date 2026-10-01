@@ -5,6 +5,7 @@ import 'package:arya/services/brave_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/searxng_search_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -172,9 +173,10 @@ When the user asks a research question, you must present a balanced view:
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
+      final braveActive = braveSearch && braveKey.isNotEmpty;
 
       List<BraveSearchResult>? searchResults;
-      if (braveSearch && braveKey.isNotEmpty) {
+      if (braveActive) {
         var runBrave = true;
         if (braveResearchOnly) {
           final probe =
@@ -193,7 +195,36 @@ When the user asks a research question, you must present a balanced view:
         }
       }
 
-      final webSearch = !braveSearch && await providers.getWebSearchOnlineEnabled();
+      // SearXNG is the optional second grounding source: it fills in
+      // when Brave is off or found nothing. Same research-only rule.
+      final searxngActive = await SearxngSearchService.isEnabled();
+      if ((searchResults == null || searchResults.isEmpty) && searxngActive) {
+        var runSearxng = true;
+        if (await SearxngSearchService.isResearchOnly()) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runSearxng = probe.isResearch;
+        }
+        if (runSearxng) {
+          _logger.log('OpenAIService', 'Running SearXNG search for: $prompt');
+          final hits = await SearxngSearchService.instance.search(prompt, count: 5);
+          searchResults = hits
+              .map((r) =>
+                  BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+              .toList();
+          if (searchResults.isNotEmpty) {
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} SearXNG results');
+          }
+        } else {
+          _logger.log('OpenAIService',
+              'SearXNG skipped — research-only mode, not a research question');
+        }
+      }
+
+      final webSearch = !braveActive &&
+          !searxngActive &&
+          await providers.getWebSearchOnlineEnabled();
       if (webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online')) {
         model = '$model:online';
       }

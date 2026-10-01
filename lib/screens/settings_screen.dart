@@ -9,6 +9,7 @@ import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
 import 'package:arya/services/research_assistant_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
+import 'package:arya/services/searxng_search_service.dart';
 import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
@@ -1790,7 +1791,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Web Search (Keyless DuckDuckGo)",
+              "Web Search",
               style: TextStyle(
                 color: MyAppTheme.mainFontColor,
                 fontSize: 18,
@@ -1800,7 +1801,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Enable voice-activated web search using DuckDuckGo (keyless, free). Say 'web search' then your query.",
+              "Enable voice-activated web search. Say 'web search' then your query. Source is DuckDuckGo by default; SearXNG (your own server, address in the SearXNG section below) can be chosen instead.",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -1836,6 +1837,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
               ],
+            ),
+            FutureBuilder<bool>(
+              future: SearxngSearchService.isVoiceSearchBackend(),
+              builder: (context, snapshot) {
+                final useOwn = snapshot.data ?? false;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Search source",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontSize: 14,
+                      ),
+                    ),
+                    RadioListTile<bool>(
+                      value: false,
+                      groupValue: useOwn,
+                      activeColor: MyAppTheme.mainFontColor,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "DuckDuckGo (keyless, public)",
+                        style:
+                            TextStyle(color: Colors.white, fontFamily: 'Cera Pro', fontSize: 14),
+                      ),
+                      onChanged: (val) async {
+                        await SearxngSearchService.setVoiceSearchBackend(
+                            useSearxng: false);
+                        setInnerState(() {});
+                      },
+                    ),
+                    RadioListTile<bool>(
+                      value: true,
+                      groupValue: useOwn,
+                      activeColor: MyAppTheme.mainFontColor,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "SearXNG (your own server)",
+                        style:
+                            TextStyle(color: Colors.white, fontFamily: 'Cera Pro', fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        "Falls back to DuckDuckGo if your server is off",
+                        style: TextStyle(
+                          color: Color.fromRGBO(255, 138, 101, 0.8),
+                          fontFamily: 'Cera Pro',
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                      onChanged: (val) async {
+                        await SearxngSearchService.setVoiceSearchBackend(
+                            useSearxng: true);
+                        setInnerState(() {});
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
             const Text(
@@ -2059,6 +2123,182 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearxngSection() {
+    bool searxSaved = false;
+    final urlController = TextEditingController();
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "SearXNG (Your Own Search Server)",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave - no API key, nothing paid. If Brave Search is on too, Brave runs first and SearXNG fills in when Brave is off or finds nothing. Your computer's address, for example http://192.168.0.210:8888",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Use SearXNG search",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: SearxngSearchService.isEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await SearxngSearchService.setEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: MyAppTheme.mainFontColor,
+                    );
+                  },
+                ),
+              ],
+            ),
+            FutureBuilder<bool>(
+              future: SearxngSearchService.isEnabled(),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            "Research questions only",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        FutureBuilder<bool>(
+                          future: SearxngSearchService.isResearchOnly(),
+                          builder: (context, snap) {
+                            final on = snap.data ?? false;
+                            return Switch(
+                              value: on,
+                              onChanged: (val) async {
+                                await SearxngSearchService.setResearchOnly(val);
+                                setInnerState(() {});
+                              },
+                              activeColor: MyAppTheme.mainFontColor,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      "When on, ARYA only searches SearXNG for research questions, such as news, studies, or what experts say. Everything else goes straight to your AI model with no web search.",
+                      style: TextStyle(
+                        color: Color.fromRGBO(255, 138, 101, 0.8),
+                        fontSize: 13,
+                        fontFamily: 'Cera Pro',
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FutureBuilder<String>(
+                      future: SearxngSearchService.getBaseUrl(),
+                      builder: (context, snapshot) {
+                        final currentUrl = snapshot.data ?? '';
+                        if (urlController.text.isEmpty &&
+                            currentUrl.isNotEmpty) {
+                          urlController.text = currentUrl;
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              controller: urlController,
+                              decoration: const InputDecoration(
+                                labelText: "SearXNG address",
+                                hintText: "http://192.168.0.210:8888",
+                                border: OutlineInputBorder(),
+                                labelStyle: TextStyle(color: Colors.white70),
+                                hintStyle: TextStyle(color: Colors.white38),
+                              ),
+                              style: const TextStyle(color: Colors.white),
+                              keyboardType: TextInputType.url,
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    await SearxngSearchService.setBaseUrl(
+                                        urlController.text.trim());
+                                    setInnerState(() {
+                                      searxSaved = true;
+                                    });
+                                    Future.delayed(Duration(seconds: 2), () {
+                                      setInnerState(() {
+                                        searxSaved = false;
+                                      });
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: MyAppTheme.mainFontColor,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: Text(
+                                      searxSaved ? "Saved!" : "Save Address"),
+                                ),
+                                if (searxSaved) ...[
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    "Saved!",
+                                    style: TextStyle(
+                                      color: Colors.greenAccent,
+                                      fontFamily: 'Cera Pro',
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
           ],
         );
       },
@@ -2895,6 +3135,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildTtsSection(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
+            const SizedBox(height: 32),
+            _buildSearxngSection(),
             const SizedBox(height: 32),
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),

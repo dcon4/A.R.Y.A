@@ -54,10 +54,13 @@ exist.
   the result titles. Say a number to open a result, "read all" to hear
   each article in turn, "more results" for the next batch, "repeat" to
   start the current article over, "next" or "skip" while reading, and
-  "cancel" to exit.
+  "cancel" to exit. Results come from DuckDuckGo by default, or from
+  your own SearXNG server if you pick that source in Settings.
 - Optional web grounding: Brave Search results injected into the
-  prompt (with a "Research questions only" mode), or OpenRouter's
-  ":online" suffix for web search on every request.
+  prompt (with a "Research questions only" mode), SearXNG from your
+  own computer as a keyless alternative that fills in when Brave is
+  off or finds nothing, or OpenRouter's ":online" suffix for web
+  search on every request.
 - Local search: ask questions about the documents on your own computer
   over your home wifi - say "local search" followed by your question,
   or "ask my documents". ARYA answers out loud and names where the
@@ -127,7 +130,12 @@ flutter run
 4. Optional: **Brave Search** - paste a free API key from
    api.search.brave.com, and consider switching on "Research questions
    only" so web searches only happen for news/study-style questions.
-5. Optional: **Wake Word Detection** - say "hey rhasspy" to start the
+5. Optional: **SearXNG** - run the free SearXNG program on your
+   computer (with its JSON API enabled) and enter its address in
+   Settings. ARYA then uses it for web grounding, and you can pick it
+   as the voice-search source instead of DuckDuckGo. No key, no cost;
+   if Brave is also on, Brave runs first.
+6. Optional: **Wake Word Detection** - say "hey rhasspy" to start the
    hands-free mic.
 
 ## How to use it
@@ -176,6 +184,7 @@ flutter run
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
 | Text to Speech | Voice, speed, and related playback options |
 | Brave Search | Web results injected into the prompt; optional research-only mode |
+| SearXNG | Optional self-hosted search server for prompt grounding and the voice-search source |
 | Local Search | On/off, your computer's address, and the provider/model to use |
 | Memory | How ARYA stores and recalls facts you tell her |
 | Wake Word | "hey rhasspy" hands-free mic |
@@ -273,10 +282,14 @@ Save to apply.
 - Research questions only: when on, Brave is only called for
   research-type questions such as news or studies; everything else goes
   straight to your model.
+- SearXNG: optional, runs on your own computer. ARYA asks it for web
+  results and feeds them to the AI, just like Brave - no key, no cost.
+  When both are on, Brave runs first and SearXNG fills in when Brave
+  is off or finds nothing.
 - Web search on every request: appends OpenRouter's `:online` suffix,
   which costs extra credits even on free models.
-- If Brave is on, the `:online` suffix is skipped - the two are
-  alternatives, not stacked.
+- If Brave or SearXNG injection is on, the `:online` suffix is
+  skipped - they are alternatives, not stacked.
 
 ### If something seems wrong
 
