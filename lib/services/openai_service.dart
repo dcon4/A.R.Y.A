@@ -182,35 +182,18 @@ When the user asks a research question, you must present a balanced view:
       // filler so we never search a whole conversational sentence.
       final groundingQuery = _groundingQuery(prompt, history);
 
+      // Grounding order: the user's own SearXNG instance first (free,
+      // no quota), Brave fills in when SearXNG is off, gated, or empty.
+      final searxngActive = await SearxngSearchService.isEnabled();
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
       final braveActive = braveSearch && braveKey.isNotEmpty;
 
       List<BraveSearchResult>? searchResults;
-      if (braveActive) {
-        var runBrave = true;
-        if (braveResearchOnly) {
-          final probe =
-              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
-          runBrave = probe.isResearch;
-        }
-        if (runBrave) {
-          _logger.log('OpenAIService', 'Running Brave Search for: $groundingQuery');
-          final brave = BraveSearchService();
-          searchResults = await brave.search(groundingQuery);
-          if (searchResults.isNotEmpty) {
-            _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
-          }
-        } else {
-          _logger.log('OpenAIService', 'Brave skipped — research-only mode, not a research question');
-        }
-      }
+      var sourceQueried = false;
 
-      // SearXNG is the optional second grounding source: it fills in
-      // when Brave is off or found nothing. Same research-only rule.
-      final searxngActive = await SearxngSearchService.isEnabled();
-      if ((searchResults == null || searchResults.isEmpty) && searxngActive) {
+      if (searxngActive) {
         var runSearxng = true;
         if (await SearxngSearchService.isResearchOnly()) {
           final probe =
@@ -219,33 +202,61 @@ When the user asks a research question, you must present a balanced view:
         }
         if (runSearxng) {
           _logger.log('OpenAIService', 'Running SearXNG search for: $groundingQuery');
+          sourceQueried = true;
           final hits =
               await SearxngSearchService.instance.search(groundingQuery, count: 5);
-          var results = hits
+          searchResults = hits
               .map((r) =>
                   BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
               .toList();
-          if (results.isEmpty) {
-            // SearXNG is optional and may be unreachable from the phone;
-            // never let that leave the model answering from memory.
-            _logger.log('OpenAIService',
-                'SearXNG found nothing — falling back to DuckDuckGo');
-            final ddg = await WebSearchService.instance
-                .search(groundingQuery, forceDuckDuckGo: true);
-            results = ddg
-                .map((r) =>
-                    BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
-                .toList();
-          }
-          searchResults = results;
           if (searchResults.isNotEmpty) {
             _logger.log(
-                'OpenAIService', 'Got ${searchResults.length} search results');
+                'OpenAIService', 'Got ${searchResults.length} SearXNG results');
+          } else {
+            _logger.log('OpenAIService', 'SearXNG found nothing');
           }
         } else {
           _logger.log('OpenAIService',
               'SearXNG skipped — research-only mode, not a research question');
         }
+      }
+
+      if ((searchResults == null || searchResults.isEmpty) && braveActive) {
+        var runBrave = true;
+        if (braveResearchOnly) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runBrave = probe.isResearch;
+        }
+        if (runBrave) {
+          _logger.log('OpenAIService', 'Running Brave Search for: $groundingQuery');
+          sourceQueried = true;
+          final brave = BraveSearchService();
+          searchResults = await brave.search(groundingQuery);
+          if (searchResults.isNotEmpty) {
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} Brave results');
+          } else {
+            _logger.log('OpenAIService', 'Brave found nothing');
+          }
+        } else {
+          _logger.log('OpenAIService',
+              'Brave skipped — research-only mode, not a research question');
+        }
+      }
+
+      // DuckDuckGo last resort — only when a configured source was
+      // actually queried and came back empty. Research-only gates and
+      // "everything off" still mean no injection.
+      if (sourceQueried && (searchResults == null || searchResults.isEmpty)) {
+        _logger.log('OpenAIService',
+            'No results from configured sources — falling back to DuckDuckGo');
+        final ddg = await WebSearchService.instance
+            .search(groundingQuery, forceDuckDuckGo: true);
+        searchResults = ddg
+            .map((r) =>
+                BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+            .toList();
       }
 
       // Let the online flag back in whenever grounding produced nothing
