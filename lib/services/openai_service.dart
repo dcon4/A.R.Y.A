@@ -6,6 +6,7 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/query_classifier.dart';
 import 'package:arya/services/searxng_search_service.dart';
+import 'package:arya/services/web_search_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -220,13 +221,26 @@ When the user asks a research question, you must present a balanced view:
           _logger.log('OpenAIService', 'Running SearXNG search for: $groundingQuery');
           final hits =
               await SearxngSearchService.instance.search(groundingQuery, count: 5);
-          searchResults = hits
+          var results = hits
               .map((r) =>
                   BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
               .toList();
+          if (results.isEmpty) {
+            // SearXNG is optional and may be unreachable from the phone;
+            // never let that leave the model answering from memory.
+            _logger.log('OpenAIService',
+                'SearXNG found nothing — falling back to DuckDuckGo');
+            final ddg = await WebSearchService.instance
+                .search(groundingQuery, forceDuckDuckGo: true);
+            results = ddg
+                .map((r) =>
+                    BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+                .toList();
+          }
+          searchResults = results;
           if (searchResults.isNotEmpty) {
             _logger.log(
-                'OpenAIService', 'Got ${searchResults.length} SearXNG results');
+                'OpenAIService', 'Got ${searchResults.length} search results');
           }
         } else {
           _logger.log('OpenAIService',
@@ -234,9 +248,12 @@ When the user asks a research question, you must present a balanced view:
         }
       }
 
-      final webSearch = !braveActive &&
-          !searxngActive &&
-          await providers.getWebSearchOnlineEnabled();
+      // Let the online flag back in whenever grounding produced nothing
+      // (Brave research-only skipped, SearXNG down, both off) — stale
+      // answers are worse than the extra web lookup.
+      final groundingWorked = searchResults != null && searchResults.isNotEmpty;
+      final webSearch =
+          !groundingWorked && await providers.getWebSearchOnlineEnabled();
       if (webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online')) {
         model = '$model:online';
       }

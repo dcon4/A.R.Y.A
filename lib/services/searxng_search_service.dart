@@ -102,7 +102,7 @@ class SearxngSearchService {
               'User-Agent': 'ARYA/1.0 (voice assistant)',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
         _logger.error(

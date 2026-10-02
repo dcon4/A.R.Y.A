@@ -17,11 +17,12 @@ class WebSearchService {
   static final WebSearchService instance = WebSearchService._internal();
   WebSearchService._internal();
 
-  Future<List<SearchResult>> search(String query) async {
+  Future<List<SearchResult>> search(String query,
+      {bool forceDuckDuckGo = false}) async {
     final logger = DebugLogger();
     // Optional source: the user's own SearXNG server. DuckDuckGo
     // stays the default and the fallback when SearXNG fails.
-    if (await SearxngSearchService.isVoiceSearchBackend()) {
+    if (!forceDuckDuckGo && await SearxngSearchService.isVoiceSearchBackend()) {
       final own = await SearxngSearchService.instance.search(query, count: 8);
       if (own.isNotEmpty) {
         logger.log('WebSearchService', 'Using SearXNG results (${own.length})');

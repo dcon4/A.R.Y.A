@@ -361,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return '';
   }
 
-  Future<bool> _handleVoiceCommand(String text) async {
+  Future<bool> _handleVoiceCommand(String text, {bool fromTyped = false}) async {
     final cmd = _detectVoiceCommand(text);
     if (cmd == null) return false;
 
@@ -420,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final prefs = await SharedPreferences.getInstance();
         if (!(prefs.getBool('web_search_enabled') ?? false)) {
           await _speakAndWait("Web search is not enabled in settings.");
-          startListening();
+          if (!fromTyped) startListening();
           return true;
         }
         setState(() {
@@ -429,20 +429,24 @@ class _HomeScreenState extends State<HomeScreen> {
         _browserFlow.tts = flutterTts;
         _browserFlow.logger = _logger;
         final initialQuery = BrowserFlow.extractSearchQuery(text);
-        _logger.log('HomeScreen', 'Entering web search mode (query=$initialQuery)');
+        _logger.log('HomeScreen',
+            'Entering web search mode (query=$initialQuery${fromTyped ? ', typed' : ''})');
+        // Typed entry must not yank the microphone open — the user is
+        // typing, and the flow accepts their next typed line anyway.
+        void Function() resumeMic = () {
+          if (!fromTyped) startListening();
+        };
         await _browserFlow.start(
           onSpeak: (msg) => _speakAndWait(msg),
-          onListeningStarted: () {
-            startListening();
-          },
+          onListeningStarted: resumeMic,
           onIdle: () {
             _browserMode = false;
             setState(() {});
-            startListening();
+            resumeMic();
           },
           onError: (msg) async {
             await _speakAndWait(msg);
-            startListening();
+            resumeMic();
           },
           initialQuery: initialQuery,
         );
@@ -1548,8 +1552,26 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final textCmd = _detectVoiceCommand(text);
-    if (textCmd == 'local_search' || textCmd == 'private_search') {
-      await _handleVoiceCommand(text);
+    if (textCmd != null && textCmd != 'web_search') {
+      await _handleVoiceCommand(text, fromTyped: true);
+      return;
+    }
+    // Mirror the voice path: while the search flow is active, typed text
+    // is its input (a query, a number, 'cancel') — not a new AI chat.
+    if (_browserMode) {
+      final handled = await _browserFlow.handleSpeechResult(text,
+          onNextListen: startListening);
+      if (handled) return;
+      _logger.log('HomeScreen',
+          'BrowserFlow unhandled (typed) — routing to AI: "$text"');
+      setState(() {
+        _browserMode = false;
+        _searchState = SearchState.idle;
+        _readingAllSequentially = false;
+      });
+    }
+    if (textCmd == 'web_search') {
+      await _handleVoiceCommand(text, fromTyped: true);
       return;
     }
     lastWords = text;
