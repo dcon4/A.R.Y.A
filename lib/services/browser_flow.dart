@@ -41,6 +41,11 @@ class BrowserFlow {
   late void Function() _onIdle;
   late Future<void> Function(String) _onError;
 
+  // Optional observers set by HomeScreen: puts the result list on screen
+  // and saves searches and read articles into the conversation transcript.
+  Future<void> Function(List<ws.SearchResult> results, String query)? onResults;
+  Future<void> Function(String title, String url, String text)? onArticleRead;
+
   bool get hasResults => _allResults.isNotEmpty;
   bool get isReading => _isReadingPage;
 
@@ -154,6 +159,7 @@ class BrowserFlow {
     try {
       final results = await WebSearchService.instance.search(query);
       if (results.isEmpty) {
+        await onResults?.call(const <ws.SearchResult>[], query);
         await _onError("No results found for '$query'. Say another query or 'cancel'.");
         return;
       }
@@ -163,8 +169,10 @@ class BrowserFlow {
       _currentResultIndex = 0;
       _readingAllSequentially = false;
 
+      await onResults?.call(_allResults, query);
       await _presentCurrentPage();
     } catch (e) {
+      await onResults?.call(const <ws.SearchResult>[], query);
       await _onError("Search failed: $e");
     }
   }
@@ -408,6 +416,7 @@ class BrowserFlow {
       final gen = _readingGen;
       _logger.log('BrowserFlow', 'Reading ${_currentPageChunks.length} chunk(s)');
 
+      await onArticleRead?.call(result.title, result.url, content);
       await _onSpeak("Reading ${result.title}.");
       await _readNextChunk(gen);
     } catch (e) {

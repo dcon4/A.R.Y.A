@@ -121,6 +121,10 @@ class HelpScreen extends StatelessWidget {
             _bullet('"cancel" to exit search mode'),
             _bullet('Results come from DuckDuckGo, or from your own '
                 'SearXNG server if you chose that source in Settings'),
+            _bullet('The full results list, with descriptions and links, '
+                'also appears on screen'),
+            _bullet('Every search and every article you read is saved '
+                'into the conversation transcript'),
             _body('If ARYA is reading and you want her to stop, just start '
                 'talking.'),
 

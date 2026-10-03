@@ -96,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Browser Flow
   final BrowserFlow _browserFlow = BrowserFlow();
   bool _browserMode = false;
+  String _webSearchResultsText = '';
 
   @override
   void initState() {
@@ -106,6 +107,65 @@ class _HomeScreenState extends State<HomeScreen> {
     // reset(), including "New conversation" before a search ever ran.
     _browserFlow.tts = flutterTts;
     _browserFlow.logger = _logger;
+    // Results go on screen as well as being spoken, and searches and
+    // read articles are saved into the conversation transcript.
+    _browserFlow.onResults = (results, query) async {
+      if (!mounted) return;
+      if (results.isEmpty) {
+        setState(() {
+          _webSearchResultsText = '';
+          generatedContent = 'No web search results for "$query".';
+        });
+        return;
+      }
+      final sb = StringBuffer('Search results for "$query":\n\n');
+      for (var i = 0; i < results.length; i++) {
+        sb.writeln('${i + 1}. ${results[i].title}');
+        sb.writeln('   ${results[i].snippet}');
+        sb.writeln('   ${results[i].url}');
+        sb.writeln('');
+      }
+      final text = sb.toString().trimRight();
+      setState(() {
+        _webSearchResultsText = text;
+        generatedContent = text;
+      });
+      conversationService.addEntry(ConversationEntry(
+        userQuery: 'web search: $query',
+        aiResponse: text,
+        model: 'web search',
+        provider: '',
+        routingCategory: 'web_search',
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (e) {
+        _logger.error('HomeScreen', 'Transcript save of search results failed', e);
+      }
+    };
+    _browserFlow.onArticleRead = (title, url, text) async {
+      if (!mounted) return;
+      final article = text.length > 6000
+          ? '${text.substring(0, 6000)}\n\n(article text truncated in transcript)'
+          : text;
+      setState(() {
+        generatedContent = _webSearchResultsText.isEmpty
+            ? 'Reading: $title\n$url\n\n$article'
+            : '$_webSearchResultsText\n\nReading: $title\n$url\n\n$article';
+      });
+      conversationService.addEntry(ConversationEntry(
+        userQuery: 'read article: $title',
+        aiResponse: '$url\n\n$article',
+        model: 'web search',
+        provider: '',
+        routingCategory: 'article_reading',
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (e) {
+        _logger.error('HomeScreen', 'Transcript save of article failed', e);
+      }
+    };
     BackgroundService.setOnStartMicCallback(() {
       if (speechToText.isNotListening) {
         startListening();
@@ -1714,6 +1774,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _pendingQuery = '';
       _previousUserQuery = '';
       _previousAiResponse = '';
+      _webSearchResultsText = '';
     });
     conversationService.clear();
     _clearResponseChunks();

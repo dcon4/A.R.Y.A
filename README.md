@@ -55,7 +55,10 @@ exist.
   each article in turn, "more results" for the next batch, "repeat" to
   start the current article over, "next" or "skip" while reading, and
   "cancel" to exit. Results come from DuckDuckGo by default, or from
-  your own SearXNG server if you pick that source in Settings.
+  your own SearXNG server if you pick that source in Settings. The
+  full results list, with descriptions and links, also appears on
+  screen, and every search and every article you read is saved into
+  the conversation transcript.
 - Optional web grounding: Brave Search results injected into the
   prompt (with a "Research questions only" mode), SearXNG from your
   own computer as a keyless alternative that fills in when Brave is
