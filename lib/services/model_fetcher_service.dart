@@ -187,6 +187,84 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from NVIDIA NIM (public list, no key required)
+  Future<List<Map<String, dynamic>>> fetchNvidiaNimModels(
+      [String apiKey = '']) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from NVIDIA NIM...');
+
+      final headers = <String, String>{};
+      if (apiKey.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $apiKey';
+      }
+      final response = await http
+          .get(
+            Uri.parse('https://integrate.api.nvidia.com/v1/models'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'is_free': false, // NIM is paid per token
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} NIM models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'NIM API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch NIM models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Kilo's gateway (open list, key optional)
+  Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Kilo Code...');
+
+      final response = await http.get(
+        Uri.parse('https://api.kilo.ai/api/gateway/models'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'created': m['created'] ?? 0,
+            // Kilo's gateway mixes free and paid models; free ones are
+            // marked ":free" or carry "free" in the id (kilo-auto/free).
+            'is_free': m['id']?.toString().toLowerCase().contains('free') ?? false,
+            'supports_vision': (m['id'] as String).contains('vision'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Kilo models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Kilo Code API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Kilo Code models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,

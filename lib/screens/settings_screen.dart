@@ -7,7 +7,9 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/research_assistant_service.dart';
 import 'package:arya/services/save_directory_picker.dart';
+import 'package:arya/services/searxng_search_service.dart';
 import 'package:arya/services/settings_service.dart';
 import 'package:arya/services/wake_word_service.dart';
 import 'package:arya/theme/app_theme.dart';
@@ -33,6 +35,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _researchAnnouncementController = TextEditingController();
   final TextEditingController _researchPromptController = TextEditingController();
   final TextEditingController _weatherZipController = TextEditingController();
+  final TextEditingController _localSearchAddressController = TextEditingController();
+  final TextEditingController _cloudflareAccountIdController = TextEditingController();
+  bool _localSearchEnabled = false;
+  String _localSearchModelId = '';
+  String _localSearchProviderId = '';
   bool _isSaved = false;
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
@@ -76,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final savedSystemPrompt = prefs.getString('system_prompt') ?? '';
     final savedResearchAnnouncement = prefs.getString('research_announcement') ?? '';
     final savedResearchPrompt = prefs.getString('research_prompt_extension') ?? '';
+    final localSearchApiKey = await providers.getApiKeyForProvider('openrouter');
 
     setState(() {
       _selectedProviderId = savedProviderId;
@@ -92,6 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
       _smartFreeEnabled = prefs.getBool('smart_free_enabled') ?? false;
       _weatherZipController.text = prefs.getString('weather_zip_code') ?? '';
+      _cloudflareAccountIdController.text = prefs.getString('cloudflare_account_id') ?? '';
       // Show what is actually in effect: the saved text, or the default.
       _researchAnnouncementController.text = savedResearchAnnouncement.isNotEmpty
           ? savedResearchAnnouncement
@@ -99,6 +108,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _researchPromptController.text = savedResearchPrompt.isNotEmpty
           ? savedResearchPrompt
           : OpenaiService.defaultResearchPrompt.trim();
+      _localSearchEnabled = prefs.getBool('local_search_enabled') ?? false;
+      _localSearchAddressController.text =
+          prefs.getString('local_search_address') ?? '';
+      _localSearchModelId = prefs.getString('local_search_model') ?? '';
+      _localSearchProviderId = prefs.getString('local_search_provider') ?? '';
+      // Older versions only offered OpenRouter models; derive the provider
+      // from the saved model id so the dropdown shows the right list.
+      if (_localSearchProviderId.isEmpty && _localSearchModelId.isNotEmpty) {
+        _localSearchProviderId = providers.apiProviders
+                .any((p) => p.models.any((m) => m.id == _localSearchModelId))
+            ? providers.apiProviders
+                .firstWhere(
+                    (p) => p.models.any((m) => m.id == _localSearchModelId))
+                .id
+            : 'openrouter';
+      }
     });
   }
 
@@ -119,12 +144,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (provider.id == 'custom') {
       await prefs.setString('api_custom_base_url', _customBaseUrlController.text.trim());
     }
+    if (provider.id == 'cloudflare' || provider.id == 'kiloworks_ai') {
+      await prefs.setString('cloudflare_account_id', _cloudflareAccountIdController.text.trim());
+    }
 
     await prefs.setString('system_prompt', _systemPromptController.text.trim());
     await prefs.setString(
         'research_announcement', _researchAnnouncementController.text.trim());
     await prefs.setString(
         'research_prompt_extension', _researchPromptController.text.trim());
+    await prefs.setBool('local_search_enabled', _localSearchEnabled);
+    await prefs.setString(
+        'local_search_address', _localSearchAddressController.text.trim());
+    await prefs.setString('local_search_model', _localSearchModelId);
+    await prefs.setString('local_search_provider', _localSearchProviderId);
     clearCachedSettings();
     setState(() {
       _isSaved = true;
@@ -200,6 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _customBaseUrlController.dispose();
     _researchAnnouncementController.dispose();
     _researchPromptController.dispose();
+    _localSearchAddressController.dispose();
     super.dispose();
   }
 
@@ -210,6 +244,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'groq': return 'gsk_...';
       case 'deepseek': return 'sk-...';
       case 'cerebras': return 'cerebras_...';
+      case 'nim': return 'nvapi-...';
+      case 'zen': return 'sk-...';
+      case 'kilo_code': return 'API key (optional)';
+      case 'kiloworks_ai': return 'API key';
       default: return 'API key';
     }
   }
@@ -221,6 +259,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'groq': return 'Get your free API key at console.groq.com/keys. Fast inference for open models.';
       case 'deepseek': return 'Get your API key at platform.deepseek.com/api-keys.';
       case 'cerebras': return 'Get your API key at cloud.cerebras.ai. Fast inference for open models via OpenAI-compatible API.';
+      case 'nim': return 'Get your API key at build.nvidia.com. NVIDIA NIM runs open models, paid per token.';
+      case 'zen': return 'Get your API key at opencode.ai/auth. OpenCode Zen has free models - each one shows what it does with your text.';
+      case 'kilo_code': return 'No key needed for the free tier - leave the key blank to use Kilo\'s anonymous free models, or get a key at kilo.ai.';
+      case 'kiloworks_ai': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -268,7 +310,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontFamily: 'Cera Pro',
                 fontSize: 15,
               ),
-              items: providers.apiProviders.map((p) {
+              items: providers.apiProviders
+                  .where((p) => p.id != 'local')
+                  .map((p) {
                 return DropdownMenuItem(
                   value: p.id,
                   child: Text(p.name),
@@ -400,6 +444,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
             fontFamily: 'Cera Pro',
           ),
           labelText: "Base URL",
+          labelStyle: const TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontFamily: 'Cera Pro',
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: MyAppTheme.mainFontColor,
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloudflareAccountIdField() {
+    if (_selectedProviderId != 'cloudflare' && _selectedProviderId != 'kiloworks_ai') {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: TextField(
+        controller: _cloudflareAccountIdController,
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'Cera Pro',
+          fontSize: 15,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+          hintText: "Your Cloudflare account ID (from dash.cloudflare.com)",
+          hintStyle: TextStyle(
+            color: Colors.grey[600],
+            fontFamily: 'Cera Pro',
+          ),
+          labelText: "Cloudflare Account ID",
           labelStyle: const TextStyle(
             color: MyAppTheme.mainFontColor,
             fontFamily: 'Cera Pro',
@@ -584,7 +682,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_selectedProviderId != 'custom' && _apiKeyController.text.isNotEmpty)
+        if (_selectedProviderId != 'custom' &&
+            (_apiKeyController.text.isNotEmpty ||
+                _selectedProviderId == 'nim' ||
+                _selectedProviderId == 'zen' ||
+                _selectedProviderId == 'kiloworks_ai'))
           ModelSelector(
             key: ValueKey(_selectedProviderId),
             providerId: _selectedProviderId,
@@ -772,7 +874,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : 'Use my default model'),
             ),
             ...providers.apiProviders
-                .where((p) => p.id != 'custom')
+                .where((p) => p.id != 'custom' && p.id != 'local')
                 .map((p) {
               final keyless = hasKey[p.id] != true;
               return SimpleDialogOption(
@@ -899,6 +1001,241 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLocalSearchSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Local Search",
+          style: TextStyle(
+            color: MyAppTheme.mainFontColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cera Pro',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Ask questions about the documents on this computer, over your home wifi only. Say 'local search' followed by your question, or 'ask my documents'. No password is used and nothing works away from home.",
+          style: TextStyle(
+            color: Color.fromRGBO(255, 138, 101, 0.8),
+            fontSize: 14,
+            fontFamily: 'Cera Pro',
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                "Turn local search on",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Cera Pro',
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: _localSearchEnabled,
+              onChanged: (val) {
+                ResearchAssistantService.setEnabled(val);
+                setState(() {
+                  _localSearchEnabled = val;
+                });
+              },
+              activeColor: MyAppTheme.mainFontColor,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _localSearchAddressController,
+          style: const TextStyle(color: Colors.white, fontFamily: 'Cera Pro'),
+          decoration: InputDecoration(
+            hintText: ResearchAssistantService.defaultAddress,
+            hintStyle: TextStyle(color: Colors.grey[600]),
+            helperText: "Address of your computer's Research Assistant.",
+            helperStyle: TextStyle(color: Colors.grey[600]),
+            filled: true,
+            fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            ),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.save, color: MyAppTheme.mainFontColor),
+              onPressed: () async {
+                await ResearchAssistantService.setAddress(
+                    _localSearchAddressController.text);
+                if (mounted) {
+                  setState(() {});
+                  _showSnack(context, 'Address saved');
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Model for local search",
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cera Pro',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Choose which provider on your computer answers your document questions. The computer holds the keys - the phone only sends your choice, and the computer tells ARYA which model it actually used.",
+          style: TextStyle(
+            color: Colors.white70,
+            fontFamily: 'Cera Pro',
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _localSearchProviderId,
+              isExpanded: true,
+              dropdownColor: Colors.grey[900],
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Cera Pro',
+                fontSize: 15,
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: '',
+                  child: Text("Use the computer's own choice"),
+                ),
+                ...providers.apiProviders
+                    .where((p) =>
+                        providers.localSearchProviderIds.contains(p.id))
+                    .map((p) => DropdownMenuItem(
+                          value: p.id,
+                          child: Text(p.name),
+                        )),
+              ],
+              onChanged: (newId) {
+                if (newId == null) return;
+                setState(() {
+                  _localSearchProviderId = newId;
+                  if (newId.isEmpty) {
+                    _localSearchModelId = '';
+                  } else {
+                    final newProvider = providers.apiProviders
+                        .firstWhere((x) => x.id == newId);
+                    if (!newProvider.models
+                        .any((m) => m.id == _localSearchModelId)) {
+                      _localSearchModelId = newProvider.defaultModel;
+                    }
+                  }
+                });
+                _saveSettings();
+              },
+            ),
+          ),
+        ),
+        if (_localSearchProviderId.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Builder(builder: (context) {
+            final localProvider = providers.apiProviders
+                .firstWhere((x) => x.id == _localSearchProviderId);
+            final localModels =
+                List<providers.ApiModel>.from(localProvider.models);
+            if (_localSearchModelId.isNotEmpty &&
+                !localModels.any((m) => m.id == _localSearchModelId)) {
+              localModels.insert(
+                  0,
+                  providers.ApiModel(
+                      id: _localSearchModelId,
+                      label: '$_localSearchModelId (saved)'));
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _localSearchModelId.isEmpty
+                      ? null
+                      : _localSearchModelId,
+                  isExpanded: true,
+                  hint: const Text("Choose a model"),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 15,
+                  ),
+                  items: localModels
+                      .map((m) => DropdownMenuItem(
+                            value: m.id,
+                            child: Text(m.label),
+                          ))
+                      .toList(),
+                  onChanged: (newModel) {
+                    if (newModel == null) return;
+                    setState(() {
+                      _localSearchModelId = newModel;
+                    });
+                    _saveSettings();
+                  },
+                ),
+              ),
+            );
+          }),
+        ],
+        if (_localSearchModelId.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            "Current choice: $_localSearchModelId",
+            style: const TextStyle(
+              color: Colors.white70,
+              fontFamily: 'Cera Pro',
+              fontSize: 13,
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _localSearchProviderId = '';
+                _localSearchModelId = '';
+              });
+              _saveSettings();
+            },
+            child: const Text(
+              "Use the computer's own model",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontFamily: 'Cera Pro',
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -1454,7 +1791,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Web Search (Keyless DuckDuckGo)",
+              "Web Search",
               style: TextStyle(
                 color: MyAppTheme.mainFontColor,
                 fontSize: 18,
@@ -1464,7 +1801,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Enable voice-activated web search using DuckDuckGo (keyless, free). Say 'web search' then your query.",
+              "Enable voice-activated web search. Say 'web search' then your query. Source is DuckDuckGo by default; SearXNG (your own server, address in the SearXNG section below) can be chosen instead.",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -1500,6 +1837,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
               ],
+            ),
+            FutureBuilder<bool>(
+              future: SearxngSearchService.isVoiceSearchBackend(),
+              builder: (context, snapshot) {
+                final useOwn = snapshot.data ?? false;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Search source",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Cera Pro',
+                        fontSize: 14,
+                      ),
+                    ),
+                    RadioListTile<bool>(
+                      value: false,
+                      groupValue: useOwn,
+                      activeColor: MyAppTheme.mainFontColor,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "DuckDuckGo (keyless, public)",
+                        style:
+                            TextStyle(color: Colors.white, fontFamily: 'Cera Pro', fontSize: 14),
+                      ),
+                      onChanged: (val) async {
+                        await SearxngSearchService.setVoiceSearchBackend(
+                            useSearxng: false);
+                        setInnerState(() {});
+                      },
+                    ),
+                    RadioListTile<bool>(
+                      value: true,
+                      groupValue: useOwn,
+                      activeColor: MyAppTheme.mainFontColor,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "SearXNG (your own server)",
+                        style:
+                            TextStyle(color: Colors.white, fontFamily: 'Cera Pro', fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        "Falls back to DuckDuckGo if your server is off",
+                        style: TextStyle(
+                          color: Color.fromRGBO(255, 138, 101, 0.8),
+                          fontFamily: 'Cera Pro',
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                      onChanged: (val) async {
+                        await SearxngSearchService.setVoiceSearchBackend(
+                            useSearxng: true);
+                        setInnerState(() {});
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 24),
             const Text(
@@ -1723,6 +2123,182 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearxngSection() {
+    bool searxSaved = false;
+    final urlController = TextEditingController();
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "SearXNG (Your Own Search Server)",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave - no API key, nothing paid. If Brave Search is on too, Brave runs first and SearXNG fills in when Brave is off or finds nothing. Your computer's address, for example http://192.168.0.210:8888",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Use SearXNG search",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: SearxngSearchService.isEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await SearxngSearchService.setEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: MyAppTheme.mainFontColor,
+                    );
+                  },
+                ),
+              ],
+            ),
+            FutureBuilder<bool>(
+              future: SearxngSearchService.isEnabled(),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            "Research questions only",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        FutureBuilder<bool>(
+                          future: SearxngSearchService.isResearchOnly(),
+                          builder: (context, snap) {
+                            final on = snap.data ?? false;
+                            return Switch(
+                              value: on,
+                              onChanged: (val) async {
+                                await SearxngSearchService.setResearchOnly(val);
+                                setInnerState(() {});
+                              },
+                              activeColor: MyAppTheme.mainFontColor,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      "When on, ARYA only searches SearXNG for research questions, such as news, studies, or what experts say. Everything else goes straight to your AI model with no web search.",
+                      style: TextStyle(
+                        color: Color.fromRGBO(255, 138, 101, 0.8),
+                        fontSize: 13,
+                        fontFamily: 'Cera Pro',
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FutureBuilder<String>(
+                      future: SearxngSearchService.getBaseUrl(),
+                      builder: (context, snapshot) {
+                        final currentUrl = snapshot.data ?? '';
+                        if (urlController.text.isEmpty &&
+                            currentUrl.isNotEmpty) {
+                          urlController.text = currentUrl;
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              controller: urlController,
+                              decoration: const InputDecoration(
+                                labelText: "SearXNG address",
+                                hintText: "http://192.168.0.210:8888",
+                                border: OutlineInputBorder(),
+                                labelStyle: TextStyle(color: Colors.white70),
+                                hintStyle: TextStyle(color: Colors.white38),
+                              ),
+                              style: const TextStyle(color: Colors.white),
+                              keyboardType: TextInputType.url,
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    await SearxngSearchService.setBaseUrl(
+                                        urlController.text.trim());
+                                    setInnerState(() {
+                                      searxSaved = true;
+                                    });
+                                    Future.delayed(Duration(seconds: 2), () {
+                                      setInnerState(() {
+                                        searxSaved = false;
+                                      });
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: MyAppTheme.mainFontColor,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: Text(
+                                      searxSaved ? "Saved!" : "Save Address"),
+                                ),
+                                if (searxSaved) ...[
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    "Saved!",
+                                    style: TextStyle(
+                                      color: Colors.greenAccent,
+                                      fontFamily: 'Cera Pro',
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
           ],
         );
       },
@@ -2537,6 +3113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildProviderSelector(),
             _buildApiKeyField(),
             _buildCustomBaseUrlField(),
+            _buildCloudflareAccountIdField(),
             _buildSaveButton(),
             const SizedBox(height: 32),
             _buildSystemPromptSection(),
@@ -2558,6 +3135,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildTtsSection(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
+            const SizedBox(height: 32),
+            _buildSearxngSection(),
+            const SizedBox(height: 32),
+            Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            _buildLocalSearchSection(),
             const SizedBox(height: 32),
             Divider(color: MyAppTheme.mainFontColor.withValues(alpha: 0.3)),
             const SizedBox(height: 16),

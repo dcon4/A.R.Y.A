@@ -14,6 +14,7 @@ class ApiProvider {
   final String defaultModel;
   final List<ApiModel> models;
   final bool requiresReferer;
+  final bool supportsWebSearch;
 
   const ApiProvider({
     required this.id,
@@ -22,6 +23,7 @@ class ApiProvider {
     required this.defaultModel,
     required this.models,
     this.requiresReferer = false,
+    this.supportsWebSearch = false,
   });
 
   String get prefKey => '${id}_api_key';
@@ -40,6 +42,7 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://openrouter.ai/api/v1',
     defaultModel: '~openai/gpt-mini-latest',
     requiresReferer: true,
+    supportsWebSearch: true,
     models: const [
       ApiModel(id: 'openai/gpt-oss-20b:free', label: 'GPT OSS 20B (FREE)'),
       ApiModel(id: 'openai/gpt-oss-120b:free', label: 'GPT OSS 120B (FREE)'),
@@ -88,12 +91,12 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'openai/gpt-oss-20b',
     models: const [
-      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (Groq)'),
-      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (Groq)'),
-      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Groq)'),
-      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B'),
-      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant'),
-      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (legacy)'),
+      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (free)'),
+      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (free)'),
+      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (free)'),
+      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B (free)'),
+      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (free)'),
+      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (free)'),
     ],
   ),
   ApiProvider(
@@ -115,6 +118,85 @@ final List<ApiProvider> apiProviders = [
       ApiModel(id: 'llama-3.3-70b', label: 'Llama 3.3 70B'),
       ApiModel(id: 'llama-3.1-8b', label: 'Llama 3.1 8B'),
       ApiModel(id: 'llama-3.1-70b', label: 'Llama 3.1 70B'),
+    ],
+  ),
+  ApiProvider(
+    id: 'nim',
+    name: 'NVIDIA NIM',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    defaultModel: 'openai/gpt-oss-20b',
+    models: const [
+      ApiModel(
+          id: 'openai/gpt-oss-20b',
+          label: 'GPT OSS 20B (free) - confirmed working on this account'),
+    ],
+  ),
+  ApiProvider(
+    id: 'zen',
+    name: 'OpenCode Zen',
+    baseUrl: 'https://opencode.ai/zen/v1',
+    defaultModel: 'space-bunny-free',
+    models: const [
+      ApiModel(
+          id: 'space-bunny-free',
+          label: 'Space Bunny (free) - keeps no copy of your text, never trains on it'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kilo_code',
+    name: 'Kilo Code',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    defaultModel: 'kilo-auto/free',
+    models: const [
+      ApiModel(
+          id: 'kilo-auto/free',
+          label: 'Kilo Auto Free - routes to the best free model (free)'),
+      ApiModel(
+          id: 'qwen/qwen3.8-27b:free',
+          label: 'Qwen 3.8 27B (free) - strong reasoning'),
+      ApiModel(
+          id: 'nvidia/nemotron-3-super-120b-a12b:free',
+          label: 'Nemotron 3 Super 120B (free) - large, capable'),
+      ApiModel(
+          id: 'openrouter/free',
+          label: 'OpenRouter Free - auto-picks a free model (free)'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kiloworks_ai',
+    name: 'Cloudflare Workers AI',
+    baseUrl: 'https://api.cloudflare.com/client/v4/accounts',
+    defaultModel: '@cf/meta/llama-3.1-8b-instruct-fp8',
+    models: const [
+      ApiModel(
+          id: '@cf/meta/llama-3.1-8b-instruct-fp8',
+          label: 'Llama 3.1 8B FP8 - good all-round answers'),
+      ApiModel(
+          id: '@cf/zai-org/glm-4.7-flash',
+          label: 'GLM 4.7 Flash - fast, cheap'),
+      ApiModel(
+          id: '@cf/qwen/qwq-32b',
+          label: 'QwQ 32B - reasoning model'),
+      ApiModel(
+          id: '@cf/openai/gpt-oss-120b',
+          label: 'GPT OSS 120B - strong, larger model'),
+      ApiModel(
+          id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+          label: 'Llama 3.3 70B Fast - larger, optimized for speed'),
+      ApiModel(
+          id: '@cf/qwen/qwen3-30b-a3b-fp8',
+          label: 'Qwen3 30B A3B FP8 - efficient mixture-of-experts'),
+    ],
+  ),
+  ApiProvider(
+    id: 'local',
+    name: 'Local model (this computer)',
+    baseUrl: '',
+    defaultModel: 'gemma3:1b',
+    models: const [
+      ApiModel(
+          id: 'gemma3:1b',
+          label: 'Local: private, runs on this computer, nothing sent online'),
     ],
   ),
   ApiProvider(
@@ -153,6 +235,10 @@ Future<String> getRoutingModel(String category) async {
 }
 
 Future<void> setRouting(String category, String providerId, String model) async {
+  // 'local' only ever answers local-search questions through the computer's
+  // Research Assistant - its address does not exist on the phone, so it must
+  // never be routable for general chat.
+  if (providerId == 'local') return;
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString(_routingPrefProvider(category), providerId);
   await prefs.setString(_routingPrefModel(category), model);
@@ -173,6 +259,16 @@ Future<String> getSelectedProviderId() async {
   return prefs.getString(_prefsProvider) ?? 'openrouter';
 }
 
+Future<void> setSelectedProviderId(String providerId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_prefsProvider, providerId);
+}
+
+Future<void> setModel(String model) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_prefsModel, model);
+}
+
 Future<String> getApiKeyForProvider(String providerId) async {
   final provider = apiProviders.firstWhere(
     (p) => p.id == providerId,
@@ -191,6 +287,12 @@ Future<String> getBaseUrlForProvider(String providerId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('api_custom_base_url') ?? '';
   }
+  if (provider.id == 'cloudflare' || provider.id == 'kiloworks_ai') {
+    final prefs = await SharedPreferences.getInstance();
+    final accountId = prefs.getString('cloudflare_account_id') ?? '';
+    if (accountId.isEmpty) return provider.baseUrl;
+    return '${provider.baseUrl}/$accountId/ai/v1';
+  }
   return provider.baseUrl;
 }
 
@@ -201,6 +303,28 @@ bool getRequiresRefererForProvider(String providerId) {
   );
   return provider.requiresReferer;
 }
+
+bool providerSupportsWebSearch(String providerId) {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  return provider.supportsWebSearch;
+}
+
+/// Providers the computer's Research Assistant can answer with.
+/// Kept in the same order as the Research Assistant's own registry.
+/// 'local' is the model running on the PC itself - local search only,
+/// never offered for general chat (its address only exists on the PC).
+const List<String> localSearchProviderIds = [
+  'openrouter',
+  'groq',
+  'nim',
+  'zen',
+  'kilo_code',
+  'kiloworks_ai',
+  'local',
+];
 
 // --- Preference accessors ---
 

@@ -11,6 +11,7 @@ import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/openai_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/research_assistant_service.dart';
 import 'package:arya/services/weather_service.dart';
 import 'package:arya/services/web_search_service.dart';
 import 'package:arya/services/wake_word_service.dart';
@@ -76,6 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
   QueryClassification? _pendingClassification;
   String _pendingQuery = '';
   bool _isConfirming = false;
+  bool _localSearchPending = false;
+  int _localSearchTurnsRemaining = 0;
+  // Search scope of the current local-search session: 'public' (the
+  // non-sensitive folders, cloud answer allowed) or 'private' (only the
+  // private Keep folder, always answered by the local model on the PC).
+  String _localSearchScope = 'public';
+  Future<void> Function()? _retryAction;
   String _previousUserQuery = '';
   String _previousAiResponse = '';
 
@@ -88,6 +96,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // Browser Flow
   final BrowserFlow _browserFlow = BrowserFlow();
   bool _browserMode = false;
+  String _webSearchResultsText = '';
+
+  // Transient status line pinned to the top of the screen
+  String? _statusMessage;
+  Timer? _statusTimer;
 
   @override
   void initState() {
@@ -98,6 +111,66 @@ class _HomeScreenState extends State<HomeScreen> {
     // reset(), including "New conversation" before a search ever ran.
     _browserFlow.tts = flutterTts;
     _browserFlow.logger = _logger;
+    // Results go on screen as well as being spoken, and searches and
+    // read articles are saved into the conversation transcript.
+    _browserFlow.onResults = (results, query, elapsed) async {
+      if (!mounted) return;
+      if (results.isEmpty) {
+        setState(() {
+          _webSearchResultsText = '';
+          generatedContent = 'No web search results for "$query".';
+        });
+        return;
+      }
+      final sb = StringBuffer('Search results for "$query":\n\n');
+      for (var i = 0; i < results.length; i++) {
+        sb.writeln('${i + 1}. ${results[i].title}');
+        sb.writeln('   ${results[i].snippet}');
+        sb.writeln('   ${results[i].url}');
+        sb.writeln('');
+      }
+      final text = sb.toString().trimRight();
+      setState(() {
+        _webSearchResultsText = text;
+        generatedContent = text;
+      });
+      conversationService.addEntry(ConversationEntry(
+        userQuery: 'web search: $query',
+        aiResponse: text,
+        model: 'web search',
+        provider: '',
+        routingCategory: 'web_search',
+        responseTime: elapsed,
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (e) {
+        _logger.error('HomeScreen', 'Transcript save of search results failed', e);
+      }
+    };
+    _browserFlow.onArticleRead = (title, url, text) async {
+      if (!mounted) return;
+      final article = text.length > 6000
+          ? '${text.substring(0, 6000)}\n\n(article text truncated in transcript)'
+          : text;
+      setState(() {
+        generatedContent = _webSearchResultsText.isEmpty
+            ? 'Reading: $title\n$url\n\n$article'
+            : '$_webSearchResultsText\n\nReading: $title\n$url\n\n$article';
+      });
+      conversationService.addEntry(ConversationEntry(
+        userQuery: 'read article: $title',
+        aiResponse: '$url\n\n$article',
+        model: 'web search',
+        provider: '',
+        routingCategory: 'article_reading',
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (e) {
+        _logger.error('HomeScreen', 'Transcript save of article failed', e);
+      }
+    };
     BackgroundService.setOnStartMicCallback(() {
       if (speechToText.isNotListening) {
         startListening();
@@ -119,9 +192,12 @@ class _HomeScreenState extends State<HomeScreen> {
     BackgroundService.setOnRotateProviderCallback(() async {
       final prefs = await SharedPreferences.getInstance();
       final currentId = prefs.getString('api_provider') ?? 'openrouter';
-      final currentIndex = apiProviders.indexWhere((p) => p.id == currentId);
-      final nextIndex = (currentIndex + 1) % apiProviders.length;
-      final next = apiProviders[nextIndex];
+      // 'local' is local-search only - its address exists on the PC, never
+      // on the phone, so it must never become the general-chat provider.
+      final selectable = apiProviders.where((p) => p.id != 'local').toList();
+      final currentIndex = selectable.indexWhere((p) => p.id == currentId);
+      final nextIndex = (currentIndex + 1) % selectable.length;
+      final next = selectable[nextIndex];
       await prefs.setString('api_provider', next.id);
       if (next.defaultModel.isNotEmpty) {
         await prefs.setString('api_model', next.defaultModel);
@@ -248,6 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> systemSpeak(String content) async {
     _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
+    _armWakeWhileSpeaking();
     if (content.length <= _maxTtsChunkSize) {
       _clearResponseChunks();
       await flutterTts.speak(content);
@@ -303,6 +380,13 @@ class _HomeScreenState extends State<HomeScreen> {
         .hasMatch(lower)) {
       return 'new_conversation';
     }
+    if (lower.startsWith('local search') ||
+        lower.startsWith('ask my documents')) {
+      return 'local_search';
+    }
+    // Must come before the web-search keywords below: "private search"
+    // also contains the word "search".
+    if (lower.startsWith('private search')) return 'private_search';
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -320,7 +404,29 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
-  Future<bool> _handleVoiceCommand(String text) async {
+  bool _hasLocalSearchPrefix(String text) {
+    final lower = text.trim().toLowerCase();
+    return lower.startsWith('local search') ||
+        lower.startsWith('ask my documents') ||
+        lower.startsWith('private search');
+  }
+
+  String _localSearchQuestion(String text) {
+    final trimmed = text.trim();
+    final lower = trimmed.toLowerCase();
+    for (final prefix in ['local search', 'ask my documents', 'private search']) {
+      if (lower.startsWith(prefix)) {
+        var rest = trimmed.substring(prefix.length);
+        rest = rest.replaceFirst(RegExp(r'^[\s,:;\-–]+'), '');
+        rest = rest.replaceFirst(RegExp(r'[\s,.;:!?–-]+$'), '');
+        if (rest.trim().isEmpty) return '';
+        return rest.trim();
+      }
+    }
+    return '';
+  }
+
+  Future<bool> _handleVoiceCommand(String text, {bool fromTyped = false}) async {
     final cmd = _detectVoiceCommand(text);
     if (cmd == null) return false;
 
@@ -369,11 +475,17 @@ class _HomeScreenState extends State<HomeScreen> {
         final weatherReport = await WeatherService.instance.fetchWeather();
         await _speakAndWait(weatherReport);
         break;
+      case 'local_search':
+        await _handleLocalSearchCommand(text);
+        break;
+      case 'private_search':
+        await _handleLocalSearchCommand(text, scope: 'private');
+        break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
         if (!(prefs.getBool('web_search_enabled') ?? false)) {
           await _speakAndWait("Web search is not enabled in settings.");
-          startListening();
+          if (!fromTyped) startListening();
           return true;
         }
         setState(() {
@@ -382,20 +494,24 @@ class _HomeScreenState extends State<HomeScreen> {
         _browserFlow.tts = flutterTts;
         _browserFlow.logger = _logger;
         final initialQuery = BrowserFlow.extractSearchQuery(text);
-        _logger.log('HomeScreen', 'Entering web search mode (query=$initialQuery)');
+        _logger.log('HomeScreen',
+            'Entering web search mode (query=$initialQuery${fromTyped ? ', typed' : ''})');
+        // Typed entry must not yank the microphone open — the user is
+        // typing, and the flow accepts their next typed line anyway.
+        void Function() resumeMic = () {
+          if (!fromTyped) startListening();
+        };
         await _browserFlow.start(
           onSpeak: (msg) => _speakAndWait(msg),
-          onListeningStarted: () {
-            startListening();
-          },
+          onListeningStarted: resumeMic,
           onIdle: () {
             _browserMode = false;
             setState(() {});
-            startListening();
+            resumeMic();
           },
           onError: (msg) async {
             await _speakAndWait(msg);
-            startListening();
+            resumeMic();
           },
           initialQuery: initialQuery,
         );
@@ -410,6 +526,197 @@ class _HomeScreenState extends State<HomeScreen> {
       startListening();
     }
     return true;
+  }
+
+  Future<void> _handleLocalSearchCommand(String text,
+      {String scope = 'public'}) async {
+    // Remember the mode before the pending prompt: a bare "private
+    // search" gets its question in a later turn and must stay private.
+    _localSearchScope = scope;
+    if (!await ResearchAssistantService.isEnabled()) {
+      _localSearchTurnsRemaining = 0;
+      await _speakAndWait("Local search is turned off in Settings.");
+      return;
+    }
+    final question = _localSearchQuestion(text);
+    if (question.isEmpty) {
+      setState(() {
+        _localSearchPending = true;
+        _retryAction = null;
+      });
+      await _speakAndWait("What would you like me to search for.");
+    } else {
+      await _runLocalSearch(question, isTrigger: true);
+    }
+  }
+
+  List<Map<String, String>> _recentHistoryTurns() {
+    final turns = <Map<String, String>>[];
+    String? pendingQuestion;
+    for (final entry in _messageHistory) {
+      final role = entry['role'] ?? '';
+      final content = entry['content'] ?? '';
+      if (role == 'user') {
+        pendingQuestion = content;
+      } else if (role == 'assistant' &&
+          pendingQuestion != null &&
+          content.isNotEmpty) {
+        turns.add({'question': pendingQuestion, 'answer': content});
+        pendingQuestion = null;
+      }
+    }
+    if (turns.length > 3) {
+      return turns.sublist(turns.length - 3);
+    }
+    return turns;
+  }
+
+  Future<void> _runLocalSearch(String question,
+      {bool isTrigger = false, String scope = ''}) async {
+    final searchScope = scope.isNotEmpty ? scope : _localSearchScope;
+    if (isTrigger) _localSearchScope = searchScope;
+    _logger.log(
+        'LocalSearch', 'Running search scope=$searchScope trigger=$isTrigger');
+    if (!await ResearchAssistantService.isEnabled()) {
+      _localSearchTurnsRemaining = 0;
+      await _speakAndWait("Local search is turned off in Settings.");
+      return;
+    }
+    var trimmed = _localSearchQuestion(question);
+    if (!_hasLocalSearchPrefix(question)) {
+      trimmed = question.trim();
+    }
+    if (trimmed.isEmpty) {
+      setState(() {
+        _localSearchPending = true;
+        _retryAction = null;
+      });
+      await _speakAndWait("What would you like me to search for.");
+      return;
+    }
+    setState(() {
+      isLoading = true;
+      _retryAction = null;
+    });
+    final localTimer = Stopwatch()..start();
+    final reachable = await ResearchAssistantService.instance.checkReachable();
+    if (!reachable) {
+      const message =
+          "Your computer is not reachable. Check that it is on and on the "
+          "same wifi, then try again.";
+      setState(() {
+        generatedContent = message;
+        isLoading = false;
+        _retryAction = () => _runLocalSearch(trimmed,
+            isTrigger: isTrigger, scope: searchScope);
+      });
+      await _speakAndWait(message);
+      return;
+    }
+    final result = await ResearchAssistantService.instance
+        .ask(trimmed, history: _recentHistoryTurns(), scope: searchScope);
+    localTimer.stop();
+    final answerScreen = _localSearchScreenText(result);
+    final answerSpoken = _localSearchSpeech(result);
+    // Name the mode back to the user on a private search.
+    final privateOk = result.ok && searchScope == 'private';
+    final screenText = privateOk
+        ? 'Private search, answered locally.\n\n$answerScreen'
+        : answerScreen;
+    final spoken =
+        privateOk ? 'Private search, answered locally. $answerSpoken' : answerSpoken;
+    setState(() {
+      generatedContent = screenText;
+      isLoading = false;
+      _retryAction = result.ok
+          ? null
+          : () => _runLocalSearch(trimmed,
+              isTrigger: isTrigger, scope: searchScope);
+      if (result.ok && isTrigger) {
+        _localSearchTurnsRemaining = 3;
+      }
+    });
+    if (result.ok && (result.answer ?? '').trim().isNotEmpty) {
+      _lastAiResponse = screenText;
+      _previousUserQuery = trimmed;
+      _previousAiResponse = screenText;
+      _messageHistory.add({'role': 'user', 'content': trimmed});
+      _messageHistory.add({'role': 'assistant', 'content': screenText});
+      conversationService.addEntry(ConversationEntry(
+        userQuery: trimmed,
+        aiResponse: screenText,
+        model: result.model.isNotEmpty ? result.model : 'local search',
+        provider: result.provider.isNotEmpty ? result.provider : 'local search',
+        routingCategory:
+            searchScope == 'private' ? 'private_search' : 'local_search',
+        responseTime: localTimer.elapsed,
+      ));
+      try {
+        await conversationService.autoSave();
+      } catch (_) {
+        _logger.log('LocalSearch', 'Conversation auto-save failed');
+      }
+    }
+    if (spoken.length <= _maxTtsChunkSize) {
+      await _speakAndWait(spoken);
+    } else {
+      for (final chunk in _splitAtSentences(spoken, _maxTtsChunkSize)) {
+        await _speakAndWait(chunk);
+      }
+    }
+  }
+
+  String _localSearchSourceLine(LocalSearchSource source) {
+    return [
+      source.folder,
+      source.title,
+      source.location,
+    ].where((part) => part.trim().isNotEmpty).join(', ');
+  }
+
+  String _localSearchExcerpt(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.length <= 400) return trimmed;
+    final cut = trimmed.substring(0, 400);
+    final lastSpace = cut.lastIndexOf(' ');
+    final head = lastSpace > 300 ? cut.substring(0, lastSpace) : cut;
+    return '${head.trimRight()}...';
+  }
+
+  String _localSearchSpeech(LocalSearchResult result) {
+    if (!result.ok) return result.error;
+    final buffer = StringBuffer(result.answer ?? '');
+    if (result.sources.isNotEmpty) {
+      buffer.write(' Sources: ');
+      for (var i = 0; i < result.sources.length; i++) {
+        final source = result.sources[i];
+        buffer.write(
+            'Source ${i + 1}: ${_localSearchSourceLine(source)}. ');
+        final excerpt = _localSearchExcerpt(source.text);
+        if (excerpt.isNotEmpty) {
+          buffer.write('Passage: $excerpt ');
+        }
+      }
+    }
+    return buffer.toString();
+  }
+
+  String _localSearchScreenText(LocalSearchResult result) {
+    if (!result.ok) return result.error;
+    final buffer = StringBuffer(result.answer ?? '');
+    if (result.sources.isNotEmpty) {
+      buffer.write('\n\nSources:');
+      for (var i = 0; i < result.sources.length; i++) {
+        final source = result.sources[i];
+        buffer.write('\n${i + 1}. ${_localSearchSourceLine(source)}');
+        final excerpt = _localSearchExcerpt(source.text);
+        if (excerpt.isNotEmpty) {
+          buffer.write('\n   Passage: $excerpt');
+        }
+      }
+    }
+    return buffer.toString();
   }
 
   // --- Search Helper ---
@@ -456,20 +763,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'reasoning';
   }
 
-  Future<({String providerId, String model})> _resolveRoute(String query) async {
+  Future<({String providerId, String model, String routingCategory})> _resolveRoute(String query) async {
     final prefs = await SharedPreferences.getInstance();
     final autoRoute = prefs.getBool('auto_route_enabled') ?? false;
     if (!autoRoute) {
       final pid = await getSelectedProviderId();
       final m = await getModel();
-      return (providerId: pid, model: m);
+      return (providerId: pid, model: m, routingCategory: 'manual');
     }
     final category = _classifyQuery(query);
     final pid = await getRoutingProviderId(category);
     final m = await getRoutingModel(category);
     final resolvedPid = pid.isNotEmpty ? pid : await getSelectedProviderId();
     final resolvedModel = m.isNotEmpty ? m : (await getModel());
-    return (providerId: resolvedPid, model: resolvedModel);
+    return (providerId: resolvedPid, model: resolvedModel, routingCategory: category);
   }
 
   Future<void> _speakAndWait(String text) {
@@ -486,6 +793,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakNow(String text, int gen) async {
     // Superseded by a barge-in while queued — drop it.
     if (gen != _speakGen) return;
+    _armWakeWhileSpeaking();
     final completer = Completer<void>();
     _announceCompleter = completer;
     try {
@@ -522,6 +830,23 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await flutterTts.stop();
     } catch (_) {}
+  }
+
+  /// Re-arm the wake word while a reply is being spoken so the user can
+  /// interrupt a long answer with "hey rhasspy". The 2-second delay gives
+  /// the just-finished listening turn time to settle, and matches the
+  /// echo guard used when speech finishes. The wake handler itself only
+  /// acts when the mic is not already listening, so this cannot steal the
+  /// microphone from an active recognition session.
+  void _armWakeWhileSpeaking() {
+    if (!_wakeWordPausedForSpeech) return;
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_wakeWordPausedForSpeech) {
+        _wakeWordPausedForSpeech = false;
+        WakeWordService.instance.resume();
+        _logger.verbose('HomeScreen', 'Wake word re-armed during speech');
+      }
+    });
   }
 
   Future<void> _speakProviderAnnouncement(SharedPreferences prefs) async {
@@ -562,12 +887,19 @@ class _HomeScreenState extends State<HomeScreen> {
       await speechToText.initialize();
     }
 
-    // Stop any ongoing TTS so it doesn't get interrupted mid-sentence
-    // by the announcement speech or by a new response later. Skip when a
-    // prompt is mid-speech — killing it orphaned its completion waiter and
-    // stalled the flow for 60 seconds.
-    _clearResponseChunks();
-    if (_announceCompleter == null) {
+    // Stop any ongoing TTS so the mic gets a quiet room. An awaited
+    // utterance (prompt, local search answer) is interrupted properly:
+    // its completion waiter is released and any queued chunks are
+    // dropped, so the waiting flow continues instead of stalling.
+    if (_announceCompleter != null) {
+      _logger.verbose('HomeScreen',
+          'Barge-in — stopping awaited speech so the mic can listen');
+      await _interruptSpeech();
+    } else {
+      // Also bump the generation: a queued chunk can slip in during the
+      // microtask gap between two awaited utterances, and this drops it.
+      _speakGen++;
+      _clearResponseChunks();
       await flutterTts.stop();
     }
 
@@ -672,6 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // One or two words cannot be split by a mid-utterance pause.
     if (wordCount < 3) return false;
     if (_searchState == SearchState.awaitingQuery) return true;
+    if (_localSearchPending) return true;
     // Results/reading dialogs expect short replies (cancel, read all, 1-9)
     // which must stay instant.
     if (_searchState != SearchState.idle) return false;
@@ -813,6 +1146,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _processSpeech() async {
     try {
+      if (_localSearchPending) {
+        if (_detectVoiceCommand(lastWords) == 'new_conversation') {
+          _localSearchPending = false;
+          await _handleVoiceCommand(lastWords);
+          return;
+        }
+        _localSearchPending = false;
+        final lower = lastWords.toLowerCase().trim();
+        if (lower == 'cancel' || lower == 'stop') {
+          await _speakAndWait("Cancelled.");
+          startListening();
+          return;
+        }
+        await _runLocalSearch(lastWords, isTrigger: true);
+        startListening();
+        return;
+      }
+      if (_localSearchTurnsRemaining > 0 &&
+          _detectVoiceCommand(lastWords) == null &&
+          !_browserMode) {
+        _localSearchTurnsRemaining--;
+        _logger.log('HomeScreen',
+            'Local search continuation (turns left: $_localSearchTurnsRemaining)');
+        await _runLocalSearch(lastWords);
+        startListening();
+        return;
+      }
       // Non-search voice commands (weather, memory) first — must work
       // even when browser mode is active so weather never routes to DuckDuckGo.
       final detectedCmd = _detectVoiceCommand(lastWords);
@@ -1079,6 +1439,15 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
+      if (!_browserMode &&
+          _localSearchTurnsRemaining > 0 &&
+          _detectVoiceCommand(lastWords) == null) {
+        _localSearchTurnsRemaining--;
+        _logger.log('HomeScreen',
+            'Local search continuation (turns left: $_localSearchTurnsRemaining)');
+        await _runLocalSearch(lastWords);
+        return;
+      }
 
       // Smart Free: classify query and optionally confirm before answering
       final prefs = await SharedPreferences.getInstance();
@@ -1116,6 +1485,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = 'Error: $e';
         isLoading = false;
+        _retryAction = sendMessageToOpenRouter;
       });
     }
   }
@@ -1144,9 +1514,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sendQueryToAI(String query, {QueryClassification? classification}) async {
+    final responseTimer = Stopwatch()..start();
     try {
       setState(() {
         isLoading = true;
+        _retryAction = null;
       });
 
       // Recall relevant memories
@@ -1158,7 +1530,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Determine route (provider + model)
       final route = await _resolveRoute(query);
-      _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model}');
+      _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model} (routing: ${route.routingCategory})');
 
       final isResearch = classification?.isResearch ?? false;
 
@@ -1171,12 +1543,20 @@ class _HomeScreenState extends State<HomeScreen> {
         maxTokens: 2000,
         isResearch: isResearch,
       );
+      responseTimer.stop();
 
       _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
+      if (openaiService.lastServedProviderId.isNotEmpty &&
+          (openaiService.lastServedProviderId != route.providerId ||
+              openaiService.lastServedModel != route.model)) {
+        _logger.log('HomeScreen',
+            'Served by ${openaiService.lastServedProviderId} / ${openaiService.lastServedModel} (route was ${route.providerId} / ${route.model})');
+      }
 
       setState(() {
         generatedContent = response;
         isLoading = false;
+        _retryAction = null;
       });
 
       // Log the conversation entry
@@ -1190,7 +1570,14 @@ class _HomeScreenState extends State<HomeScreen> {
         conversationService.addEntry(ConversationEntry(
           userQuery: query,
           aiResponse: response,
-          model: route.model,
+          model: openaiService.lastServedModel.isNotEmpty
+              ? openaiService.lastServedModel
+              : route.model,
+          provider: openaiService.lastServedProviderId.isNotEmpty
+              ? openaiService.lastServedProviderId
+              : route.providerId,
+          routingCategory: route.routingCategory,
+          responseTime: responseTimer.elapsed,
         ));
 
         // Auto-save if enabled
@@ -1209,17 +1596,56 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         generatedContent = 'Error: $e';
         isLoading = false;
+        _retryAction = () => _sendQueryToAI(query, classification: classification);
       });
     }
   }
 
-  void _sendTextMessage() {
+  Future<void> _sendTextMessage() async {
     final text = _textInputController.text.trim();
     if (text.isEmpty) return;
 
     _logger.log('HomeScreen', 'Sending typed text: "${text.length > 60 ? text.substring(0, 60) + "..." : text}"');
-    lastWords = text;
     _textInputController.clear();
+
+    if (_localSearchPending) {
+      _localSearchPending = false;
+      final lower = text.toLowerCase();
+      if (lower == 'cancel' || lower == 'stop') {
+        await _speakAndWait("Cancelled.");
+        return;
+      }
+      if (_detectVoiceCommand(text) == 'new_conversation') {
+        await _handleVoiceCommand(text);
+        return;
+      }
+      await _runLocalSearch(text, isTrigger: true);
+      return;
+    }
+    final textCmd = _detectVoiceCommand(text);
+    if (textCmd != null && textCmd != 'web_search') {
+      await _handleVoiceCommand(text, fromTyped: true);
+      return;
+    }
+    // Mirror the voice path: while the search flow is active, typed text
+    // is its input (a query, a number, 'cancel') — not a new AI chat.
+    if (_browserMode) {
+      final handled = await _browserFlow.handleSpeechResult(text,
+          onNextListen: startListening);
+      if (handled) return;
+      _logger.log('HomeScreen',
+          'BrowserFlow unhandled (typed) — routing to AI: "$text"');
+      setState(() {
+        _browserMode = false;
+        _searchState = SearchState.idle;
+        _readingAllSequentially = false;
+      });
+    }
+    if (textCmd == 'web_search') {
+      await _handleVoiceCommand(text, fromTyped: true);
+      return;
+    }
+    lastWords = text;
     sendMessageToOpenRouter();
   }
 
@@ -1351,15 +1777,33 @@ class _HomeScreenState extends State<HomeScreen> {
       generatedContent = null;
       lastWords = '';
       _isConfirming = false;
+      _localSearchPending = false;
+      _localSearchTurnsRemaining = 0;
+      _localSearchScope = 'public';
+      _retryAction = null;
       _pendingClassification = null;
       _pendingQuery = '';
       _previousUserQuery = '';
       _previousAiResponse = '';
+      _webSearchResultsText = '';
     });
     conversationService.clear();
     _clearResponseChunks();
     _logger.log('HomeScreen', 'New conversation started — search and reading state cleared');
-    _showSnackBar('New conversation started');
+    _flashStatus('New conversation started');
+  }
+
+  void _flashStatus(String message) {
+    _statusTimer?.cancel();
+    setState(() {
+      _statusMessage = message;
+    });
+    _statusTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = null;
+      });
+    });
   }
 
   void _showSnackBar(String message) {
@@ -1376,6 +1820,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _speechTimeout?.cancel();
     _stitchTimer?.cancel();
+    _statusTimer?.cancel();
     _textInputController.dispose();
     _textFocusNode.dispose();
     super.dispose();
@@ -1632,6 +2077,25 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          if (_statusMessage != null)
+            Container(
+              width: double.infinity,
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _statusMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -1889,6 +2353,34 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 1.5,
                             ),
                           ),
+                          if (_retryAction != null) ...[
+                            SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final action = _retryAction;
+                                if (action == null) return;
+                                setState(() {
+                                  _retryAction = null;
+                                });
+                                await action();
+                              },
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text(
+                                "Retry",
+                                style: TextStyle(fontFamily: 'Cera Pro'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+                                foregroundColor: MyAppTheme.mainFontColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
