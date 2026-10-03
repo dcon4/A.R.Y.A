@@ -9,6 +9,7 @@ class ConversationEntry {
   final String provider;
   final String routingCategory;
   final DateTime timestamp;
+  final Duration? responseTime;
 
   ConversationEntry({
     required this.userQuery,
@@ -16,6 +17,7 @@ class ConversationEntry {
     required this.model,
     this.provider = '',
     this.routingCategory = '',
+    this.responseTime,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }
@@ -69,6 +71,11 @@ class ConversationService {
     return truncated.isEmpty ? 'Conversation' : truncated;
   }
 
+  String _formatResponseTime(Duration d) {
+    final seconds = d.inMilliseconds / 1000;
+    return '${seconds.toStringAsFixed(1)} seconds';
+  }
+
   Future<String> getSaveDir() async {
     final dir = await getApplicationDocumentsDirectory();
     return dir.path;
@@ -101,6 +108,9 @@ class ConversationService {
       buffer.writeln(entry.userQuery);
       buffer.writeln('');
       buffer.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
+      if (entry.responseTime != null) {
+        buffer.writeln('Response time: ${_formatResponseTime(entry.responseTime!)}');
+      }
       buffer.writeln(entry.aiResponse);
       buffer.writeln('');
     }
@@ -169,6 +179,9 @@ class ConversationService {
     content.writeln(entry.userQuery);
     content.writeln('');
     content.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
+    if (entry.responseTime != null) {
+      content.writeln('Response time: ${_formatResponseTime(entry.responseTime!)}');
+    }
     content.writeln(entry.aiResponse);
     content.writeln('');
     await file.writeAsString(content.toString(), mode: FileMode.append);

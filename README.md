@@ -58,7 +58,7 @@ exist.
   your own SearXNG server if you pick that source in Settings. The
   full results list, with descriptions and links, also appears on
   screen, and every search and every article you read is saved into
-  the conversation transcript.
+  the conversation transcript, together with how long each answer took.
 - Optional web grounding: Brave Search results injected into the
   prompt (with a "Research questions only" mode), SearXNG from your
   own computer as a keyless alternative that fills in when Brave is

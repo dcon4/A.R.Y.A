@@ -98,6 +98,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _browserMode = false;
   String _webSearchResultsText = '';
 
+  // Transient status line pinned to the top of the screen
+  String? _statusMessage;
+  Timer? _statusTimer;
+
   @override
   void initState() {
     super.initState();
@@ -109,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _browserFlow.logger = _logger;
     // Results go on screen as well as being spoken, and searches and
     // read articles are saved into the conversation transcript.
-    _browserFlow.onResults = (results, query) async {
+    _browserFlow.onResults = (results, query, elapsed) async {
       if (!mounted) return;
       if (results.isEmpty) {
         setState(() {
@@ -136,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
         model: 'web search',
         provider: '',
         routingCategory: 'web_search',
+        responseTime: elapsed,
       ));
       try {
         await conversationService.autoSave();
@@ -593,6 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isLoading = true;
       _retryAction = null;
     });
+    final localTimer = Stopwatch()..start();
     final reachable = await ResearchAssistantService.instance.checkReachable();
     if (!reachable) {
       const message =
@@ -609,6 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final result = await ResearchAssistantService.instance
         .ask(trimmed, history: _recentHistoryTurns(), scope: searchScope);
+    localTimer.stop();
     final answerScreen = _localSearchScreenText(result);
     final answerSpoken = _localSearchSpeech(result);
     // Name the mode back to the user on a private search.
@@ -642,6 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
         provider: result.provider.isNotEmpty ? result.provider : 'local search',
         routingCategory:
             searchScope == 'private' ? 'private_search' : 'local_search',
+        responseTime: localTimer.elapsed,
       ));
       try {
         await conversationService.autoSave();
@@ -1506,6 +1514,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sendQueryToAI(String query, {QueryClassification? classification}) async {
+    final responseTimer = Stopwatch()..start();
     try {
       setState(() {
         isLoading = true;
@@ -1534,6 +1543,7 @@ class _HomeScreenState extends State<HomeScreen> {
         maxTokens: 2000,
         isResearch: isResearch,
       );
+      responseTimer.stop();
 
       _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
       if (openaiService.lastServedProviderId.isNotEmpty &&
@@ -1567,6 +1577,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? openaiService.lastServedProviderId
               : route.providerId,
           routingCategory: route.routingCategory,
+          responseTime: responseTimer.elapsed,
         ));
 
         // Auto-save if enabled
@@ -1779,7 +1790,20 @@ class _HomeScreenState extends State<HomeScreen> {
     conversationService.clear();
     _clearResponseChunks();
     _logger.log('HomeScreen', 'New conversation started — search and reading state cleared');
-    _showSnackBar('New conversation started');
+    _flashStatus('New conversation started');
+  }
+
+  void _flashStatus(String message) {
+    _statusTimer?.cancel();
+    setState(() {
+      _statusMessage = message;
+    });
+    _statusTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = null;
+      });
+    });
   }
 
   void _showSnackBar(String message) {
@@ -1796,6 +1820,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _speechTimeout?.cancel();
     _stitchTimer?.cancel();
+    _statusTimer?.cancel();
     _textInputController.dispose();
     _textFocusNode.dispose();
     super.dispose();
@@ -2052,6 +2077,25 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          if (_statusMessage != null)
+            Container(
+              width: double.infinity,
+              color: MyAppTheme.mainFontColor.withValues(alpha: 0.2),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _statusMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'Cera Pro',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: SingleChildScrollView(
               child: Column(

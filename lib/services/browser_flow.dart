@@ -43,7 +43,8 @@ class BrowserFlow {
 
   // Optional observers set by HomeScreen: puts the result list on screen
   // and saves searches and read articles into the conversation transcript.
-  Future<void> Function(List<ws.SearchResult> results, String query)? onResults;
+  Future<void> Function(List<ws.SearchResult> results, String query,
+      Duration elapsed)? onResults;
   Future<void> Function(String title, String url, String text)? onArticleRead;
 
   bool get hasResults => _allResults.isNotEmpty;
@@ -155,11 +156,14 @@ class BrowserFlow {
   Future<void> _performSearch(String query) async {
     _logger.log('BrowserFlow', 'Performing search: "$query"');
     await _onSpeak("Searching for: $query.");
+    final stopwatch = Stopwatch()..start();
 
     try {
       final results = await WebSearchService.instance.search(query);
+      stopwatch.stop();
       if (results.isEmpty) {
-        await onResults?.call(const <ws.SearchResult>[], query);
+        await onResults?.call(
+            const <ws.SearchResult>[], query, stopwatch.elapsed);
         await _onError("No results found for '$query'. Say another query or 'cancel'.");
         return;
       }
@@ -169,10 +173,12 @@ class BrowserFlow {
       _currentResultIndex = 0;
       _readingAllSequentially = false;
 
-      await onResults?.call(_allResults, query);
+      await onResults?.call(_allResults, query, stopwatch.elapsed);
       await _presentCurrentPage();
     } catch (e) {
-      await onResults?.call(const <ws.SearchResult>[], query);
+      stopwatch.stop();
+      await onResults?.call(
+          const <ws.SearchResult>[], query, stopwatch.elapsed);
       await _onError("Search failed: $e");
     }
   }
