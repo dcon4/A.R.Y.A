@@ -413,13 +413,44 @@ class RoutingHelpScreen extends StatelessWidget {
             _bullet('SearXNG: optional, runs on your own computer. '
                 'ARYA asks it for web results and feeds them to the AI, '
                 'just like Brave - no key, no cost. When both are on, '
-                'Brave runs first and SearXNG fills in when Brave is '
+                'SearXNG runs first and Brave fills in when SearXNG is '
                 'off or finds nothing'),
             _bullet('Web search on every request: appends OpenRouter\'s '
                 ':online suffix, which costs extra credits even on free '
                 'models'),
-            _bullet('If Brave or SearXNG injection is on, the :online '
-                'suffix is skipped - they are alternatives, not stacked'),
+            _bullet('If Brave or SearXNG actually found results, the '
+                ':online suffix is skipped - they are alternatives, not '
+                'stacked. If a source was asked but found nothing, '
+                ':online can step in'),
+
+            _heading('How search results reach the model'),
+            _body('When a question goes to the AI, fresh web results '
+                'can be looked up first and handed to the model with '
+                'the question.'),
+            _bullet('Your words are cleaned into a search query first - '
+                'voice filler is stripped away, and a short follow-up '
+                're-uses the topic from earlier in the conversation'),
+            _bullet('Sources are tried in order and the first one that '
+                'finds something wins: your own SearXNG server, then '
+                'Brave Search, then DuckDuckGo as a rescue when a '
+                'configured source was asked but found nothing'),
+            _bullet('Each source\'s "Research questions only" switch '
+                'makes a classifier check the question first - everyday '
+                'questions skip that source'),
+            _bullet('The results become a numbered list of title, link '
+                'and description, with instructions to use them to '
+                'answer, cite the sources, say honestly when they do '
+                'not contain the answer, and trust them over the '
+                'model\'s training data about recent events'),
+            _bullet('That list sits directly above your question in the '
+                'prompt, after the personality rules, your saved '
+                'memories and the conversation so far'),
+            _bullet('If nothing was found, the model answers from its '
+                'own knowledge, which can be out of date'),
+            _body('This is separate from the spoken "web search" '
+                'command: that path never touches the model. ARYA '
+                'fetches the pages herself, reads them to you, and '
+                'saves them to the conversation transcript.'),
 
             _heading('Quick reference'),
             _bullet('Provider and Model: the brain that answers, also the '
