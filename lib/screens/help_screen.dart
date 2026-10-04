@@ -177,7 +177,8 @@ class HelpScreen extends StatelessWidget {
             _bullet('Every saved reply notes the provider, model, and '
                 'routing category that produced it, so a shared '
                 'transcript shows where each answer came from'),
-            _bullet('The speaker icon on the last answer replays it'),
+            _bullet('The speaker icon on the last answer replays it, and '
+                'saying "replay" does the same thing by voice'),
             _bullet('Second opinion: say "second opinion" (or "another '
                 'opinion"), or tap the Second opinion button under an '
                 'answer - ARYA re-asks the same question, with the same '

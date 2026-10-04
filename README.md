@@ -170,7 +170,8 @@ flutter run
   new-conversation button (or its background control) - it interrupts
   TTS speech instantly, even mid-sentence - the conversation text is
   still saved to your selected folder first, so nothing is lost.
-- Replay the last answer with the speaker icon on the response card.
+- Replay the last answer with the speaker icon on the response card,
+  or just say "replay" - same button, by voice.
 - If a request fails (busy model or dropped connection), a Retry button
   appears under the answer - tap it to send the same request again.
 - Second opinion: after an answer, say "second opinion" (or "another

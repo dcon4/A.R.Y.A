@@ -397,6 +397,13 @@ class _HomeScreenState extends State<HomeScreen> {
         lower.startsWith('give it a second opinion')) {
       return 'second_opinion';
     }
+    // Re-speak what is on the response card, like the speaker icon.
+    if (lower == 'replay' ||
+        lower == 'replay that' ||
+        lower == 'replay it' ||
+        lower.startsWith('replay ')) {
+      return 'replay';
+    }
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -480,6 +487,13 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'new_conversation':
         await _newConversation();
         await _speakAndWait("New conversation started");
+        break;
+      case 'replay':
+        if (generatedContent == null || generatedContent!.isEmpty) {
+          await _speakAndWait('Nothing to replay yet.');
+        } else {
+          systemSpeak(generatedContent!);
+        }
         break;
       case 'weather':
         final weatherReport = await WeatherService.instance.fetchWeather();
