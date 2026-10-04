@@ -387,6 +387,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // Must come before the web-search keywords below: "private search"
     // also contains the word "search".
     if (lower.startsWith('private search')) return 'private_search';
+    // Re-ask the last question with the second-opinion model.
+    if (lower == 'second opinion' ||
+        lower == 'another opinion' ||
+        lower == 'other opinion' ||
+        lower.startsWith('second opinion ') ||
+        lower.startsWith('get a second opinion') ||
+        lower.startsWith('give me a second opinion') ||
+        lower.startsWith('give it a second opinion')) {
+      return 'second_opinion';
+    }
     if (lower.contains('weather') || lower == 'forecast') return 'weather';
     // Explicit search keywords only. Word boundaries so "research" does not match.
     if (lower == 'find' ||
@@ -480,6 +490,9 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
       case 'private_search':
         await _handleLocalSearchCommand(text, scope: 'private');
+        break;
+      case 'second_opinion':
+        await _sendSecondOpinion();
         break;
       case 'web_search':
         final prefs = await SharedPreferences.getInstance();
@@ -1513,7 +1526,11 @@ class _HomeScreenState extends State<HomeScreen> {
     await startListening();
   }
 
-  Future<void> _sendQueryToAI(String query, {QueryClassification? classification}) async {
+  Future<void> _sendQueryToAI(String query,
+      {QueryClassification? classification,
+      String? forceProviderId,
+      String? forceModel}) async {
+    final isSecondOpinion = forceModel != null;
     final responseTimer = Stopwatch()..start();
     try {
       setState(() {
@@ -1528,15 +1545,40 @@ class _HomeScreenState extends State<HomeScreen> {
         MemoryService.instance.incrementHitCount(m.id);
       }
 
-      // Determine route (provider + model)
-      final route = await _resolveRoute(query);
+      // Determine route (provider + model). A second opinion always goes to
+      // the model picked in Settings, never through auto-route.
+      final route = isSecondOpinion
+          ? (providerId: forceProviderId ?? '',
+              model: forceModel!,
+              routingCategory: 'second_opinion')
+          : await _resolveRoute(query);
       _logger.log('HomeScreen', 'Route: ${route.providerId} / ${route.model} (routing: ${route.routingCategory})');
+
+      // A second opinion must see the same context the first answer saw:
+      // drop the trailing question/answer pair(s) so the model is not
+      // anchored by the first reply. Search results are re-run inside
+      // chatGPTAPI exactly as they were the first time.
+      List<Map<String, String>>? secondOpinionHistory;
+      if (isSecondOpinion) {
+        secondOpinionHistory = List<Map<String, String>>.from(_messageHistory);
+        while (secondOpinionHistory.length >= 2 &&
+            secondOpinionHistory.last['role'] == 'assistant' &&
+            secondOpinionHistory[secondOpinionHistory.length - 2]['role'] ==
+                'user' &&
+            secondOpinionHistory[secondOpinionHistory.length - 2]['content'] ==
+                query) {
+          secondOpinionHistory.removeLast();
+          secondOpinionHistory.removeLast();
+        }
+      }
 
       final isResearch = classification?.isResearch ?? false;
 
       final response = await openaiService.chatGPTAPI(
         query,
-        history: _messageHistory.isNotEmpty ? _messageHistory : null,
+        history: isSecondOpinion
+            ? (secondOpinionHistory!.isNotEmpty ? secondOpinionHistory : null)
+            : (_messageHistory.isNotEmpty ? _messageHistory : null),
         providerId: route.providerId,
         overrideModel: route.model,
         memories: relevantMemories.isNotEmpty ? relevantMemories : null,
@@ -1554,10 +1596,23 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       setState(() {
-        generatedContent = response;
+        if (isSecondOpinion && response != null && response.isNotEmpty) {
+          // Keep the first answer on screen and show the second opinion
+          // underneath it, clearly labelled with the model that wrote it.
+          final header = 'Second opinion (${route.model}):';
+          generatedContent =
+              (generatedContent == null || generatedContent!.isEmpty)
+                  ? '$header\n$response'
+                  : '$generatedContent\n\n$header\n$response';
+        } else if (!isSecondOpinion) {
+          generatedContent = response;
+        }
         isLoading = false;
         _retryAction = null;
       });
+      if (isSecondOpinion && (response == null || response.isEmpty)) {
+        _flashStatus('The second opinion model gave no answer');
+      }
 
       // Log the conversation entry
       if (response != null && response.isNotEmpty) {
@@ -1568,7 +1623,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _messageHistory.add({'role': 'assistant', 'content': response});
 
         conversationService.addEntry(ConversationEntry(
-          userQuery: query,
+          userQuery: isSecondOpinion ? 'second opinion: $query' : query,
           aiResponse: response,
           model: openaiService.lastServedModel.isNotEmpty
               ? openaiService.lastServedModel
@@ -1594,11 +1649,54 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.error('HomeScreen', '_sendQueryToAI failed', e);
       _logger.error('HomeScreen', 'Stack trace: $st');
       setState(() {
-        generatedContent = 'Error: $e';
+        if (isSecondOpinion &&
+            generatedContent != null &&
+            generatedContent!.isNotEmpty) {
+          // Keep the first answer visible; report the failure underneath.
+          generatedContent = '$generatedContent\n\nSecond opinion failed: $e';
+        } else {
+          generatedContent = 'Error: $e';
+        }
         isLoading = false;
-        _retryAction = () => _sendQueryToAI(query, classification: classification);
+        _retryAction = () => _sendQueryToAI(query,
+            classification: classification,
+            forceProviderId: forceProviderId,
+            forceModel: forceModel);
       });
     }
+  }
+
+  /// Ask the model chosen under "Second opinion" in Settings the same
+  /// question again — with the same injected search results — and show its
+  /// answer under the first one in the transcript.
+  Future<void> _sendSecondOpinion() async {
+    final query = _previousUserQuery;
+    if (query.isEmpty) {
+      await _speakAndWait(
+          'There is no previous question to get a second opinion on.');
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final soProvider = await getRoutingProviderId('second_opinion');
+    final soModel = await getRoutingModel('second_opinion');
+    if (soModel.isEmpty) {
+      await _speakAndWait('No second opinion model is set yet. In Settings, '
+          'under Model Routing, pick one for Second opinion.');
+      return;
+    }
+    _logger.log(
+        'HomeScreen', 'Second opinion requested ($soProvider / $soModel)');
+    _flashStatus('Getting a second opinion...');
+    QueryClassification? classification;
+    final smartFree = prefs.getBool('smart_free_enabled') ?? false;
+    if (smartFree) {
+      classification = await QueryClassifier.instance
+          .classify(query, smartFreeEnabled: true);
+    }
+    await _sendQueryToAI(query,
+        classification: classification,
+        forceProviderId: soProvider,
+        forceModel: soModel);
   }
 
   Future<void> _sendTextMessage() async {
@@ -2372,6 +2470,27 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
                                     MyAppTheme.mainFontColor.withValues(alpha: 0.3),
+                                foregroundColor: MyAppTheme.mainFontColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ],
+                          if (_previousUserQuery.isNotEmpty && !_isConfirming) ...[
+                            SizedBox(height: _retryAction != null ? 8 : 12),
+                            ElevatedButton.icon(
+                              onPressed: _sendSecondOpinion,
+                              icon: const Icon(Icons.compare_arrows, size: 18),
+                              label: const Text(
+                                "Second opinion",
+                                style: TextStyle(fontFamily: 'Cera Pro'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: MyAppTheme.mainFontColor
+                                    .withValues(alpha: 0.18),
                                 foregroundColor: MyAppTheme.mainFontColor,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),

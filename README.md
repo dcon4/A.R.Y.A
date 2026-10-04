@@ -173,6 +173,13 @@ flutter run
 - Replay the last answer with the speaker icon on the response card.
 - If a request fails (busy model or dropped connection), a Retry button
   appears under the answer - tap it to send the same request again.
+- Second opinion: after an answer, say "second opinion" (or "another
+  opinion"), or tap the Second opinion button under the answer. ARYA
+  re-asks the same question - with the same injected search results -
+  to a different model you choose in Settings, under Model Routing,
+  and the new answer appears under the first one. Both answers stay
+  in the same transcript. Until you pick a model, ARYA tells you
+  where to set one.
 
 ## Settings quick reference
 
@@ -180,7 +187,7 @@ flutter run
 | --- | --- |
 | System prompt | ARYA's personality and instructions |
 | Model | Provider, API key, and default model |
-| Model Routing | Auto-route switch plus per-category provider/model pickers |
+| Model Routing | Auto-route switch, per-category pickers, and the second-opinion model |
 | Smart Confirmation | Confirm complex questions; balanced research answers |
 | Weather Settings | Your US ZIP code for forecasts |
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
@@ -259,6 +266,12 @@ The four category rows are live buttons. Tap a row, choose a provider
 locked door), then choose a model. The row shows your pick and the
 screen reader announces it. "Use my default model" resets the row to
 your main Model section choice.
+
+Below the four categories sits the Second opinion row, and it works
+the same way: it picks the provider and model that re-answers your
+last question when you say "second opinion" or tap the Second opinion
+button. It is independent of Auto-route, so you can set it with
+Auto-route off. Until you choose a model the row shows "Not set".
 
 With Auto-route on and a category configured, the log "Route:" line
 shows that category's provider and model. Weather, memory, and

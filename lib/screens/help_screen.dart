@@ -178,12 +178,17 @@ class HelpScreen extends StatelessWidget {
                 'routing category that produced it, so a shared '
                 'transcript shows where each answer came from'),
             _bullet('The speaker icon on the last answer replays it'),
+            _bullet('Second opinion: say "second opinion" (or "another '
+                'opinion"), or tap the Second opinion button under an '
+                'answer - ARYA re-asks the same question, with the same '
+                'search results, to a different model you pick in '
+                'Settings, and both answers stay in the same transcript'),
 
             _heading('Settings at a glance'),
             _bullet('Model: provider, API key, and default model'),
-            _bullet('Model Routing: auto-route and a provider/model '
+            _bullet('Model Routing: auto-route, a provider/model '
                 'choice for coding, quick, creative, and reasoning '
-                'questions'),
+                'questions, and the model used for second opinions'),
             _bullet('Smart Confirmation: confirm complex questions first '
                 'and get balanced research answers'),
             _bullet('Weather Settings: your US ZIP code'),
@@ -383,6 +388,13 @@ class RoutingHelpScreen extends StatelessWidget {
                 'model. The row shows your pick, and the screen reader '
                 'announces it. "Use my default model" resets the row to '
                 'your main Model section choice.'),
+            _body('Below the four categories sits the Second opinion '
+                'row, and it works the same way: it picks the provider '
+                'and model that re-answers your last question when you '
+                'say "second opinion" or tap the Second opinion button. '
+                'It is independent of Auto-route, so you can set it with '
+                'Auto-route off. Until you choose a model the row shows '
+                '"Not set".'),
             _body('With Auto-route on and a category configured, the log '
                 '"Route:" line shows that category provider and model, '
                 'so you can verify a routing choice by asking a matching '

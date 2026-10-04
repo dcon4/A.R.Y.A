@@ -825,6 +825,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _routingCategoryRow("Creative", "creative", "write, story, poem, describe", refresh: setInnerState),
               _routingCategoryRow("Coding", "coding", "code, function, bug, python, api", refresh: setInnerState),
             ],
+            const SizedBox(height: 12),
+            _routingCategoryRow("Second opinion", "second_opinion",
+                "a different model re-answers your last question", refresh: setInnerState),
           ],
         );
       },
@@ -835,7 +838,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// nothing is configured, otherwise "Provider / model".
   Future<String> _routingTargetLabel(String category) async {
     final model = await providers.getRoutingModel(category);
-    if (model.isEmpty) return 'default';
+    if (model.isEmpty) {
+      return category == 'second_opinion' ? 'Not set' : 'default';
+    }
     final pid = await providers.getRoutingProviderId(category);
     if (pid.isEmpty) return model;
     final provider = providers.apiProviders.firstWhere(
