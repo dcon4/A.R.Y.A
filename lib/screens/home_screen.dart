@@ -150,8 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     _browserFlow.onArticleRead = (title, url, text) async {
       if (!mounted) return;
-      final article = text.length > 6000
-          ? '${text.substring(0, 6000)}\n\n(article text truncated in transcript)'
+      final article = text.length > 48000
+          ? '${text.substring(0, 48000)}\n\n(article text truncated in transcript)'
           : text;
       setState(() {
         generatedContent = _webSearchResultsText.isEmpty
