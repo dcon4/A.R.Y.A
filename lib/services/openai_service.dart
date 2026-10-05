@@ -584,6 +584,9 @@ When the user asks a research question, you must present a balanced view:
           models = await fetcher.fetchKiloCodeModels(
               apiKey.isEmpty ? 'anonymous' : apiKey);
           break;
+        case 'ollama':
+          models = await fetcher.fetchOllamaModels(apiKey);
+          break;
       }
 
       final wasFree = _modelIsFree(providerId, badModel);
@@ -887,6 +890,8 @@ class _ModelFetcher {
   Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String key) =>
       _fetch('https://api.kilo.ai/api/gateway/models', key,
           (m) => (m['id'] ?? '').toString().toLowerCase().contains('free'));
+  Future<List<Map<String, dynamic>>> fetchOllamaModels(String key) =>
+      _fetch('https://ollama.com/v1/models', key, (_) => false);
 
   Future<List<Map<String, dynamic>>> _fetch(
     String url,

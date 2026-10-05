@@ -265,6 +265,45 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from Ollama Cloud (ollama.com).
+  ///
+  /// The list is public, so it works without a key too; chat itself always
+  /// needs one. Response is OpenAI-style: {"data": [{"id": "..."}]}.
+  Future<List<Map<String, dynamic>>> fetchOllamaModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Ollama...');
+
+      final response = await http.get(
+        Uri.parse('https://ollama.com/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': false,
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Ollama models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Ollama API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Ollama models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,

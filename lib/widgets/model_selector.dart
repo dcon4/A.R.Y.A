@@ -59,12 +59,13 @@ class _ModelSelectorState extends State<ModelSelector> {
   }
 
   Future<void> _fetchModels() async {
-    // NVIDIA NIM and Cloudflare publish their model lists openly, and
-    // OpenCode Zen is served from the built-in registry - neither needs
+    // NVIDIA NIM, Cloudflare, and Ollama publish their model lists openly,
+    // and OpenCode Zen is served from the built-in registry - none needs
     // a phone-side key. Kilo's gateway list is open too (anonymous tier).
     final keyRequired = widget.providerId != 'nim' &&
         widget.providerId != 'zen' &&
         widget.providerId != 'kiloworks_ai' &&
+        widget.providerId != 'ollama' &&
         widget.providerId != 'kilo_code';
     if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
@@ -132,6 +133,9 @@ class _ModelSelectorState extends State<ModelSelector> {
           break;
         case 'kilo_code':
           models = await _fetcher.fetchKiloCodeModels(widget.apiKey);
+          break;
+        case 'ollama':
+          models = await _fetcher.fetchOllamaModels(widget.apiKey);
           break;
         default:
           _error = 'Model fetching not supported for this provider';
