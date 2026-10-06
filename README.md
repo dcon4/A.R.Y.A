@@ -55,14 +55,16 @@ exist.
   the result titles. Say a number to open a result, "read all" to hear
   each article in turn, "more results" for the next batch, "repeat" to
   start the current article over, "next" or "skip" while reading, and
-  "cancel" to exit. Results come from DuckDuckGo by default, or from
-  your own SearXNG server if you pick that source in Settings. The
+  "cancel" to exit. Results come from your own SearXNG server if you
+  pick that source in Settings, then from Exa when its key is saved,
+  and otherwise from DuckDuckGo. The
   full results list, with descriptions and links, also appears on
   screen, and every search and every article you read is saved into
   the conversation transcript, together with how long each answer took.
 - Optional web grounding: SearXNG from your own computer as a keyless
-  first choice, Brave Search (with a "Research questions only" mode)
-  filling in when SearXNG is off or finds nothing, or OpenRouter's
+  first choice, Exa Search when you add its key (it also supplies
+  article text in voice web search), Brave Search (with a "Research
+  questions only" mode) after that, or OpenRouter's
   ":online" suffix for web search on every request.
 - Local search: ask questions about the documents on your own computer
   over your home wifi - say "local search" followed by your question,
@@ -133,12 +135,15 @@ flutter run
 4. Optional: **Brave Search** - paste a free API key from
    api.search.brave.com, and consider switching on "Research questions
    only" so web searches only happen for news/study-style questions.
-5. Optional: **SearXNG** - run the free SearXNG program on your
+5. Optional: **Exa Search** - paste an API key from
+   dashboard.exa.ai/api-keys. Exa feeds web results into answers and
+   also supplies the article text during voice web search.
+6. Optional: **SearXNG** - run the free SearXNG program on your
    computer (with its JSON API enabled) and enter its address in
    Settings. ARYA then uses it for web grounding, and you can pick it
    as the voice-search source instead of DuckDuckGo. No key, no cost;
-   if Brave is also on, SearXNG runs first.
-6. Optional: **Wake Word Detection** - say "hey rhasspy" to start the
+   SearXNG runs first, with Exa and Brave filling in.
+7. Optional: **Wake Word Detection** - say "hey rhasspy" to start the
    hands-free mic.
 
 ## How to use it
@@ -195,6 +200,7 @@ flutter run
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
 | Text to Speech | Voice, speed, and related playback options |
 | Brave Search | Web results injected into the prompt; optional research-only mode |
+| Exa Search | Web results injected into the prompt plus article text in voice search; optional research-only mode |
 | SearXNG | Optional self-hosted search server for prompt grounding and the voice-search source |
 | Local Search | On/off, your computer's address, and the provider/model to use |
 | Memory | How ARYA stores and recalls facts you tell her |
@@ -296,18 +302,21 @@ Save to apply.
 
 - Brave Search: web results injected into the AI context when enabled
   with a key.
-- Research questions only: when on, Brave is only called for
+- Research questions only: when on, Brave (or Exa) is only called for
   research-type questions such as news or studies; everything else goes
   straight to your model.
+- Exa Search: web results injected into the AI context when enabled
+  with a key, and clean article text for voice web search when a page
+  cannot be fetched normally. Get a key at dashboard.exa.ai/api-keys.
 - SearXNG: optional, runs on your own computer. ARYA asks it for web
-  results and feeds them to the AI, just like Brave - no key, no cost.
-  When both are on, SearXNG runs first and Brave fills in when
-  SearXNG is off or finds nothing.
+  results and feeds them to the AI, just like Brave or Exa - no key,
+  no cost. SearXNG runs first; Exa and Brave fill in when SearXNG is
+  off or finds nothing.
 - Web search on every request: appends OpenRouter's `:online` suffix,
   which costs extra credits even on free models.
-- If Brave or SearXNG actually found results, the `:online` suffix is
-  skipped - they are alternatives, not stacked. If a source was asked
-  but found nothing, `:online` can step in.
+- If SearXNG, Exa, or Brave actually found results, the `:online`
+  suffix is skipped - they are alternatives, not stacked. If a source
+  was asked but found nothing, `:online` can step in.
 
 ### How search results reach the model
 
@@ -318,9 +327,10 @@ first and handed to the model as part of the prompt:
   "check the recent news" is stripped away, and a follow-up with too
   little left in it re-uses the topic from earlier in the conversation.
 - Sources are tried in order and the first one that finds something
-  wins: your own SearXNG server, then Brave Search, then DuckDuckGo
-  as a rescue when a configured source was asked but found nothing.
-- Each of Brave and SearXNG has its own "Research questions only"
+  wins: your own SearXNG server, then Exa Search, then Brave Search,
+  then DuckDuckGo as a rescue when a configured source was asked but
+  found nothing.
+- Each of Brave, Exa and SearXNG has its own "Research questions only"
   switch; when it is on, a classifier checks the question first and
   everyday questions skip that source.
 - The results become a numbered list of title, link and description,
@@ -335,8 +345,10 @@ first and handed to the model as part of the prompt:
   searches failed. The fallbacks above exist to make that rare.
 
 This is separate from the spoken "web search" command: that path
-never touches the model. ARYA fetches the pages herself, reads them
-to you, and saves them to the conversation transcript.
+never touches the model. ARYA fetches the pages herself - asking Exa
+for the article text first when its key is saved, and downloading the
+page otherwise - reads them to you, and saves them to the
+conversation transcript.
 
 ### If something seems wrong
 

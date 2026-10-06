@@ -1,4 +1,5 @@
 import 'package:arya/services/debug_logger.dart';
+import 'package:arya/services/exa_search_service.dart';
 import 'package:arya/services/page_fetcher_service.dart';
 import 'package:arya/services/web_search_service.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -403,7 +404,14 @@ class BrowserFlow {
         return;
       }
 
-      final content = await PageFetcherService.instance.fetchPageContent(url);
+      // Exa can hand back clean page text directly - try it first when
+      // the key is saved, and fall back to the normal page fetcher.
+      String? content;
+      if (await ExaSearchService.isUsable()) {
+        _logger.log('BrowserFlow', 'Getting page text from Exa: $url');
+        content = await ExaSearchService().fetchPageText(url);
+      }
+      content ??= await PageFetcherService.instance.fetchPageContent(url);
 
       if (content == null || content.isEmpty) {
         _logger.log('BrowserFlow', 'Fetch failed for $url — using snippet');

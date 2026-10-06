@@ -119,8 +119,9 @@ class HelpScreen extends StatelessWidget {
             _bullet('"next" or "skip" while reading to move on'),
             _bullet('"new search" to start a different search'),
             _bullet('"cancel" to exit search mode'),
-            _bullet('Results come from DuckDuckGo, or from your own '
-                'SearXNG server if you chose that source in Settings'),
+            _bullet('Results come from your own SearXNG server if you '
+                'chose that source in Settings, then from Exa when its '
+                'key is saved, otherwise DuckDuckGo'),
             _bullet('The full results list, with descriptions and links, '
                 'also appears on screen'),
             _bullet('Every search and every article you read is saved '
@@ -195,6 +196,8 @@ class HelpScreen extends StatelessWidget {
             _bullet('Weather Settings: your US ZIP code'),
             _bullet('Text to Speech: voice and speed'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('Exa Search: web results for answers, plus article '
+                'text in voice web search'),
             _bullet('Local Search: on or off, the computer address, '
                 'and which provider and model to use'),
             _bullet('Memory: what ARYA stores about you'),
@@ -420,20 +423,25 @@ class RoutingHelpScreen extends StatelessWidget {
             _heading('Web search options'),
             _bullet('Brave Search: web results injected into the AI '
                 'context when enabled with a key'),
-            _bullet('Research questions only: when on, Brave is only '
-                'called for research-type questions such as news or '
-                'studies; everything else goes straight to your model'),
+            _bullet('Exa Search: web results injected into the AI '
+                'context when enabled with a key, and clean article '
+                'text for voice web search when a page cannot be '
+                'fetched normally'),
+            _bullet('Research questions only: when on, Brave or Exa is '
+                'only called for research-type questions such as news '
+                'or studies; everything else goes straight to your '
+                'model'),
             _bullet('SearXNG: optional, runs on your own computer. '
                 'ARYA asks it for web results and feeds them to the AI, '
-                'just like Brave - no key, no cost. When both are on, '
-                'SearXNG runs first and Brave fills in when SearXNG is '
-                'off or finds nothing'),
+                'just like Brave or Exa - no key, no cost. SearXNG runs '
+                'first; Exa and Brave fill in when SearXNG is off or '
+                'finds nothing'),
             _bullet('Web search on every request: appends OpenRouter\'s '
                 ':online suffix, which costs extra credits even on free '
                 'models'),
-            _bullet('If Brave or SearXNG actually found results, the '
-                ':online suffix is skipped - they are alternatives, not '
-                'stacked. If a source was asked but found nothing, '
+            _bullet('If SearXNG, Exa, or Brave actually found results, '
+                'the :online suffix is skipped - they are alternatives, '
+                'not stacked. If a source was asked but found nothing, '
                 ':online can step in'),
 
             _heading('How search results reach the model'),
@@ -445,8 +453,9 @@ class RoutingHelpScreen extends StatelessWidget {
                 're-uses the topic from earlier in the conversation'),
             _bullet('Sources are tried in order and the first one that '
                 'finds something wins: your own SearXNG server, then '
-                'Brave Search, then DuckDuckGo as a rescue when a '
-                'configured source was asked but found nothing'),
+                'Exa Search, then Brave Search, then DuckDuckGo as a '
+                'rescue when a configured source was asked but found '
+                'nothing'),
             _bullet('Each source\'s "Research questions only" switch '
                 'makes a classifier check the question first - everyday '
                 'questions skip that source'),
@@ -462,7 +471,8 @@ class RoutingHelpScreen extends StatelessWidget {
                 'own knowledge, which can be out of date'),
             _body('This is separate from the spoken "web search" '
                 'command: that path never touches the model. ARYA '
-                'fetches the pages herself, reads them to you, and '
+                'fetches the pages herself - asking Exa for the text '
+                'first when its key is saved - reads them to you, and '
                 'saves them to the conversation transcript.'),
 
             _heading('Quick reference'),
@@ -476,6 +486,8 @@ class RoutingHelpScreen extends StatelessWidget {
             _bullet('Smart Confirmation: confirmation and balanced '
                 'research answers'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('Exa Search: web results and article text for voice '
+                'web search'),
             _bullet('SearXNG: your own computer\'s search results, '
                 'optional and free'),
             _bullet('Web search on every request: OpenRouter :online '

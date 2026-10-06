@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 import 'package:arya/services/debug_logger.dart';
+import 'package:arya/services/exa_search_service.dart';
 import 'package:arya/services/searxng_search_service.dart';
 
 class SearchResult {
@@ -31,8 +32,22 @@ class WebSearchService {
                 SearchResult(title: r.title, snippet: r.snippet, url: r.url))
             .toList();
       }
-      logger.log(
-          'WebSearchService', 'SearXNG returned nothing - falling back to DuckDuckGo');
+      logger.log('WebSearchService', 'SearXNG returned nothing');
+    }
+    // Exa fills in before DuckDuckGo: semantic search with clean page
+    // excerpts, same toggle and key as the grounding source. The
+    // forceDuckDuckGo path (grounding's last resort) skips it.
+    if (!forceDuckDuckGo && await ExaSearchService.isUsable()) {
+      final exa =
+          await ExaSearchService().search(query, numResults: 8, snippetChars: 350);
+      if (exa.isNotEmpty) {
+        logger.log('WebSearchService', 'Using Exa results (${exa.length})');
+        return exa
+            .map((r) =>
+                SearchResult(title: r.title, snippet: r.snippet, url: r.url))
+            .toList();
+      }
+      logger.log('WebSearchService', 'Exa returned nothing');
     }
     try {
       final encodedQuery = Uri.encodeComponent(query);

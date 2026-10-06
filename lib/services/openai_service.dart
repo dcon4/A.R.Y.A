@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:arya/models/memory_entry.dart';
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
+import 'package:arya/services/exa_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/query_classifier.dart';
@@ -183,12 +184,15 @@ When the user asks a research question, you must present a balanced view:
       final groundingQuery = _groundingQuery(prompt, history);
 
       // Grounding order: the user's own SearXNG instance first (free,
-      // no quota), Brave fills in when SearXNG is off, gated, or empty.
+      // no quota), Exa fills in next (semantic search, returns page
+      // text), then Brave, and DuckDuckGo last.
       final searxngActive = await SearxngSearchService.isEnabled();
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
       final braveActive = braveSearch && braveKey.isNotEmpty;
+      final exaActive = await ExaSearchService.isUsable();
+      final exaResearchOnly = await ExaSearchService.isResearchOnly();
 
       List<BraveSearchResult>? searchResults;
       var sourceQueried = false;
@@ -218,6 +222,34 @@ When the user asks a research question, you must present a balanced view:
         } else {
           _logger.log('OpenAIService',
               'SearXNG skipped — research-only mode, not a research question');
+        }
+      }
+
+      if ((searchResults == null || searchResults.isEmpty) && exaActive) {
+        var runExa = true;
+        if (exaResearchOnly) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runExa = probe.isResearch;
+        }
+        if (runExa) {
+          _logger.log('OpenAIService', 'Running Exa search for: $groundingQuery');
+          sourceQueried = true;
+          final hits = await ExaSearchService()
+              .search(groundingQuery, numResults: 5);
+          searchResults = hits
+              .map((r) =>
+                  BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+              .toList();
+          if (searchResults.isNotEmpty) {
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} Exa results');
+          } else {
+            _logger.log('OpenAIService', 'Exa found nothing');
+          }
+        } else {
+          _logger.log('OpenAIService',
+              'Exa skipped — research-only mode, not a research question');
         }
       }
 

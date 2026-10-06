@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:arya/models/memory_entry.dart';
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
+import 'package:arya/services/exa_search_service.dart';
 import 'package:arya/services/background_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
@@ -2136,6 +2137,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildExaSearchSection() {
+    bool exaSaved = false;
+    final keyController = TextEditingController();
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Exa Search",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Uses the Exa search API to find web results that feed into your AI's answers, and to read articles during voice web search when a page cannot be fetched normally. Works with any provider. Get an API key at dashboard.exa.ai/api-keys.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Use Exa Search",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Cera Pro',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                FutureBuilder<bool>(
+                  future: ExaSearchService.isEnabled(),
+                  builder: (context, snapshot) {
+                    final enabled = snapshot.data ?? false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (val) async {
+                        await ExaSearchService.setEnabled(val);
+                        setInnerState(() {});
+                      },
+                      activeColor: MyAppTheme.mainFontColor,
+                    );
+                  },
+                ),
+              ],
+            ),
+            FutureBuilder<bool>(
+              future: ExaSearchService.isEnabled(),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            "Research questions only",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        FutureBuilder<bool>(
+                          future: ExaSearchService.isResearchOnly(),
+                          builder: (context, snap) {
+                            final on = snap.data ?? false;
+                            return Switch(
+                              value: on,
+                              onChanged: (val) async {
+                                await ExaSearchService.setResearchOnly(val);
+                                setInnerState(() {});
+                              },
+                              activeColor: MyAppTheme.mainFontColor,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      "When on, ARYA only searches the web for research questions, such as news, studies, or what experts say. Everything else goes straight to your AI model with no web search.",
+                      style: TextStyle(
+                        color: Color.fromRGBO(255, 138, 101, 0.8),
+                        fontSize: 13,
+                        fontFamily: 'Cera Pro',
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            FutureBuilder<String>(
+              future: ExaSearchService.getApiKey(),
+              builder: (context, snapshot) {
+                final currentKey = snapshot.data ?? '';
+                if (keyController.text.isEmpty && currentKey.isNotEmpty) {
+                  keyController.text = currentKey;
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: keyController,
+                      decoration: const InputDecoration(
+                        labelText: "Exa API Key",
+                        hintText: "Enter your Exa API key",
+                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: Colors.white70),
+                        hintStyle: TextStyle(color: Colors.white38),
+                      ),
+                      style: const TextStyle(color: Colors.white),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () async {
+                            await ExaSearchService.setApiKey(keyController.text.trim());
+                            setInnerState(() {
+                              exaSaved = true;
+                            });
+                            Future.delayed(Duration(seconds: 2), () {
+                              setInnerState(() {
+                                exaSaved = false;
+                              });
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: MyAppTheme.mainFontColor,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: Text(exaSaved ? "Saved!" : "Save Exa Key"),
+                        ),
+                        if (exaSaved) ...[
+                          const SizedBox(width: 8),
+                          const Text(
+                            "Saved!",
+                            style: TextStyle(
+                              color: Colors.greenAccent,
+                              fontFamily: 'Cera Pro',
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildSearxngSection() {
     bool searxSaved = false;
     final urlController = TextEditingController();
@@ -2155,7 +2328,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave - no API key, nothing paid. If Brave Search is on too, Brave runs first and SearXNG fills in when Brave is off or finds nothing. Your computer's address, for example http://192.168.0.210:8888",
+              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave or Exa - no API key, nothing paid. SearXNG always runs first; Exa and Brave fill in when SearXNG is off or finds nothing. Your computer's address, for example http://192.168.0.210:8888",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -3142,6 +3315,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildTtsSection(),
             const SizedBox(height: 32),
             _buildBraveSearchSection(),
+            const SizedBox(height: 32),
+            _buildExaSearchSection(),
             const SizedBox(height: 32),
             _buildSearxngSection(),
             const SizedBox(height: 32),
