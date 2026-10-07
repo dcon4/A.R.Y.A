@@ -52,7 +52,9 @@ exist.
 - Weather: set your US ZIP code in Settings and ask for the weather or
   forecast.
 - Web search and article reading: say "search for ..." and ARYA reads
-  the result titles. Say a number to open a result, "read all" to hear
+  the result titles. Say or type a number to open a result, or two
+  numbers like "2 5" to hear those two articles one after the other,
+  "read all" to hear
   each article in turn, "more results" for the next batch, "repeat" to
   start the current article over, "next" or "skip" while reading, and
   "cancel" to exit. Results come from your own SearXNG server if you
@@ -178,6 +180,11 @@ flutter run
   still saved to your selected folder first, so nothing is lost.
 - Replay the last answer with the speaker icon on the response card,
   or just say "replay" - same button, by voice.
+- Typed shortcuts in the text box: "l s" starts a local search, "p s"
+  a private search, "w s" a web search, and inside a web search "r a"
+  reads all results - typing two numbers like "2 5" reads those two
+  articles in order. You can add the question straight after the
+  shortcut, for example "l s where is my passport".
 - If a request fails (busy model or dropped connection), a Retry button
   appears under the answer - tap it to send the same request again.
 - Second opinion: after an answer, say "second opinion" (or "another

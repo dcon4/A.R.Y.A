@@ -111,14 +111,21 @@ class HelpScreen extends StatelessWidget {
             _heading('Web search and article reading'),
             _body('Say "search for ..." or "find ..." to start a web '
                 'search. ARYA reads the result titles first.'),
-            _bullet('Say a number, like "one", to open that result and '
-                'hear the article'),
-            _bullet('"read all" to hear every article in turn'),
+            _bullet('Say or type a number, like "one", to open that '
+                'result and hear the article'),
+            _bullet('Say or type two numbers, like "2 5", to hear '
+                'those two articles one after the other'),
+            _bullet('"read all" (or type "r a") to hear every article '
+                'in turn'),
             _bullet('"more results" for the next five results'),
             _bullet('"repeat" to start the current article again'),
             _bullet('"next" or "skip" while reading to move on'),
             _bullet('"new search" to start a different search'),
             _bullet('"cancel" to exit search mode'),
+            _bullet('Typed shortcuts in the text box: "l s" starts a '
+                'local search, "p s" a private search, "w s" a web '
+                'search - you can add the question straight after, like '
+                '"l s where is my passport"'),
             _bullet('Results come from your own SearXNG server if you '
                 'chose that source in Settings, then from Exa when its '
                 'key is saved, otherwise DuckDuckGo'),

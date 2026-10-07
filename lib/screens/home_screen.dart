@@ -1714,7 +1714,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sendTextMessage() async {
-    final text = _textInputController.text.trim();
+    var text = _textInputController.text.trim();
     if (text.isEmpty) return;
 
     _logger.log('HomeScreen', 'Sending typed text: "${text.length > 60 ? text.substring(0, 60) + "..." : text}"');
@@ -1734,6 +1734,9 @@ class _HomeScreenState extends State<HomeScreen> {
       await _runLocalSearch(text, isTrigger: true);
       return;
     }
+    // Short typed commands: "l s", "p s", "w s" and (inside a web
+    // search) "r a" expand to their full words before detection.
+    text = _expandTypedShortcuts(text);
     final textCmd = _detectVoiceCommand(text);
     if (textCmd != null && textCmd != 'web_search') {
       await _handleVoiceCommand(text, fromTyped: true);
@@ -1759,6 +1762,34 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     lastWords = text;
     sendMessageToOpenRouter();
+  }
+
+  /// Typed shortcuts: "l s"/"ls" → local search, "p s"/"ps" → private
+  /// search, "w s"/"ws" → web search, and inside a web search
+  /// "r a"/"ra" → read all. Everything after the shortcut is kept as is,
+  /// so "l s where is my passport" works like the full command.
+  String _expandTypedShortcuts(String text) {
+    const shortcuts = <String, String>{
+      'l s': 'local search',
+      'ls': 'local search',
+      'p s': 'private search',
+      'ps': 'private search',
+      'w s': 'web search',
+      'ws': 'web search',
+      'r a': 'read all',
+      'ra': 'read all',
+    };
+    for (final entry in shortcuts.entries) {
+      final key = entry.key;
+      if (text.length < key.length) continue;
+      if (text.substring(0, key.length).toLowerCase() != key) continue;
+      if (text.length > key.length &&
+          !RegExp(r'\s').hasMatch(text[key.length])) continue;
+      // "r a" only means something while a web search is on screen.
+      if ((key == 'r a' || key == 'ra') && !_browserMode) break;
+      return entry.value + text.substring(key.length);
+    }
+    return text;
   }
 
   Future<void> _manualSave() async {

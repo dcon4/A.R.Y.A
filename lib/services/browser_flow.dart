@@ -30,6 +30,9 @@ class BrowserFlow {
   int _readingGen = 0;
   bool _readingAllSequentially = false;
   bool _isReadingPage = false;
+  // Picked article indexes waiting to be read in order after the current
+  // one finishes - from typing (or saying) several numbers like "2 5".
+  List<int> _queuedResultIndexes = [];
 
   BrowserFlow._internal();
 
@@ -95,6 +98,7 @@ class BrowserFlow {
     _readingGen = 0;
     _readingAllSequentially = false;
     _isReadingPage = false;
+    _queuedResultIndexes = [];
   }
 
   Future<void> _speakAndListen(String message) async {
@@ -156,6 +160,7 @@ class BrowserFlow {
 
   Future<void> _performSearch(String query) async {
     _logger.log('BrowserFlow', 'Performing search: "$query"');
+    _queuedResultIndexes = [];
     await _onSpeak("Searching for: $query.");
     final stopwatch = Stopwatch()..start();
 
@@ -240,17 +245,20 @@ class BrowserFlow {
   /// "read result three", "the third one", "number 3", "3rd".
   /// Returns null when the phrase is not a number selection (so free-form
   /// questions go to AI instead of opening a result by accident).
-  int? _extractNumber(String text) {
+  /// All numbers in the input, in order — "2" → [2], "2 5" → [2, 5],
+  /// "read one and five" → [1, 5]. Returns [] for prose.
+  List<int> _extractNumbers(String text) {
     final lower = _norm(text);
-    if (lower.isEmpty) return null;
+    if (lower.isEmpty) return [];
 
-    // Command/filler words that may surround the number.
+    // Command/filler words that may surround the numbers.
     const filler = {
       'the', 'a', 'an', 'read', 'reads', 'reading', 'please', 'open', 'opens',
       'opening', 'show', 'shows', 'select', 'choose', 'pick', 'result',
       'results', 'number', 'option', 'item', 'choice', 'of', 'page', 'go',
       'going', 'ahead', 'i', 'me', 'my', 'want', 'would', 'like', 'just',
       'really', 'um', 'uh', 'ah', 'yeah', 'yes', 'ok', 'okay',
+      'and', 'then', 'also', 'after', 'next',
     };
     const numberWords = {
       'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
@@ -270,31 +278,31 @@ class BrowserFlow {
         .split(' ')
         .where((t) => t.isNotEmpty && !filler.contains(t))
         .toList();
-    if (tokens.isEmpty) return null;
+    if (tokens.isEmpty) return [];
 
     bool hasDigit(String t) => RegExp(r'\d').hasMatch(t);
     bool isNumberish(String t) =>
         hasDigit(t) || numberWords.containsKey(t) || phonetic.containsKey(t);
 
     // Every remaining token must be number-like, otherwise this is prose.
-    if (!tokens.every(isNumberish)) return null;
+    if (!tokens.every(isNumberish)) return [];
 
-    // Digits first ("result 3", "3rd").
+    final numbers = <int>[];
     for (final t in tokens) {
       final d = RegExp(r'\d+').firstMatch(t);
-      if (d != null) return int.parse(d.group(0)!);
-    }
-    // Exact number words as spoken ("third", "three").
-    for (final t in tokens) {
-      final v = numberWords[t];
-      if (v != null) return v;
-    }
-    // Phonetic corrections ("tree" → three, "to" → two).
-    for (final t in tokens) {
+      if (d != null) {
+        numbers.add(int.parse(d.group(0)!));
+        continue;
+      }
+      final wordValue = numberWords[t];
+      if (wordValue != null) {
+        numbers.add(wordValue);
+        continue;
+      }
       final mapped = phonetic[t];
-      if (mapped != null) return numberWords[mapped];
+      if (mapped != null) numbers.add(numberWords[mapped]!);
     }
-    return null;
+    return numbers;
   }
 
   Future<bool> _handleResultSelection(String text) async {
@@ -330,6 +338,7 @@ class BrowserFlow {
         _pageOffset = 0;
         _currentResultIndex = 0;
         _readingAllSequentially = false;
+        _queuedResultIndexes = [];
         await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
       }
       return true;
@@ -340,13 +349,14 @@ class BrowserFlow {
       return true;
     }
 
-    // Check for number
-    final number = _extractNumber(text);
-    if (number != null) {
-      _logger.log('BrowserFlow', 'Parsed number $number from "$text"');
-      if (number >= 1 && number <= _allResults.length) {
-        _currentResultIndex = number - 1;
+    // Check for numbers — one ("2") or several to read in order ("2 5").
+    final numbers = _extractNumbers(text);
+    if (numbers.isNotEmpty) {
+      _logger.log('BrowserFlow', 'Parsed numbers $numbers from "$text"');
+      if (numbers.every((n) => n >= 1 && n <= _allResults.length)) {
+        _currentResultIndex = numbers.first - 1;
         _readingAllSequentially = false;
+        _queuedResultIndexes = numbers.sublist(1);
         await _openResult(_currentResultIndex);
         return true;
       }
@@ -373,6 +383,7 @@ class BrowserFlow {
 
   Future<void> _startReadingAll() async {
     _readingAllSequentially = true;
+    _queuedResultIndexes = [];
     _currentResultIndex = _pageOffset;
     await _openResult(_currentResultIndex);
   }
@@ -462,6 +473,7 @@ class BrowserFlow {
     _currentChunkIndex = 0;
     _readingAllSequentially = false;
     _isReadingPage = false;
+    _queuedResultIndexes = [];
     _logger.log('BrowserFlow', 'Reset — back to normal chat');
   }
 
@@ -495,6 +507,16 @@ class BrowserFlow {
   }
 
   Future<void> _handleChunkEnd() async {
+    // Several numbers were picked ("2 5"): after this article, read the
+    // next picked one in order.
+    if (_queuedResultIndexes.isNotEmpty) {
+      final next = _queuedResultIndexes.removeAt(0);
+      _currentResultIndex = next - 1;
+      await _onSpeak("Finished with that article. Continuing to the next one you picked.");
+      if (_allResults.isEmpty) return; // cancelled during the transition
+      await _openResult(next - 1, announce: false);
+      return;
+    }
     if (!_readingAllSequentially) {
       await _speakAndListen("End of article. Say a number, 'new search', or 'cancel'.");
       return;
@@ -531,6 +553,7 @@ class BrowserFlow {
       _isReadingPage = false;
       _readingAllSequentially = false;
       _allResults = [];
+      _queuedResultIndexes = [];
       await _speakAndListen("What would you like to search for? Say your query, or 'cancel' to exit.");
       return;
     }
@@ -562,11 +585,13 @@ class BrowserFlow {
       return;
     }
 
-    // Number selection while reading
-    final number = _extractNumber(text);
-    if (number != null && number >= 1 && number <= _allResults.length) {
-      _currentResultIndex = number - 1;
-      await _openResult(number - 1);
+    // Number selection while reading (one or several, e.g. "2 5")
+    final numbers = _extractNumbers(text);
+    if (numbers.isNotEmpty &&
+        numbers.every((n) => n >= 1 && n <= _allResults.length)) {
+      _currentResultIndex = numbers.first - 1;
+      _queuedResultIndexes = numbers.sublist(1);
+      await _openResult(numbers.first - 1);
       return;
     }
 
@@ -585,6 +610,7 @@ class BrowserFlow {
     _currentResultIndex = 0;
     _readingAllSequentially = false;
     _isReadingPage = false;
+    _queuedResultIndexes = [];
     _onIdle();
   }
 
