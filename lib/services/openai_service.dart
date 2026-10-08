@@ -626,6 +626,15 @@ When the user asks a research question, you must present a balanced view:
         case 'venice':
           models = await fetcher.fetchVeniceModels(apiKey);
           break;
+        case 'requesty':
+          models = await fetcher.fetchRequestyModels(apiKey);
+          break;
+        case 'mistral':
+          models = await fetcher.fetchMistralModels(apiKey);
+          break;
+        case 'zenith':
+          models = await fetcher.fetchZenithModels(apiKey);
+          break;
       }
 
       final wasFree = _modelIsFree(providerId, badModel);
@@ -683,15 +692,25 @@ When the user asks a research question, you must present a balanced view:
   }
 
   /// Free-status per provider: OpenRouter free variants carry ":free",
-  /// Groq's developer tier is free, the others bill per usage.
+  /// Groq's developer tier is free, Requesty free models are marked in the
+  /// curated list, Mistral's free plan bills nothing, the others pay per use.
   bool _modelIsFree(String providerId, String modelId) {
     switch (providerId) {
       case 'openrouter':
         return modelId.contains(':free');
       case 'groq':
+      case 'mistral':
         return true;
       case 'kilo_code':
         return modelId.contains('free');
+      case 'requesty':
+        final requesty = providers.apiProviders.firstWhere(
+          (p) => p.id == 'requesty',
+          orElse: () => providers.apiProviders.first,
+        );
+        return requesty.models.any(
+          (m) => m.id == modelId && m.label.toLowerCase().contains('free'),
+        );
       default:
         return false;
     }
@@ -706,6 +725,8 @@ When the user asks a research question, you must present a balanced view:
     'zen',
     'kilo_code',
     'kiloworks_ai',
+    'requesty',
+    'mistral',
   ];
 
   /// Try other providers with API keys when rate limited (429).
@@ -934,6 +955,23 @@ class _ModelFetcher {
 
   Future<List<Map<String, dynamic>>> fetchVeniceModels(String key) =>
       _fetch('https://api.venice.ai/api/v1/models', key, (_) => false);
+
+  Future<List<Map<String, dynamic>>> fetchRequestyModels(String key) =>
+      _fetch('https://router.requesty.ai/v1/models', key, (m) {
+        final input = (m['input_price'] as num?) ?? 1;
+        final output = (m['output_price'] as num?) ?? 1;
+        return input == 0 && output == 0;
+      });
+
+  Future<List<Map<String, dynamic>>> fetchMistralModels(String key) =>
+      _fetch('https://api.mistral.ai/v1/models', key, (_) => true);
+
+  Future<List<Map<String, dynamic>>> fetchZenithModels(String key) =>
+      _fetch('https://api.zenllm.org/v1/models', key, (m) {
+        final pricing = m['pricing'];
+        if (pricing is Map) return ((pricing['input_per_mtok'] as num?) ?? 1) == 0;
+        return false;
+      });
 
   Future<List<Map<String, dynamic>>> _fetch(
     String url,

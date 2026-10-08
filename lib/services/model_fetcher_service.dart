@@ -345,6 +345,123 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from Requesty (router.requesty.ai). The list is readable
+  /// without a key; free models carry zero input and output prices.
+  Future<List<Map<String, dynamic>>> fetchRequestyModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Requesty...');
+
+      final response = await http.get(
+        Uri.parse('https://router.requesty.ai/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final input = (m['input_price'] as num?) ?? 1;
+          final output = (m['output_price'] as num?) ?? 1;
+          return {
+            'id': id,
+            'name': id,
+            'is_free': input == 0 && output == 0,
+            'supports_vision': m['supports_vision'] == true,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Requesty models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Requesty API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Requesty models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Mistral (api.mistral.ai). The list needs a key;
+  /// the free plan is rate limited but bills nothing.
+  Future<List<Map<String, dynamic>>> fetchMistralModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Mistral...');
+
+      final response = await http.get(
+        Uri.parse('https://api.mistral.ai/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': true,
+            'supports_vision': false,
+          };
+        }).where((m) => (m['id'] as String).isNotEmpty).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Mistral models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Mistral API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Mistral models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Zenith (api.zenllm.org). The list is readable without
+  /// a key; pricing is prepaid micro-USD per token (nothing free today).
+  Future<List<Map<String, dynamic>>> fetchZenithModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Zenith...');
+
+      final response = await http.get(
+        Uri.parse('https://api.zenllm.org/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final pricing = m['pricing'] ?? const {};
+          final perMtok = (pricing['input_per_mtok'] as num?) ?? 1;
+          final modalities =
+              (m['architecture']?['input_modalities'] as List?) ?? const [];
+          return {
+            'id': id,
+            'name': (m['display_name'] ?? id).toString(),
+            'is_free': perMtok == 0,
+            'supports_vision': modalities.contains('image'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Zenith models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Zenith API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Zenith models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,

@@ -37,7 +37,8 @@ exist.
   phone (on-device detection, runs offline).
 - Multiple AI providers: OpenRouter, OpenAI, Groq, DeepSeek, Cerebras,
   NVIDIA NIM, OpenCode Zen, Kilo Code, Cloudflare Workers AI, Ollama
-  Cloud (ollama.com), Venice.ai (venice.ai), or a custom
+  Cloud (ollama.com), Venice.ai (venice.ai), Requesty (requesty.ai),
+  Mistral (mistral.ai), Zenith (zenllm.org), or a custom
   OpenAI-compatible endpoint. Model
   lists are fetched live from each provider; a "Free Models Only"
   filter helps you stay on free tiers. If a provider is rate limited,

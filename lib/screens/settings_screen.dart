@@ -266,6 +266,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'kiloworks_ai': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       case 'ollama': return 'Get your API key at ollama.com/settings/keys. Ollama Cloud runs the models on their servers - nothing to install.';
       case 'venice': return 'Get your API key at venice.ai/settings/api. Venice is a private, OpenAI-compatible API - pay per token, new accounts get free credits.';
+      case 'requesty': return 'Get your free key at app.requesty.ai/sign-up. Free models cost nothing and allow 200 requests a day - no card needed.';
+      case 'mistral': return 'Get your API key at console.mistral.ai/keys. The free plan includes generous monthly tokens, rate limited.';
+      case 'zenith': return 'Get your API key at zenllm.org. Zenith routes frontier models with prepaid per-token billing - no subscription.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -691,6 +694,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _selectedProviderId == 'zen' ||
                 _selectedProviderId == 'ollama' ||
                 _selectedProviderId == 'venice' ||
+                _selectedProviderId == 'requesty' ||
+                _selectedProviderId == 'zenith' ||
                 _selectedProviderId == 'kiloworks_ai'))
           ModelSelector(
             key: ValueKey(_selectedProviderId),
