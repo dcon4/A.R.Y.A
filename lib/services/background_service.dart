@@ -9,6 +9,8 @@ class BackgroundService {
   static void Function()? _onStartMic;
   static void Function()? _onNewConversation;
   static void Function()? _onToggleBraveSearch;
+  static void Function()? _onToggleWebSearch;
+  static void Function()? _onTriggerSecondOpinion;
   static void Function()? _onRotateProvider;
   static void Function()? _onRotateAnnounceMode;
 
@@ -26,8 +28,12 @@ class BackgroundService {
         _onStartMic?.call();
       } else if (call.method == 'newConversation') {
         _onNewConversation?.call();
-      } else if (call.method == 'toggleBraveSearch') {
+       } else if (call.method == 'toggleBraveSearch') {
         _onToggleBraveSearch?.call();
+      } else if (call.method == 'toggleWebSearch') {
+        _onToggleWebSearch?.call();
+      } else if (call.method == 'triggerSecondOpinion') {
+        _onTriggerSecondOpinion?.call();
       } else if (call.method == 'rotateProvider') {
         _onRotateProvider?.call();
       } else if (call.method == 'rotateAnnounceMode') {
@@ -46,6 +52,14 @@ class BackgroundService {
 
   static void setOnToggleBraveSearchCallback(void Function() callback) {
     _onToggleBraveSearch = callback;
+  }
+
+  static void setOnToggleWebSearchCallback(void Function() callback) {
+    _onToggleWebSearch = callback;
+  }
+
+  static void setOnTriggerSecondOpinionCallback(void Function() callback) {
+    _onTriggerSecondOpinion = callback;
   }
 
   static void setOnRotateProviderCallback(void Function() callback) {

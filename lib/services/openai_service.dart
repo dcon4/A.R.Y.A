@@ -183,21 +183,24 @@ When the user asks a research question, you must present a balanced view:
       // filler so we never search a whole conversational sentence.
       final groundingQuery = _groundingQuery(prompt, history);
 
-      // Grounding order: the user's own SearXNG instance first (free,
-      // no quota), Exa fills in next (semantic search, returns page
-      // text), then Brave, and DuckDuckGo last.
-      final searxngActive = await SearxngSearchService.isEnabled();
+      final prefs = await SharedPreferences.getInstance();
+      final webSearchEnabled = prefs.getBool('web_search_enabled') ?? false;
+      List<BraveSearchResult>? searchResults;
+      var sourceQueried = false;
+
+      if (webSearchEnabled) {
+        // Grounding order: the user's own SearXNG instance first (free,
+        // no quota), Exa fills in next (semantic search, returns page
+        // text), then Brave, and DuckDuckGo last.
+        final searxngActive = await SearxngSearchService.isEnabled();
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
       final braveActive = braveSearch && braveKey.isNotEmpty;
-      final exaActive = await ExaSearchService.isUsable();
-      final exaResearchOnly = await ExaSearchService.isResearchOnly();
+        final exaActive = await ExaSearchService.isUsable();
+        final exaResearchOnly = await ExaSearchService.isResearchOnly();
 
-      List<BraveSearchResult>? searchResults;
-      var sourceQueried = false;
-
-      if (searxngActive) {
+        if (searxngActive) {
         var runSearxng = true;
         if (await SearxngSearchService.isResearchOnly()) {
           final probe =
@@ -290,13 +293,14 @@ When the user asks a research question, you must present a balanced view:
                 BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
             .toList();
       }
+      }
 
       // Let the online flag back in whenever grounding produced nothing
       // (Brave research-only skipped, SearXNG down, both off) — stale
       // answers are worse than the extra web lookup.
-      final groundingWorked = searchResults != null && searchResults.isNotEmpty;
+      final groundingWorked = webSearchEnabled && searchResults != null && searchResults.isNotEmpty;
       final webSearch =
-          !groundingWorked && await providers.getWebSearchOnlineEnabled();
+          !groundingWorked && webSearchEnabled && await providers.getWebSearchOnlineEnabled();
       if (webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online')) {
         model = '$model:online';
       }

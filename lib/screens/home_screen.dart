@@ -189,6 +189,17 @@ class _HomeScreenState extends State<HomeScreen> {
       systemSpeak(current ? "You have turned off Brave Search" : "Brave Search On");
     });
 
+    BackgroundService.setOnToggleWebSearchCallback(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getBool('web_search_enabled') ?? false;
+      await prefs.setBool('web_search_enabled', !current);
+      systemSpeak(current ? "You have turned search off" : "Searching the Web is on");
+    });
+
+    BackgroundService.setOnTriggerSecondOpinionCallback(() async {
+      await _sendSecondOpinion();
+    });
+
     BackgroundService.setOnRotateProviderCallback(() async {
       final prefs = await SharedPreferences.getInstance();
       final currentId = prefs.getString('api_provider') ?? 'openrouter';

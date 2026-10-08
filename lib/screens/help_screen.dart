@@ -248,10 +248,12 @@ class HelpScreen extends StatelessWidget {
                 'previous - control Android notifications that do not '
                 'normally respond to them.'),
             _body('ARYA shows a notification with controls for the '
-                'microphone, a new conversation, Brave Search, and '
-                'switching providers. With RemoteFix installed, your '
-                'headset buttons can drive those controls, so you can '
-                'run ARYA hands-free without touching the phone.'),
+                'microphone, a new conversation, Brave Search, '
+                'Web Search, Second Opinion, and switching '
+                'providers. With RemoteFix installed, your '
+                'headset buttons can drive those controls, so '
+                'you can run ARYA hands-free without touching '
+                'the phone.'),
             _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
 
             _heading('If something goes wrong'),

@@ -25,6 +25,8 @@ class AryaForegroundService : Service() {
         private const val ACTION_STOP = "com.example.arya.STOP_FOREGROUND"
         const val ACTION_START_MIC = "com.example.arya.START_MIC"
         const val ACTION_TOGGLE_BRAVE_SEARCH = "com.example.arya.TOGGLE_BRAVE_SEARCH"
+        const val ACTION_TOGGLE_WEB_SEARCH = "com.example.arya.TOGGLE_WEB_SEARCH"
+        const val ACTION_TRIGGER_SECOND_OPINION = "com.example.arya.TRIGGER_SECOND_OPINION"
         const val ACTION_ROTATE_PROVIDER = "com.example.arya.ROTATE_PROVIDER"
         const val ACTION_ROTATE_ANNOUNCE_MODE = "com.example.arya.ROTATE_ANNOUNCE_MODE"
         var binaryMessenger: BinaryMessenger? = null
@@ -82,6 +84,16 @@ class AryaForegroundService : Service() {
             ACTION_TOGGLE_BRAVE_SEARCH -> {
                 binaryMessenger?.let { messenger ->
                     MethodChannel(messenger, "arya.mic_trigger").invokeMethod("toggleBraveSearch", null)
+                }
+            }
+            ACTION_TOGGLE_WEB_SEARCH -> {
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("toggleWebSearch", null)
+                }
+            }
+            ACTION_TRIGGER_SECOND_OPINION -> {
+                binaryMessenger?.let { messenger ->
+                    MethodChannel(messenger, "arya.mic_trigger").invokeMethod("triggerSecondOpinion", null)
                 }
             }
             ACTION_ROTATE_PROVIDER -> {
@@ -196,6 +208,26 @@ class AryaForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val toggleWebIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_TOGGLE_WEB_SEARCH
+        }
+        val toggleWebPendingIntent = PendingIntent.getService(
+            this,
+            7,
+            toggleWebIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val secondOpinionIntent = Intent(this, AryaForegroundService::class.java).apply {
+            action = ACTION_TRIGGER_SECOND_OPINION
+        }
+        val secondOpinionPendingIntent = PendingIntent.getService(
+            this,
+            8,
+            secondOpinionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val rotateProviderIntent = Intent(this, AryaForegroundService::class.java).apply {
             action = ACTION_ROTATE_PROVIDER
         }
@@ -257,10 +289,20 @@ class AryaForegroundService : Service() {
                 "Rotate Provider",
                 rotateProviderPendingIntent
             )
-            .addAction(
+             .addAction(
                 R.drawable.ic_launcher_foreground,
                 "Brave Search",
                 toggleBravePendingIntent
+            )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Web Search",
+                toggleWebPendingIntent
+            )
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Second Opinion",
+                secondOpinionPendingIntent
             )
             .build()
     }
