@@ -304,6 +304,47 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from Venice.ai (api.venice.ai). The list is readable
+  /// without a key; per-token pricing and vision support come along too.
+  Future<List<Map<String, dynamic>>> fetchVeniceModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Venice...');
+
+      final response = await http.get(
+        Uri.parse('https://api.venice.ai/api/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final spec = m['model_spec'] ?? const {};
+          final pricing = (spec['pricing'] ?? const {})['input'] ?? const {};
+          final caps = spec['capabilities'] ?? const {};
+          final usd = ((pricing['usd'] as num?) ?? 1).toDouble();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': usd == 0,
+            'supports_vision': caps['supportsVision'] == true,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Venice models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Venice API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Venice models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,

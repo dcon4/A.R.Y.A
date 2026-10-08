@@ -66,6 +66,7 @@ class _ModelSelectorState extends State<ModelSelector> {
         widget.providerId != 'zen' &&
         widget.providerId != 'kiloworks_ai' &&
         widget.providerId != 'ollama' &&
+        widget.providerId != 'venice' &&
         widget.providerId != 'kilo_code';
     if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
@@ -136,6 +137,9 @@ class _ModelSelectorState extends State<ModelSelector> {
           break;
         case 'ollama':
           models = await _fetcher.fetchOllamaModels(widget.apiKey);
+          break;
+        case 'venice':
+          models = await _fetcher.fetchVeniceModels(widget.apiKey);
           break;
         default:
           _error = 'Model fetching not supported for this provider';

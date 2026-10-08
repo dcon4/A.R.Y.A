@@ -265,6 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'kilo_code': return 'No key needed for the free tier - leave the key blank to use Kilo\'s anonymous free models, or get a key at kilo.ai.';
       case 'kiloworks_ai': return 'Get your API key at cloudflare.com/ai. Cloudflare Workers AI provides access to Cloudflare-hosted models.';
       case 'ollama': return 'Get your API key at ollama.com/settings/keys. Ollama Cloud runs the models on their servers - nothing to install.';
+      case 'venice': return 'Get your API key at venice.ai/settings/api. Venice is a private, OpenAI-compatible API - pay per token, new accounts get free credits.';
       default: return 'Enter the base URL and API key for your custom provider.';
     }
   }
@@ -689,6 +690,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _selectedProviderId == 'nim' ||
                 _selectedProviderId == 'zen' ||
                 _selectedProviderId == 'ollama' ||
+                _selectedProviderId == 'venice' ||
                 _selectedProviderId == 'kiloworks_ai'))
           ModelSelector(
             key: ValueKey(_selectedProviderId),

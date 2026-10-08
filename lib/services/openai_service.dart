@@ -623,6 +623,9 @@ When the user asks a research question, you must present a balanced view:
         case 'ollama':
           models = await fetcher.fetchOllamaModels(apiKey);
           break;
+        case 'venice':
+          models = await fetcher.fetchVeniceModels(apiKey);
+          break;
       }
 
       final wasFree = _modelIsFree(providerId, badModel);
@@ -929,6 +932,9 @@ class _ModelFetcher {
   Future<List<Map<String, dynamic>>> fetchOllamaModels(String key) =>
       _fetch('https://ollama.com/v1/models', key, (_) => false);
 
+  Future<List<Map<String, dynamic>>> fetchVeniceModels(String key) =>
+      _fetch('https://api.venice.ai/api/v1/models', key, (_) => false);
+
   Future<List<Map<String, dynamic>>> _fetch(
     String url,
     String key,
@@ -937,7 +943,9 @@ class _ModelFetcher {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'Authorization': 'Bearer $key'},
+        headers: {
+          if (key.isNotEmpty) 'Authorization': 'Bearer $key',
+        },
       ).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
