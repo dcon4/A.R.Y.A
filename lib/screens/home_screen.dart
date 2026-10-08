@@ -415,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
         lower.startsWith('search ') ||
         lower.startsWith('google ') ||
         lower.startsWith('look up ') ||
-        RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
+        RegExp(r'\b(search|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
       return 'web_search';
     }
     return null;
@@ -1303,7 +1303,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         if (lower == 'new search' ||
-            RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
+            RegExp(r'\b(search|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
           });
@@ -1368,7 +1368,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         if (lower == 'new search' ||
-            RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
+            RegExp(r'\b(search|duckduckgo|duck\s+duck\s+go|look\s+up)\b').hasMatch(lower)) {
           setState(() {
             _searchState = SearchState.awaitingQuery;
             _readingAllSequentially = false;

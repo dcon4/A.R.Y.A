@@ -237,7 +237,7 @@ class BrowserFlow {
       return true;
     }
     // Word-boundary match so "research" does not trigger web search.
-    return RegExp(r'\b(search|searching|google|duckduckgo|duck\s+duck\s+go|look\s+up)\b')
+    return RegExp(r'\b(search|duckduckgo|duck\s+duck\s+go|look\s+up)\b')
         .hasMatch(lower);
   }
 
