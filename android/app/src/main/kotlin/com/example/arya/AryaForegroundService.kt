@@ -37,7 +37,7 @@ class AryaForegroundService : Service() {
         @Volatile
         var ttsPaused: Boolean = false
 
-        fun setTtsPaused(paused: Boolean) {
+        fun applyTtsPaused(paused: Boolean) {
             ttsPaused = paused
             instance?.let { svc ->
                 val manager = svc.getSystemService(NotificationManager::class.java)

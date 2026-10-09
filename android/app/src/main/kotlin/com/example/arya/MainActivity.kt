@@ -50,7 +50,7 @@ class MainActivity : FlutterActivity() {
                 // Keeps the notification's pause button label in step with
                 // the real pause state (held by the button or by a call).
                 "setTtsPaused" -> {
-                    AryaForegroundService.setTtsPaused(call.arguments as? Boolean ?: false)
+                    AryaForegroundService.applyTtsPaused(call.arguments as? Boolean ?: false)
                     result.success(true)
                 }
                 else -> result.notImplemented()
