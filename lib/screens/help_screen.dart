@@ -258,11 +258,14 @@ class HelpScreen extends StatelessWidget {
             _body('While speech is paused, ARYA stays quiet. Tap '
                 'Resume Speech on the notification, or simply '
                 'use the microphone again - the mic always '
-                'wins - and what was cut off starts again from '
-                'the beginning of that sentence. ARYA also '
-                'pauses itself automatically whenever your '
-                'phone rings or you are on a call, and picks '
-                'up where it left off when the call ends.'),
+                'wins - and ARYA picks up inside the sentence '
+                'it stopped in instead of starting the answer '
+                'over. If the phone\'s voice engine cannot '
+                'report how far it had read, ARYA restarts at '
+                'the top of the current paragraph instead. '
+                'ARYA also pauses itself automatically whenever '
+                'your phone rings or you are on a call, and '
+                'picks up where it left off when the call ends.'),
             _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
 
             _heading('If something goes wrong'),

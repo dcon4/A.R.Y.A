@@ -106,10 +106,12 @@ hands-free without touching the phone.
 
 Speech pauses hold everything ARYA would say. Tap Resume Speech on the
 notification to continue, or just use the microphone again - the mic
-wins - and the sentence that was cut off starts again from its
-beginning. ARYA also pauses itself automatically whenever the phone
-rings or a call is in progress, and picks up where it left off when the
-call ends.
+wins - and ARYA picks up inside the sentence it stopped in rather than
+starting the answer over. If the phone's voice engine cannot report how
+far it had read, ARYA restarts at the top of the current paragraph
+instead of at the top of the answer. ARYA also pauses itself
+automatically whenever the phone rings or a call is in progress, and
+picks up where it left off when the call ends.
 
 ## Installing
 

@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakChain = Future.value();
   // Bumped when the user barges in; queued speech from before is skipped.
   int _speakGen = 0;
-  static const int _maxTtsChunkSize = 3500;
+  static const int _maxTtsChunkSize = 600;
   List<String> _responseChunks = [];
   int _responseChunkIndex = 0;
   // True only while a response is genuinely being read out, so a resume
@@ -87,6 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _pendingSpokenText;
   // How often the wait loop re-checks the clock and the pause state.
   static const _ttsWaitSlice = Duration(milliseconds: 500);
+  // Where the engine says it has read up to inside the current utterance.
+  // Reset on every utterance start; stays 0 if the engine never reports
+  // progress, which is logged at pause time so it can be spotted in a log.
+  int _ttsProgressStart = 0;
+  int _ttsProgressLength = 0;
   String _lastAiResponse = '';
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
   QueryClassification? _pendingClassification;
@@ -317,6 +322,23 @@ class _HomeScreenState extends State<HomeScreen> {
     // When TTS finishes speaking, wait 2 seconds before re-arming the
     // wake word detector so it doesn't hear its own echo and re-trigger.
     flutterTts.setCompletionHandler(_onTtsCompletion);
+
+    // Track how far the engine has read into the current utterance. A
+    // pause uses this (via flutter_tts's own pause/resume) to carry on
+    // from the sentence it stopped in instead of starting over.
+    flutterTts.setStartHandler(() {
+      _ttsProgressStart = 0;
+      _ttsProgressLength = 0;
+    });
+    // A resume restarts the remainder of the text, so offsets start at 0
+    // again and the plugin reports "continue" instead of "start".
+    flutterTts.setContinueHandler(() {
+      _ttsProgressStart = 0;
+    });
+    flutterTts.setProgressHandler((text, start, end, word) {
+      _ttsProgressStart = start;
+      _ttsProgressLength = text.length;
+    });
 
     // Warm the TTS engine so the first announcement on bluetooth is not
     // truncated (the engine initializes lazily and cuts off the first
@@ -929,17 +951,31 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_speechPaused) {
       if (_ttsEnginePaused) return;
       _ttsEnginePaused = true;
-      _logger.log('HomeScreen', 'Speech paused (user=$_speechPausedByUser, call=$_speechPausedByCall)');
+      final at = _ttsProgressStart;
+      final of = _ttsProgressLength;
+      _logger.log('HomeScreen',
+          'Speech paused (user=$_speechPausedByUser, call=$_speechPausedByCall) at char $at of $of');
+      // pause(), unlike stop(), remembers the text it has not read yet, so
+      // the re-speak below picks up inside the sentence it stopped in
+      // instead of starting the whole reply over. Engines that never report
+      // progress leave that position at 0 and resume from the top of the
+      // current paragraph (the reply is split into ~600-character parts).
       try {
-        await flutterTts.stop();
-      } catch (_) {}
+        await flutterTts.pause();
+      } catch (_) {
+        try {
+          await flutterTts.stop();
+        } catch (_) {}
+      }
       return;
     }
     if (!_ttsEnginePaused) return;
     _ttsEnginePaused = false;
     _logger.log('HomeScreen', 'Speech resumed');
-    // Restart what the pause stopped: the awaited utterance first,
-    // otherwise the response chunk we stopped on.
+    // Re-speak the exact string that was handed to the engine before the
+    // pause: flutter_tts matches on it and continues from the text it had
+    // not read yet. The awaited utterance comes first, otherwise the
+    // response part we stopped on.
     if (_announceCompleter != null &&
         !_announceCompleter!.isCompleted &&
         _pendingSpokenText != null) {
