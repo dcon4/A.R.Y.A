@@ -98,10 +98,18 @@ exist.
 ARYA works best with
 [RemoteFix](https://github.com/dcon4/RemoteFix), another app by the same
 developer. ARYA shows a notification with controls for the microphone,
-a new conversation, Brave Search, and switching providers. RemoteFix
+a new conversation, Brave Search, Web Search, Second Opinion, switching
+providers, and pausing or resuming speech. RemoteFix
 lets your standard Bluetooth headset buttons (play, pause, next,
 previous) drive those notification controls, so ARYA can be run
 hands-free without touching the phone.
+
+Speech pauses hold everything ARYA would say. Tap Resume Speech on the
+notification to continue, or just use the microphone again - the mic
+wins - and the sentence that was cut off starts again from its
+beginning. ARYA also pauses itself automatically whenever the phone
+rings or a call is in progress, and picks up where it left off when the
+call ends.
 
 ## Installing
 

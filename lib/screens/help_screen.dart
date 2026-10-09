@@ -249,11 +249,20 @@ class HelpScreen extends StatelessWidget {
                 'normally respond to them.'),
             _body('ARYA shows a notification with controls for the '
                 'microphone, a new conversation, Brave Search, '
-                'Web Search, Second Opinion, and switching '
-                'providers. With RemoteFix installed, your '
+                'Web Search, Second Opinion, switching '
+                'providers, and pausing or resuming speech. With '
+                'RemoteFix installed, your '
                 'headset buttons can drive those controls, so '
                 'you can run ARYA hands-free without touching '
                 'the phone.'),
+            _body('While speech is paused, ARYA stays quiet. Tap '
+                'Resume Speech on the notification, or simply '
+                'use the microphone again - the mic always '
+                'wins - and what was cut off starts again from '
+                'the beginning of that sentence. ARYA also '
+                'pauses itself automatically whenever your '
+                'phone rings or you are on a call, and picks '
+                'up where it left off when the call ends.'),
             _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
 
             _heading('If something goes wrong'),

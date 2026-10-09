@@ -1,6 +1,8 @@
 package com.example.arya
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -37,6 +39,18 @@ class MainActivity : FlutterActivity() {
                 }
                 "stopForegroundService" -> {
                     AryaForegroundService.stop(this)
+                    result.success(true)
+                }
+                // Read by Dart once a second to notice a phone call: the
+                // audio mode leaves MODE_NORMAL while a call rings or runs.
+                "getAudioMode" -> {
+                    val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    result.success(audio.mode)
+                }
+                // Keeps the notification's pause button label in step with
+                // the real pause state (held by the button or by a call).
+                "setTtsPaused" -> {
+                    AryaForegroundService.setTtsPaused(call.arguments as? Boolean ?: false)
                     result.success(true)
                 }
                 else -> result.notImplemented()

@@ -72,6 +72,21 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int _maxTtsChunkSize = 3500;
   List<String> _responseChunks = [];
   int _responseChunkIndex = 0;
+  // True only while a response is genuinely being read out, so a resume
+  // never restarts a chunk chain that was already finished or abandoned.
+  bool _responseSpeechActive = false;
+  // Speech pause. Two independent causes hold speech: the user tapped the
+  // notification's Pause Speech button, or a phone call is ringing or in
+  // progress. While either cause is set, new speech is dropped and the TTS
+  // engine is stopped; speech cut off mid-sentence is replayed on resume.
+  bool _speechPausedByUser = false;
+  bool _speechPausedByCall = false;
+  // True while the TTS engine has actually been stopped for a pause.
+  bool _ttsEnginePaused = false;
+  // Text of the in-flight awaited utterance, so resume can restart it.
+  String? _pendingSpokenText;
+  // How often the wait loop re-checks the clock and the pause state.
+  static const _ttsWaitSlice = Duration(milliseconds: 500);
   String _lastAiResponse = '';
   static const _btChannel = MethodChannel('arya.bluetooth_mic_toggle');
   QueryClassification? _pendingClassification;
@@ -225,6 +240,15 @@ class _HomeScreenState extends State<HomeScreen> {
       systemSpeak("Announce ${labels[next]}");
     });
 
+    BackgroundService.setOnToggleTtsPauseCallback(() async {
+      await _toggleSpeechPauseByUser();
+    });
+
+    BackgroundService.setOnCallStateChangedCallback((inCall) async {
+      if (!mounted) return;
+      await _setCallSpeechPause(inCall);
+    });
+
     WakeWordService.instance.onWakeWordDetected = () async {
       if (speechToText.isNotListening) {
         await WakeWordService.instance.pause();
@@ -311,11 +335,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onTtsCompletion() {
-    // If an announcement completer is pending, complete it first.
+    // If an announcement completer is pending, complete it first. This also
+    // covers an utterance that finished in the instant before a pause began:
+    // the waiter is released instead of being replayed on resume.
     if (_announceCompleter != null && !_announceCompleter!.isCompleted) {
       _announceCompleter!.complete();
       return;
     }
+    // Paused (user or phone call): stop here without advancing, so the
+    // current chunk stays put and resume replays it from its start.
+    if (_ttsEnginePaused) return;
     // Speak the next chunk of a long response, if any.
     if (_responseChunkIndex < _responseChunks.length - 1) {
       _responseChunkIndex++;
@@ -334,22 +363,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> systemSpeak(String content) async {
-    _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
-    _armWakeWhileSpeaking();
-    if (content.length <= _maxTtsChunkSize) {
-      _clearResponseChunks();
-      await flutterTts.speak(content);
+    if (_speechPaused) {
+      _logger.verbose('HomeScreen', 'Holding response speech (paused)');
       return;
     }
+    _logger.verbose('HomeScreen', 'Speaking response (${content.length} chars)');
+    _armWakeWhileSpeaking();
+    // Always go through the chunk list, even for a single short reply:
+    // a pause mid-reply then resumes at the chunk we stopped on instead
+    // of losing the tail of the answer.
     _responseChunks = _splitAtSentences(content, _maxTtsChunkSize);
     _responseChunkIndex = 0;
-    _logger.verbose('HomeScreen', 'Chunking response into ${_responseChunks.length} parts');
+    _responseSpeechActive = true;
+    if (_responseChunks.length > 1) {
+      _logger.verbose('HomeScreen', 'Chunking response into ${_responseChunks.length} parts');
+    }
     await flutterTts.speak(_responseChunks[0]);
   }
 
   void _clearResponseChunks() {
     _responseChunks = [];
     _responseChunkIndex = 0;
+    _responseSpeechActive = false;
   }
 
   List<String> _splitAtSentences(String text, int maxChunk) {
@@ -831,17 +866,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakNow(String text, int gen) async {
     // Superseded by a barge-in while queued — drop it.
     if (gen != _speakGen) return;
+    // Paused (user button or phone call): say nothing and release the
+    // caller, so a held prompt can never stall a later flow.
+    if (_speechPaused) {
+      _logger.verbose('HomeScreen', 'Holding speech while paused (${text.length} chars)');
+      return;
+    }
     _armWakeWhileSpeaking();
     final completer = Completer<void>();
     _announceCompleter = completer;
+    _pendingSpokenText = text;
     try {
       await flutterTts.speak(text);
-      await completer.future.timeout(_speakTimeoutFor(text));
+      await _awaitTtsCompletion(completer, _speakTimeoutFor(text));
     } on TimeoutException {
       // Completion never arrived (speech was stopped/interrupted). Continue
       // instead of stalling the whole flow for a minute.
       _logger.log('HomeScreen', 'TTS completion timeout (${text.length} chars) — continuing');
     } finally {
+      _pendingSpokenText = null;
       if (identical(_announceCompleter, completer)) {
         _announceCompleter = null;
       }
@@ -852,6 +895,91 @@ class _HomeScreenState extends State<HomeScreen> {
     // Observed TTS rate can be as slow as ~10 chars/second; scale with length.
     final seconds = (30 + text.length ~/ 5).clamp(60, 150);
     return Duration(seconds: seconds);
+  }
+
+  /// Waits for the completion callback in short slices, so a pause can hold
+  /// an utterance open without eating into its timeout budget.
+  Future<void> _awaitTtsCompletion(Completer<void> completer, Duration timeout) async {
+    var deadline = DateTime.now().add(timeout);
+    while (true) {
+      if (completer.isCompleted) return;
+      var wait = deadline.difference(DateTime.now());
+      if (wait <= Duration.zero) {
+        throw TimeoutException('TTS completion timed out');
+      }
+      if (wait > _ttsWaitSlice) wait = _ttsWaitSlice;
+      try {
+        await completer.future.timeout(wait);
+        return;
+      } on TimeoutException {
+        // While paused no audio is playing, so give that time back instead
+        // of letting a long pause run the utterance into a timeout.
+        if (_speechPaused && !completer.isCompleted) {
+          deadline = deadline.add(wait);
+        }
+      }
+    }
+  }
+
+  bool get _speechPaused => _speechPausedByUser || _speechPausedByCall;
+
+  /// Stops the TTS engine when a pause cause appears, or restarts whatever
+  /// the pause cut off once every cause is gone. Idempotent.
+  Future<void> _syncSpeechPause() async {
+    if (_speechPaused) {
+      if (_ttsEnginePaused) return;
+      _ttsEnginePaused = true;
+      _logger.log('HomeScreen', 'Speech paused (user=$_speechPausedByUser, call=$_speechPausedByCall)');
+      try {
+        await flutterTts.stop();
+      } catch (_) {}
+      return;
+    }
+    if (!_ttsEnginePaused) return;
+    _ttsEnginePaused = false;
+    _logger.log('HomeScreen', 'Speech resumed');
+    // Restart what the pause stopped: the awaited utterance first,
+    // otherwise the response chunk we stopped on.
+    if (_announceCompleter != null &&
+        !_announceCompleter!.isCompleted &&
+        _pendingSpokenText != null) {
+      try {
+        await flutterTts.speak(_pendingSpokenText!);
+      } catch (e) {
+        _logger.error('HomeScreen', 'Speech resume failed', e);
+      }
+      return;
+    }
+    if (_responseSpeechActive &&
+        _responseChunks.isNotEmpty &&
+        _responseChunkIndex < _responseChunks.length) {
+      try {
+        await flutterTts.speak(_responseChunks[_responseChunkIndex]);
+      } catch (e) {
+        _logger.error('HomeScreen', 'Speech resume failed', e);
+      }
+    }
+  }
+
+  /// Notification "Pause Speech" / "Resume Speech" button.
+  Future<void> _toggleSpeechPauseByUser() async {
+    if (_speechPausedByCall) {
+      _logger.verbose('HomeScreen', 'Speech toggle ignored — a phone call holds the pause');
+      return;
+    }
+    _speechPausedByUser = !_speechPausedByUser;
+    await _syncSpeechPause();
+    await BackgroundService.setTtsPausedState(_speechPaused);
+  }
+
+  /// Called when the phone starts or ends a call: hold speech, then let it
+  /// pick up where it left off when the call is over.
+  Future<void> _setCallSpeechPause(bool inCall) async {
+    if (inCall == _speechPausedByCall) return;
+    _speechPausedByCall = inCall;
+    _logger.log('HomeScreen', inCall ? 'Phone call started — holding speech' : 'Phone call ended — releasing speech');
+    await _syncSpeechPause();
+    await BackgroundService.setTtsPausedState(_speechPaused);
   }
 
   /// Called when the user speaks while the app is talking: release the
@@ -939,6 +1067,15 @@ class _HomeScreenState extends State<HomeScreen> {
       _speakGen++;
       _clearResponseChunks();
       await flutterTts.stop();
+    }
+
+    // The microphone wins: release a pause the user pressed, so the
+    // "Listening" prompt and the answer are audible again. A pause held
+    // by a phone call stays in force — a call still outranks the mic.
+    if (_speechPausedByUser) {
+      _speechPausedByUser = false;
+      await _syncSpeechPause();
+      await BackgroundService.setTtsPausedState(_speechPaused);
     }
 
     setState(() {
@@ -1712,6 +1849,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _logger.log(
         'HomeScreen', 'Second opinion requested ($soProvider / $soModel)');
     _flashStatus('Getting a second opinion...');
+    // Say it out loud so the user knows the second opinion is under way
+    // even with the screen off. Awaited, so the reply cannot start first.
+    await _speakAndWait('Getting a second opinion...');
     QueryClassification? classification;
     final smartFree = prefs.getBool('smart_free_enabled') ?? false;
     if (smartFree) {
