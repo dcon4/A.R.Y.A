@@ -14,6 +14,7 @@ class ApiProvider {
   final String defaultModel;
   final List<ApiModel> models;
   final bool requiresReferer;
+  final bool supportsWebSearch;
 
   const ApiProvider({
     required this.id,
@@ -22,6 +23,7 @@ class ApiProvider {
     required this.defaultModel,
     required this.models,
     this.requiresReferer = false,
+    this.supportsWebSearch = false,
   });
 
   String get prefKey => '${id}_api_key';
@@ -40,6 +42,7 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://openrouter.ai/api/v1',
     defaultModel: '~openai/gpt-mini-latest',
     requiresReferer: true,
+    supportsWebSearch: true,
     models: const [
       ApiModel(id: 'openai/gpt-oss-20b:free', label: 'GPT OSS 20B (FREE)'),
       ApiModel(id: 'openai/gpt-oss-120b:free', label: 'GPT OSS 120B (FREE)'),
@@ -88,12 +91,12 @@ final List<ApiProvider> apiProviders = [
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'openai/gpt-oss-20b',
     models: const [
-      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (Groq)'),
-      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (Groq)'),
-      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Groq)'),
-      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B'),
-      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant'),
-      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (legacy)'),
+      ApiModel(id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (free)'),
+      ApiModel(id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (free)'),
+      ApiModel(id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (free)'),
+      ApiModel(id: 'allam-2-7b', label: 'Allam 2 7B (free)'),
+      ApiModel(id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (free)'),
+      ApiModel(id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (free)'),
     ],
   ),
   ApiProvider(
@@ -115,6 +118,181 @@ final List<ApiProvider> apiProviders = [
       ApiModel(id: 'llama-3.3-70b', label: 'Llama 3.3 70B'),
       ApiModel(id: 'llama-3.1-8b', label: 'Llama 3.1 8B'),
       ApiModel(id: 'llama-3.1-70b', label: 'Llama 3.1 70B'),
+    ],
+  ),
+  ApiProvider(
+    id: 'nim',
+    name: 'NVIDIA NIM',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    defaultModel: 'openai/gpt-oss-20b',
+    models: const [
+      ApiModel(
+          id: 'openai/gpt-oss-20b',
+          label: 'GPT OSS 20B (free) - confirmed working on this account'),
+    ],
+  ),
+  ApiProvider(
+    id: 'zen',
+    name: 'OpenCode Zen',
+    baseUrl: 'https://opencode.ai/zen/v1',
+    defaultModel: 'space-bunny-free',
+    models: const [
+      ApiModel(
+          id: 'space-bunny-free',
+          label: 'Space Bunny (free) - keeps no copy of your text, never trains on it'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kilo_code',
+    name: 'Kilo Code',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    defaultModel: 'kilo-auto/free',
+    models: const [
+      ApiModel(
+          id: 'kilo-auto/free',
+          label: 'Kilo Auto Free - routes to the best free model (free)'),
+      ApiModel(
+          id: 'qwen/qwen3.8-27b:free',
+          label: 'Qwen 3.8 27B (free) - strong reasoning'),
+      ApiModel(
+          id: 'nvidia/nemotron-3-super-120b-a12b:free',
+          label: 'Nemotron 3 Super 120B (free) - large, capable'),
+      ApiModel(
+          id: 'openrouter/free',
+          label: 'OpenRouter Free - auto-picks a free model (free)'),
+    ],
+  ),
+  ApiProvider(
+    id: 'kiloworks_ai',
+    name: 'Cloudflare Workers AI',
+    baseUrl: 'https://api.cloudflare.com/client/v4/accounts',
+    defaultModel: '@cf/meta/llama-3.1-8b-instruct-fp8',
+    models: const [
+      ApiModel(
+          id: '@cf/meta/llama-3.1-8b-instruct-fp8',
+          label: 'Llama 3.1 8B FP8 - good all-round answers'),
+      ApiModel(
+          id: '@cf/zai-org/glm-4.7-flash',
+          label: 'GLM 4.7 Flash - fast, cheap'),
+      ApiModel(
+          id: '@cf/qwen/qwq-32b',
+          label: 'QwQ 32B - reasoning model'),
+      ApiModel(
+          id: '@cf/openai/gpt-oss-120b',
+          label: 'GPT OSS 120B - strong, larger model'),
+      ApiModel(
+          id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+          label: 'Llama 3.3 70B Fast - larger, optimized for speed'),
+      ApiModel(
+          id: '@cf/qwen/qwen3-30b-a3b-fp8',
+          label: 'Qwen3 30B A3B FP8 - efficient mixture-of-experts'),
+    ],
+  ),
+  ApiProvider(
+    id: 'ollama',
+    name: 'Ollama',
+    baseUrl: 'https://ollama.com/v1',
+    defaultModel: 'gemma4:31b',
+    models: const [
+      ApiModel(id: 'gemma4:31b', label: 'Gemma 4 31B'),
+      ApiModel(id: 'gpt-oss:120b', label: 'GPT OSS 120B'),
+      ApiModel(id: 'gpt-oss:20b', label: 'GPT OSS 20B'),
+      ApiModel(id: 'nemotron-3-super', label: 'Nemotron 3 Super'),
+      ApiModel(id: 'nemotron-3-ultra', label: 'Nemotron 3 Ultra'),
+      ApiModel(id: 'nemotron-3-nano:30b', label: 'Nemotron 3 Nano 30B'),
+      ApiModel(id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash'),
+      ApiModel(id: 'deepseek-v4-pro:0813', label: 'DeepSeek V4 Pro'),
+      ApiModel(id: 'glm-5.3', label: 'GLM 5.3'),
+      ApiModel(id: 'glm-5.3-flash', label: 'GLM 5.3 Flash'),
+      ApiModel(id: 'glm-5.2', label: 'GLM 5.2'),
+      ApiModel(id: 'kimi-k3', label: 'Kimi K3'),
+      ApiModel(id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code'),
+      ApiModel(id: 'kimi-k2.6', label: 'Kimi K2.6'),
+      ApiModel(id: 'minimax-m3', label: 'MiniMax M3'),
+      ApiModel(id: 'minimax-m2.7', label: 'MiniMax M2.7'),
+      ApiModel(id: 'mistral-large-3:675b', label: 'Mistral Large 3 675B'),
+    ],
+  ),
+  ApiProvider(
+    id: 'venice',
+    name: 'Venice.ai',
+    baseUrl: 'https://api.venice.ai/api/v1',
+    defaultModel: 'z-ai-glm-5-3-flash',
+    models: const [
+      ApiModel(id: 'z-ai-glm-5-3-flash', label: 'GLM 5.3 Flash'),
+      ApiModel(id: 'z-ai-glm-5-3', label: 'GLM 5.3'),
+      ApiModel(id: 'kimi-k2-6', label: 'Kimi K2.6'),
+      ApiModel(id: 'kimi-k3', label: 'Kimi K3'),
+      ApiModel(id: 'nvidia-nemotron-3-ultra-550b-a55b', label: 'Nemotron 3 Ultra 550B'),
+      ApiModel(id: 'nvidia-nemotron-3-nano-30b-a3b', label: 'Nemotron 3 Nano 30B'),
+      ApiModel(id: 'openai-gpt-oss-120b', label: 'GPT OSS 120B'),
+      ApiModel(id: 'openai-gpt-6-luna', label: 'GPT 6 Luna'),
+      ApiModel(id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash'),
+      ApiModel(id: 'qwen-3-8-flash', label: 'Qwen 3.8 Flash'),
+      ApiModel(id: 'gemini-3-8-flash', label: 'Gemini 3.8 Flash'),
+      ApiModel(id: 'llama-3.3-70b', label: 'Llama 3.3 70B'),
+      ApiModel(id: 'venice-uncensored-1-2', label: 'Venice Uncensored'),
+    ],
+  ),
+  ApiProvider(
+    id: 'requesty',
+    name: 'Requesty',
+    baseUrl: 'https://router.requesty.ai/v1',
+    defaultModel: 'nvidia/nemotron-3-super-120b-a12b',
+    models: const [
+      ApiModel(id: 'nvidia/nemotron-3-super-120b-a12b', label: 'Nemotron 3 Super 120B (free)'),
+      ApiModel(id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron 3 Ultra 550B (free)'),
+      ApiModel(id: 'nvidia/nemotron-3-nano-30b-a3b', label: 'Nemotron 3 Nano 30B (free)'),
+      ApiModel(id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', label: 'Nemotron 3 Nano Omni Reasoning (free)'),
+      ApiModel(id: 'google/gemma-4-31b-it', label: 'Gemma 4 31B (free)'),
+      ApiModel(id: 'mistral/leanstral-1-5', label: 'Leanstral 1.5 (free)'),
+      ApiModel(id: 'novita/ling-3.1-flash', label: 'Ling 3.1 Flash (free)'),
+      ApiModel(id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: 'Nemotron 3.5 Lightning 30B (free)'),
+      ApiModel(id: 'poolside/laguna-m.1', label: 'Laguna M.1 (free)'),
+    ],
+  ),
+  ApiProvider(
+    id: 'mistral',
+    name: 'Mistral',
+    baseUrl: 'https://api.mistral.ai/v1',
+    defaultModel: 'mistral-small-latest',
+    models: const [
+      ApiModel(id: 'mistral-small-latest', label: 'Mistral Small (free tier)'),
+      ApiModel(id: 'open-mistral-nemo', label: 'Mistral Nemo (free tier)'),
+      ApiModel(id: 'ministral-8b-latest', label: 'Ministral 8B (free tier)'),
+      ApiModel(id: 'codestral-latest', label: 'Codestral (free tier)'),
+      ApiModel(id: 'mistral-medium-latest', label: 'Mistral Medium (free tier)'),
+      ApiModel(id: 'mistral-large-latest', label: 'Mistral Large (free tier)'),
+    ],
+  ),
+  ApiProvider(
+    id: 'zenith',
+    name: 'Zenith',
+    baseUrl: 'https://api.zenllm.org/v1',
+    defaultModel: 'gpt-6-luna',
+    models: const [
+      ApiModel(id: 'gpt-6-luna', label: 'GPT 6 Luna'),
+      ApiModel(id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash'),
+      ApiModel(id: 'glm-5.3-flash', label: 'GLM 5.3 Flash'),
+      ApiModel(id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash'),
+      ApiModel(id: 'kimi-k3', label: 'Kimi K3'),
+      ApiModel(id: 'claude-sonnet-5', label: 'Claude Sonnet 5'),
+      ApiModel(id: 'gpt-5.6-terra', label: 'GPT 5.6 Terra'),
+      ApiModel(id: 'grok-4.3', label: 'Grok 4.3'),
+      ApiModel(id: 'minimax-m3', label: 'MiniMax M3'),
+      ApiModel(id: 'gpt-6-sol', label: 'GPT 6 Sol'),
+      ApiModel(id: 'claude-opus-5.5', label: 'Claude Opus 5.5'),
+    ],
+  ),
+  ApiProvider(
+    id: 'local',
+    name: 'Local model (this computer)',
+    baseUrl: '',
+    defaultModel: 'gemma3:1b',
+    models: const [
+      ApiModel(
+          id: 'gemma3:1b',
+          label: 'Local: private, runs on this computer, nothing sent online'),
     ],
   ),
   ApiProvider(
@@ -153,6 +331,10 @@ Future<String> getRoutingModel(String category) async {
 }
 
 Future<void> setRouting(String category, String providerId, String model) async {
+  // 'local' only ever answers local-search questions through the computer's
+  // Research Assistant - its address does not exist on the phone, so it must
+  // never be routable for general chat.
+  if (providerId == 'local') return;
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString(_routingPrefProvider(category), providerId);
   await prefs.setString(_routingPrefModel(category), model);
@@ -173,6 +355,16 @@ Future<String> getSelectedProviderId() async {
   return prefs.getString(_prefsProvider) ?? 'openrouter';
 }
 
+Future<void> setSelectedProviderId(String providerId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_prefsProvider, providerId);
+}
+
+Future<void> setModel(String model) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_prefsModel, model);
+}
+
 Future<String> getApiKeyForProvider(String providerId) async {
   final provider = apiProviders.firstWhere(
     (p) => p.id == providerId,
@@ -191,6 +383,12 @@ Future<String> getBaseUrlForProvider(String providerId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('api_custom_base_url') ?? '';
   }
+  if (provider.id == 'cloudflare' || provider.id == 'kiloworks_ai') {
+    final prefs = await SharedPreferences.getInstance();
+    final accountId = prefs.getString('cloudflare_account_id') ?? '';
+    if (accountId.isEmpty) return provider.baseUrl;
+    return '${provider.baseUrl}/$accountId/ai/v1';
+  }
   return provider.baseUrl;
 }
 
@@ -201,6 +399,28 @@ bool getRequiresRefererForProvider(String providerId) {
   );
   return provider.requiresReferer;
 }
+
+bool providerSupportsWebSearch(String providerId) {
+  final provider = apiProviders.firstWhere(
+    (p) => p.id == providerId,
+    orElse: () => apiProviders[0],
+  );
+  return provider.supportsWebSearch;
+}
+
+/// Providers the computer's Research Assistant can answer with.
+/// Kept in the same order as the Research Assistant's own registry.
+/// 'local' is the model running on the PC itself - local search only,
+/// never offered for general chat (its address only exists on the PC).
+const List<String> localSearchProviderIds = [
+  'openrouter',
+  'groq',
+  'nim',
+  'zen',
+  'kilo_code',
+  'kiloworks_ai',
+  'local',
+];
 
 // --- Preference accessors ---
 

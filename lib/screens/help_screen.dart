@@ -90,8 +90,12 @@ class HelpScreen extends StatelessWidget {
             _bullet('"what is the capital of Australia"'),
             _bullet('"write me a haiku about rain"'),
             _bullet('"explain how tide tables work"'),
-            _body('ARYA answers out loud. Start talking at any moment and '
-                'she stops immediately so you can take over.'),
+            _body('ARYA answers out loud. To cut a long answer short - '
+                'from a normal question or a local search - say "hey '
+                'rhasspy", tap the microphone, or just start talking; '
+                'she stops at once so you can ask a follow-up. The full '
+                'reply is still saved with the conversation, so nothing '
+                'is lost when you start a new conversation.'),
 
             _heading('Weather'),
             _body('Set your US ZIP code under Settings, Weather Settings. '
@@ -107,16 +111,66 @@ class HelpScreen extends StatelessWidget {
             _heading('Web search and article reading'),
             _body('Say "search for ..." or "find ..." to start a web '
                 'search. ARYA reads the result titles first.'),
-            _bullet('Say a number, like "one", to open that result and '
-                'hear the article'),
-            _bullet('"read all" to hear every article in turn'),
+            _bullet('Say or type a number, like "one", to open that '
+                'result and hear the article'),
+            _bullet('Say or type two numbers, like "2 5", to hear '
+                'those two articles one after the other'),
+            _bullet('"read all" (or type "r a") to hear every article '
+                'in turn'),
             _bullet('"more results" for the next five results'),
             _bullet('"repeat" to start the current article again'),
             _bullet('"next" or "skip" while reading to move on'),
             _bullet('"new search" to start a different search'),
             _bullet('"cancel" to exit search mode'),
+            _bullet('Typed shortcuts in the text box: "l s" starts a '
+                'local search, "p s" a private search, "w s" a web '
+                'search - you can add the question straight after, like '
+                '"l s where is my passport"'),
+            _bullet('Results come from your own SearXNG server if you '
+                'chose that source in Settings, then from Exa when its '
+                'key is saved, otherwise DuckDuckGo'),
+            _bullet('The full results list, with descriptions and links, '
+                'also appears on screen'),
+            _bullet('Every search and every article you read is saved '
+                'into the conversation transcript'),
             _body('If ARYA is reading and you want her to stop, just start '
                 'talking.'),
+
+            _heading('Local search'),
+            _body('Ask questions about your own documents on this '
+                'computer, over your home wifi. The Research Assistant '
+                'must be running on the computer.'),
+            _bullet('"local search" followed by your question, for '
+                'example "local search where is my passport" - typing '
+                'the same words works too'),
+            _bullet('"ask my documents" works the same way'),
+            _bullet('"local search" looks at your everyday documents and '
+                'never searches the Internet - the answer itself may be '
+                'written by a cloud model, which is fine for these '
+                'folders'),
+            _bullet('"private search" followed by your question looks '
+                'only in your private folder and is always answered by '
+                'the model on the computer - the question and the found '
+                'passages never leave the PC, and ARYA says "Private '
+                'search, answered locally" first'),
+            _bullet('If you say only the command, ARYA asks what to '
+                'search for and listens for your question'),
+            _bullet('ARYA says the answer, then names where it was '
+                'found'),
+            _bullet('Ask a follow-up such as "what about his other '
+                'books?" - after a search, the next three questions '
+                'automatically continue as local searches without '
+                'repeating the command, and ARYA understands "his" and '
+                '"it"'),
+            _bullet('Say "new conversation" to end the three free '
+                'follow-ups sooner'),
+            _body('Turn it on and set the computer address under '
+                'Settings, Local Search.'),
+            _bullet('Choose provider "Local model (this computer)" to '
+                'have answers come from a model running on the PC itself '
+                '- nothing is sent online, it is private by design. It '
+                'is a little slower, and the computer must be on and the '
+                'model loaded'),
 
             _heading('Conversations'),
             _bullet('Say "new conversation" by voice for the same effect '
@@ -128,18 +182,31 @@ class HelpScreen extends StatelessWidget {
                 'first, so nothing is lost'),
             _bullet('The save button exports the current conversation so '
                 'you can share it'),
-            _bullet('The speaker icon on the last answer replays it'),
+            _bullet('Every saved reply notes the provider, model, and '
+                'routing category that produced it, so a shared '
+                'transcript shows where each answer came from'),
+            _bullet('The speaker icon on the last answer replays it, and '
+                'saying "replay" does the same thing by voice'),
+            _bullet('Second opinion: say "second opinion" (or "another '
+                'opinion"), or tap the Second opinion button under an '
+                'answer - ARYA re-asks the same question, with the same '
+                'search results, to a different model you pick in '
+                'Settings, and both answers stay in the same transcript'),
 
             _heading('Settings at a glance'),
             _bullet('Model: provider, API key, and default model'),
-            _bullet('Model Routing: auto-route and a provider/model '
+            _bullet('Model Routing: auto-route, a provider/model '
                 'choice for coding, quick, creative, and reasoning '
-                'questions'),
+                'questions, and the model used for second opinions'),
             _bullet('Smart Confirmation: confirm complex questions first '
                 'and get balanced research answers'),
             _bullet('Weather Settings: your US ZIP code'),
             _bullet('Text to Speech: voice and speed'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('Exa Search: web results for answers, plus article '
+                'text in voice web search'),
+            _bullet('Local Search: on or off, the computer address, '
+                'and which provider and model to use'),
             _bullet('Memory: what ARYA stores about you'),
             _bullet('Wake Word: hands-free "hey rhasspy"'),
             _bullet('Settings Backup: export and import everything'),
@@ -181,17 +248,50 @@ class HelpScreen extends StatelessWidget {
                 'previous - control Android notifications that do not '
                 'normally respond to them.'),
             _body('ARYA shows a notification with controls for the '
-                'microphone, a new conversation, Brave Search, and '
-                'switching providers. With RemoteFix installed, your '
-                'headset buttons can drive those controls, so you can '
-                'run ARYA hands-free without touching the phone.'),
+                'microphone, a new conversation, Brave Search, '
+                'Web Search, Second Opinion, switching '
+                'providers, and pausing or resuming speech. With '
+                'RemoteFix installed, your '
+                'headset buttons can drive those controls, so '
+                'you can run ARYA hands-free without touching '
+                'the phone.'),
+            _body('Switching providers only steps through '
+                'providers you have actually saved an API key '
+                'for, so you never land on one that cannot '
+                'answer. If no keys are saved yet, ARYA says '
+                'so instead of switching.'),
+            _body('While speech is paused, ARYA stays quiet. Tap '
+                'Resume Speech on the notification, or simply '
+                'use the microphone again - the mic always '
+                'wins - and ARYA picks up inside the sentence '
+                'it stopped in instead of starting the answer '
+                'over. If the phone\'s voice engine cannot '
+                'report how far it had read, ARYA restarts at '
+                'the top of the current paragraph instead. '
+                'ARYA also pauses itself automatically whenever '
+                'your phone rings or you are on a call, and '
+                'picks up where it left off when the call ends.'),
             _body('RemoteFix repository: github.com/dcon4/RemoteFix'),
 
             _heading('If something goes wrong'),
+            _body('If an answer fails - a busy model or a dropped '
+                'connection - a Retry button appears under the answer. '
+                'Tap it to send the same request again without '
+                'repeating or retyping it.'),
+            _body('If a provider is busy - it answers "too many '
+                'requests" - ARYA switches to another provider you have '
+                'saved a key for, trying free ones first. Nothing is '
+                'needed from you: the answer ends with a short note '
+                'naming the provider it switched to.'),
             _body('Tap the bug-report icon in the top bar and choose how '
                 'to send the log file, such as email or messaging. '
                 'Detailed logging is on by default, so the log shows '
                 'exactly what happened.'),
+            _body('If local search keeps saying the computer is not '
+                'reachable although it is on, allow unrestricted battery '
+                'for A.R.Y.A: Settings, Apps, A.R.Y.A, Battery, '
+                'Unrestricted. Battery saving can cut network '
+                'connections.'),
 
             _heading('About'),
             _body('A.R.Y.A - Adaptive Real-time Yielding Assistant. '
@@ -255,8 +355,11 @@ class RoutingHelpScreen extends StatelessWidget {
                 'things: which company or service answers (the provider, '
                 'like OpenRouter or Groq), and which brain it uses (the '
                 'model). The choice is written to the debug log as a line '
-                'starting with "Route:", so you can always see afterwards '
-                'which provider and model actually answered.'),
+                'starting with "Route:". If a different provider answers '
+                'instead - because the first one was busy - a "Served by" '
+                'line shows what actually answered, and the saved '
+                'conversation records the provider, model, and routing '
+                'category behind every reply.'),
             _body('Routing settings live in two places in Settings: the '
                 'Model section for your main provider and model choice, '
                 'and the Model Routing section for the auto-route switch '
@@ -283,6 +386,13 @@ class RoutingHelpScreen extends StatelessWidget {
                 'spoken answer that the new model uses paid credits. '
                 'Category rows pointing at the dead model are repaired '
                 'automatically too.'),
+            _bullet('Rate limit: if a provider says "too many requests", '
+                'ARYA automatically tries your other saved providers, '
+                'free ones first, up to three attempts. It saves the one '
+                'that worked - including any category rows that pointed '
+                'at the busy provider - and the answer ends with a note '
+                'naming the switch, plus a paid-credits warning if it '
+                'had to use a paid model.'),
 
             _heading('Auto-route'),
             _body('Auto-route sorts every question into one of four '
@@ -308,6 +418,13 @@ class RoutingHelpScreen extends StatelessWidget {
                 'model. The row shows your pick, and the screen reader '
                 'announces it. "Use my default model" resets the row to '
                 'your main Model section choice.'),
+            _body('Below the four categories sits the Second opinion '
+                'row, and it works the same way: it picks the provider '
+                'and model that re-answers your last question when you '
+                'say "second opinion" or tap the Second opinion button. '
+                'It is independent of Auto-route, so you can set it with '
+                'Auto-route off. Until you choose a model the row shows '
+                '"Not set".'),
             _body('With Auto-route on and a category configured, the log '
                 '"Route:" line shows that category provider and model, '
                 'so you can verify a routing choice by asking a matching '
@@ -332,14 +449,57 @@ class RoutingHelpScreen extends StatelessWidget {
             _heading('Web search options'),
             _bullet('Brave Search: web results injected into the AI '
                 'context when enabled with a key'),
-            _bullet('Research questions only: when on, Brave is only '
-                'called for research-type questions such as news or '
-                'studies; everything else goes straight to your model'),
+            _bullet('Exa Search: web results injected into the AI '
+                'context when enabled with a key, and clean article '
+                'text for voice web search when a page cannot be '
+                'fetched normally'),
+            _bullet('Research questions only: when on, Brave or Exa is '
+                'only called for research-type questions such as news '
+                'or studies; everything else goes straight to your '
+                'model'),
+            _bullet('SearXNG: optional, runs on your own computer. '
+                'ARYA asks it for web results and feeds them to the AI, '
+                'just like Brave or Exa - no key, no cost. SearXNG runs '
+                'first; Exa and Brave fill in when SearXNG is off or '
+                'finds nothing'),
             _bullet('Web search on every request: appends OpenRouter\'s '
                 ':online suffix, which costs extra credits even on free '
                 'models'),
-            _bullet('If Brave is on, the :online suffix is skipped - the '
-                'two are alternatives, not stacked'),
+            _bullet('If SearXNG, Exa, or Brave actually found results, '
+                'the :online suffix is skipped - they are alternatives, '
+                'not stacked. If a source was asked but found nothing, '
+                ':online can step in'),
+
+            _heading('How search results reach the model'),
+            _body('When a question goes to the AI, fresh web results '
+                'can be looked up first and handed to the model with '
+                'the question.'),
+            _bullet('Your words are cleaned into a search query first - '
+                'voice filler is stripped away, and a short follow-up '
+                're-uses the topic from earlier in the conversation'),
+            _bullet('Sources are tried in order and the first one that '
+                'finds something wins: your own SearXNG server, then '
+                'Exa Search, then Brave Search, then DuckDuckGo as a '
+                'rescue when a configured source was asked but found '
+                'nothing'),
+            _bullet('Each source\'s "Research questions only" switch '
+                'makes a classifier check the question first - everyday '
+                'questions skip that source'),
+            _bullet('The results become a numbered list of title, link '
+                'and description, with instructions to use them to '
+                'answer, cite the sources, say honestly when they do '
+                'not contain the answer, and trust them over the '
+                'model\'s training data about recent events'),
+            _bullet('That list sits directly above your question in the '
+                'prompt, after the personality rules, your saved '
+                'memories and the conversation so far'),
+            _bullet('If nothing was found, the model answers from its '
+                'own knowledge, which can be out of date'),
+            _body('This is separate from the spoken "web search" '
+                'command: that path never touches the model. ARYA '
+                'fetches the pages herself - asking Exa for the text '
+                'first when its key is saved - reads them to you, and '
+                'saves them to the conversation transcript.'),
 
             _heading('Quick reference'),
             _bullet('Provider and Model: the brain that answers, also the '
@@ -352,12 +512,20 @@ class RoutingHelpScreen extends StatelessWidget {
             _bullet('Smart Confirmation: confirmation and balanced '
                 'research answers'),
             _bullet('Brave Search: web results for research questions'),
+            _bullet('Exa Search: web results and article text for voice '
+                'web search'),
+            _bullet('SearXNG: your own computer\'s search results, '
+                'optional and free'),
             _bullet('Web search on every request: OpenRouter :online '
                 'suffix, extra credits'),
 
             _heading('If something seems wrong'),
-            _bullet('Check the log "Route:" line - it always shows the '
-                'provider and model that actually answered'),
+            _bullet('Check the log "Route:" line for the planned choice, '
+                'and the "Served by" line for what actually answered when '
+                'they differ'),
+            _bullet('If you heard "ARYA switched to ..." the main '
+                'provider was rate limited and another saved provider '
+                'answered instead'),
             _bullet('If a model was replaced behind your back, the log '
                 'says "Saved recovered model ..." or "Repaired routing '
                 'model ..."'),

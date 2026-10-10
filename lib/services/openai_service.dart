@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'package:arya/models/memory_entry.dart';
 import 'package:arya/services/api_providers.dart' as providers;
 import 'package:arya/services/brave_search_service.dart';
+import 'package:arya/services/exa_search_service.dart';
 import 'package:arya/services/debug_logger.dart';
 import 'package:arya/services/memory_service.dart';
 import 'package:arya/services/query_classifier.dart';
+import 'package:arya/services/searxng_search_service.dart';
+import 'package:arya/services/web_search_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -127,6 +130,11 @@ When the user asks a research question, you must present a balanced view:
 
   final _logger = DebugLogger();
 
+  /// What actually served the last request. May differ from the planned
+  /// route when a rate-limit fallback or a model recovery kicked in.
+  String lastServedProviderId = '';
+  String lastServedModel = '';
+
   Future<String?> chatGPTAPI(
     String prompt, {
     List<Map<String, String>>? history,
@@ -154,8 +162,15 @@ When the user asks a research question, you must present a balanced view:
       }
 
       if (resolvedApiKey.isEmpty) {
-        _logger.log('OpenAIService', 'API call blocked - no API key set');
-        return 'Please add your API key in Settings first.';
+        // Kilo's gateway serves its free tier without a key, so an empty
+        // key there means "use the anonymous free tier" instead of a block.
+        if (resolvedProviderId == 'kilo_code') {
+          resolvedApiKey = 'anonymous';
+          _logger.log('OpenAIService', 'Kilo Code: no key set — using the anonymous free tier');
+        } else {
+          _logger.log('OpenAIService', 'API call blocked - no API key set');
+          return 'Please add your API key in Settings first.';
+        }
       }
 
       var model = overrideModel ?? await getModel();
@@ -164,12 +179,84 @@ When the user asks a research question, you must present a balanced view:
         return 'Please set a base URL for your custom provider in Settings.';
       }
 
+      // Search-box query for grounding: strip voice commands and chat
+      // filler so we never search a whole conversational sentence.
+      final groundingQuery = _groundingQuery(prompt, history);
+
+      final prefs = await SharedPreferences.getInstance();
+      final webSearchEnabled = prefs.getBool('web_search_enabled') ?? false;
+      List<BraveSearchResult>? searchResults;
+      var sourceQueried = false;
+
+      if (webSearchEnabled) {
+        // Grounding order: the user's own SearXNG instance first (free,
+        // no quota), Exa fills in next (semantic search, returns page
+        // text), then Brave, and DuckDuckGo last.
+        final searxngActive = await SearxngSearchService.isEnabled();
       final braveSearch = await BraveSearchService.isEnabled();
       final braveKey = await BraveSearchService.getApiKey();
       final braveResearchOnly = await BraveSearchService.isResearchOnly();
+      final braveActive = braveSearch && braveKey.isNotEmpty;
+        final exaActive = await ExaSearchService.isUsable();
+        final exaResearchOnly = await ExaSearchService.isResearchOnly();
 
-      List<BraveSearchResult>? searchResults;
-      if (braveSearch && braveKey.isNotEmpty) {
+        if (searxngActive) {
+        var runSearxng = true;
+        if (await SearxngSearchService.isResearchOnly()) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runSearxng = probe.isResearch;
+        }
+        if (runSearxng) {
+          _logger.log('OpenAIService', 'Running SearXNG search for: $groundingQuery');
+          sourceQueried = true;
+          final hits =
+              await SearxngSearchService.instance.search(groundingQuery, count: 5);
+          searchResults = hits
+              .map((r) =>
+                  BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+              .toList();
+          if (searchResults.isNotEmpty) {
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} SearXNG results');
+          } else {
+            _logger.log('OpenAIService', 'SearXNG found nothing');
+          }
+        } else {
+          _logger.log('OpenAIService',
+              'SearXNG skipped — research-only mode, not a research question');
+        }
+      }
+
+      if ((searchResults == null || searchResults.isEmpty) && exaActive) {
+        var runExa = true;
+        if (exaResearchOnly) {
+          final probe =
+              await QueryClassifier.instance.classify(prompt, smartFreeEnabled: true);
+          runExa = probe.isResearch;
+        }
+        if (runExa) {
+          _logger.log('OpenAIService', 'Running Exa search for: $groundingQuery');
+          sourceQueried = true;
+          final hits = await ExaSearchService()
+              .search(groundingQuery, numResults: 5);
+          searchResults = hits
+              .map((r) =>
+                  BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+              .toList();
+          if (searchResults.isNotEmpty) {
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} Exa results');
+          } else {
+            _logger.log('OpenAIService', 'Exa found nothing');
+          }
+        } else {
+          _logger.log('OpenAIService',
+              'Exa skipped — research-only mode, not a research question');
+        }
+      }
+
+      if ((searchResults == null || searchResults.isEmpty) && braveActive) {
         var runBrave = true;
         if (braveResearchOnly) {
           final probe =
@@ -177,21 +264,49 @@ When the user asks a research question, you must present a balanced view:
           runBrave = probe.isResearch;
         }
         if (runBrave) {
-          _logger.log('OpenAIService', 'Running Brave Search for: $prompt');
+          _logger.log('OpenAIService', 'Running Brave Search for: $groundingQuery');
+          sourceQueried = true;
           final brave = BraveSearchService();
-          searchResults = await brave.search(prompt);
+          searchResults = await brave.search(groundingQuery);
           if (searchResults.isNotEmpty) {
-            _logger.log('OpenAIService', 'Got ${searchResults.length} search results');
+            _logger.log(
+                'OpenAIService', 'Got ${searchResults.length} Brave results');
+          } else {
+            _logger.log('OpenAIService', 'Brave found nothing');
           }
         } else {
-          _logger.log('OpenAIService', 'Brave skipped — research-only mode, not a research question');
+          _logger.log('OpenAIService',
+              'Brave skipped — research-only mode, not a research question');
         }
       }
 
-      final webSearch = !braveSearch && await providers.getWebSearchOnlineEnabled();
-      if (webSearch && resolvedProviderId == 'openrouter' && !model.contains(':online')) {
+      // DuckDuckGo last resort — only when a configured source was
+      // actually queried and came back empty. Research-only gates and
+      // "everything off" still mean no injection.
+      if (sourceQueried && (searchResults == null || searchResults.isEmpty)) {
+        _logger.log('OpenAIService',
+            'No results from configured sources — falling back to DuckDuckGo');
+        final ddg = await WebSearchService.instance
+            .search(groundingQuery, forceDuckDuckGo: true);
+        searchResults = ddg
+            .map((r) =>
+                BraveSearchResult(title: r.title, url: r.url, snippet: r.snippet))
+            .toList();
+      }
+      }
+
+      // Let the online flag back in whenever grounding produced nothing
+      // (Brave research-only skipped, SearXNG down, both off) — stale
+      // answers are worse than the extra web lookup.
+      final groundingWorked = webSearchEnabled && searchResults != null && searchResults.isNotEmpty;
+      final webSearch =
+          !groundingWorked && webSearchEnabled && await providers.getWebSearchOnlineEnabled();
+      if (webSearch && providers.providerSupportsWebSearch(resolvedProviderId) && !model.contains(':online')) {
         model = '$model:online';
       }
+
+      lastServedProviderId = resolvedProviderId;
+      lastServedModel = model;
 
       _logger.log('OpenAIService', 'Sending request to $resolvedBaseUrl model=$model');
 
@@ -215,14 +330,31 @@ When the user asks a research question, you must present a balanced view:
       }
       messages.add({'role': 'user', 'content': prompt});
 
-      var response = await _postChat(
-        baseUrl: resolvedBaseUrl,
-        apiKey: resolvedApiKey,
-        requiresReferer: resolvedRequiresReferer,
-        model: model,
-        messages: messages,
-        maxTokens: maxTokens,
-      );
+      http.Response response;
+      try {
+        response = await _postChat(
+          baseUrl: resolvedBaseUrl,
+          apiKey: resolvedApiKey,
+          requiresReferer: resolvedRequiresReferer,
+          model: model,
+          messages: messages,
+          maxTokens: maxTokens,
+        );
+      } catch (e) {
+        // The phone could not reach this provider at all (DNS, wifi,
+        // server down). Another provider with a key may still answer.
+        _logger.log('OpenAIService',
+            'First attempt failed (${e.runtimeType}) — trying fallback providers');
+        final fallback = await _tryFallbackProviders(
+          resolvedProviderId,
+          model,
+          messages,
+          maxTokens,
+          webSearch,
+        );
+        if (fallback != null) return fallback;
+        rethrow;
+      }
 
       if (response.statusCode == 200) {
         _logger.log('OpenAIService', 'API response OK (${response.body.length} chars)');
@@ -266,6 +398,7 @@ When the user asks a research question, you must present a balanced view:
           );
           if (retry.statusCode == 200) {
             _logger.log('OpenAIService', 'API response OK after model recovery (${retry.body.length} chars)');
+            lastServedModel = recovery.model;
             var content = _extractContent(retry.body);
             if (content == null || content.isEmpty) {
               _logger.error('OpenAIService', 'Recovered model returned empty content: ${_debugChoices(retry.body)}');
@@ -277,6 +410,22 @@ When the user asks a research question, you must present a balanced view:
             return content;
           }
           response = retry;
+        }
+      }
+
+      // Rate limited (429) — try other providers with keys
+      if (response.statusCode == 429) {
+        _logger.log('OpenAIService', 'Rate limited (429) on $resolvedProviderId, trying fallback providers...');
+        final fallback = await _tryFallbackProviders(
+          resolvedProviderId,
+          model,
+          messages,
+          maxTokens,
+          webSearch,
+        );
+        if (fallback != null) {
+          _logger.log('OpenAIService', 'Fallback provider succeeded');
+          return fallback;
         }
       }
 
@@ -299,6 +448,64 @@ When the user asks a research question, you must present a balanced view:
       _logger.error('OpenAIService', 'Request exception', e);
       return 'Sorry, something went wrong. Please check your connection.';
     }
+  }
+
+  /// Build a search-box query from a possibly-chatty voice prompt.
+  /// Strips command prefixes ("research ...") and conversational filler
+  /// ("please look again", "check the recent news"), and falls back to
+  /// the previous real question when little is left - otherwise a
+  /// follow-up like "check the recent news" would be searched verbatim
+  /// and hand the model generic news homepages instead of the topic.
+  String _groundingQuery(String prompt, List<Map<String, String>>? history) {
+    var q = prompt.trim();
+    q = q.replaceFirst(
+        RegExp(r'^(research|web search|search for|search|find|look up)\b[\s,:-]*',
+            caseSensitive: false),
+        '');
+    q = q.replaceFirst(
+        RegExp(r'^(no|yes|okay|ok)\b[\s,:-]*', caseSensitive: false), '');
+    const filler = [
+      'please look again',
+      'please check again',
+      'please try again',
+      'look again',
+      'try again',
+      'search again',
+      'check again',
+      'check the recent news',
+      'check the latest news',
+      'check recent news',
+      'check the news',
+      'search the recent news',
+      'search the latest news',
+      "it's been in the news recently",
+      'been in the news recently',
+      'in the news recently',
+      'look for recent news',
+    ];
+    for (final f in filler) {
+      q = q.replaceFirst(RegExp(RegExp.escape(f), caseSensitive: false), '');
+    }
+    q = q.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    q = q.replaceAll(RegExp(r'^[,.:;\s]+'), '').replaceAll(RegExp(r'[,.:;\s]+$'), '');
+
+    if (q.split(' ').where((w) => w.isNotEmpty).length < 5) {
+      final prev = _previousUserQuestion(history);
+      if (prev.isNotEmpty) q = prev;
+    }
+    return q.isEmpty ? prompt : q;
+  }
+
+  /// The last substantive thing the user asked in this conversation.
+  String _previousUserQuestion(List<Map<String, String>>? history) {
+    if (history == null) return '';
+    for (final m in history.reversed) {
+      if (m['role'] == 'user') {
+        final t = (m['content'] ?? '').trim();
+        if (t.split(' ').length >= 5) return t;
+      }
+    }
+    return '';
   }
 
   /// Pull the assistant text out of a chat-completions body.
@@ -346,7 +553,8 @@ When the user asks a research question, you must present a balanced view:
         lower.contains('does not exist') ||
         lower.contains('not a valid model') ||
         lower.contains('invalid model') ||
-        lower.contains('unknown model');
+        lower.contains('unknown model') ||
+        lower.contains('no such model');
   }
 
   Future<http.Response> _postChat({
@@ -380,9 +588,14 @@ When the user asks a research question, you must present a balanced view:
   /// If the broken model was free, prefers a free replacement; reports
   /// [paidFallback] when it had to settle on a paid one.
   Future<_ModelRecovery?> _recoverModel(String providerId, String badModel) async {
+    // The local model is only reachable through the computer's Research
+    // Assistant (local search) - never as a general-chat provider.
+    if (providerId == 'local') return null;
     try {
       final apiKey = await providers.getApiKeyForProvider(providerId);
-      if (apiKey.isEmpty) return null;
+      // Kilo's model list is public (anonymous tier), so an empty key is
+      // fine there; every other provider needs a key to list models.
+      if (apiKey.isEmpty && providerId != 'kilo_code') return null;
 
       List<Map<String, dynamic>> models = [];
       // Import kept local via ModelFetcher through a light dependency.
@@ -402,6 +615,25 @@ When the user asks a research question, you must present a balanced view:
           break;
         case 'cerebras':
           models = await fetcher.fetchCerebrasModels(apiKey);
+          break;
+        case 'kilo_code':
+          models = await fetcher.fetchKiloCodeModels(
+              apiKey.isEmpty ? 'anonymous' : apiKey);
+          break;
+        case 'ollama':
+          models = await fetcher.fetchOllamaModels(apiKey);
+          break;
+        case 'venice':
+          models = await fetcher.fetchVeniceModels(apiKey);
+          break;
+        case 'requesty':
+          models = await fetcher.fetchRequestyModels(apiKey);
+          break;
+        case 'mistral':
+          models = await fetcher.fetchMistralModels(apiKey);
+          break;
+        case 'zenith':
+          models = await fetcher.fetchZenithModels(apiKey);
           break;
       }
 
@@ -460,16 +692,202 @@ When the user asks a research question, you must present a balanced view:
   }
 
   /// Free-status per provider: OpenRouter free variants carry ":free",
-  /// Groq's developer tier is free, the others bill per usage.
+  /// Groq's developer tier is free, Requesty free models are marked in the
+  /// curated list, Mistral's free plan bills nothing, the others pay per use.
   bool _modelIsFree(String providerId, String modelId) {
     switch (providerId) {
       case 'openrouter':
         return modelId.contains(':free');
       case 'groq':
+      case 'mistral':
         return true;
+      case 'kilo_code':
+        return modelId.contains('free');
+      case 'requesty':
+        final requesty = providers.apiProviders.firstWhere(
+          (p) => p.id == 'requesty',
+          orElse: () => providers.apiProviders.first,
+        );
+        return requesty.models.any(
+          (m) => m.id == modelId && m.label.toLowerCase().contains('free'),
+        );
       default:
         return false;
     }
+  }
+
+  /// Providers that serve capable models without metered billing. Used to
+  /// order fallback candidates free-first so a switch rarely spends credits.
+  static const List<String> _freeTierProviderIds = [
+    'groq',
+    'cerebras',
+    'nim',
+    'zen',
+    'kilo_code',
+    'kiloworks_ai',
+    'requesty',
+    'mistral',
+  ];
+
+  /// Try other providers with API keys when rate limited (429).
+  /// [webSearch] is the raw user intent — each candidate decides for itself
+  /// whether it can honour it, because only some support the `:online` suffix.
+  Future<String?> _tryFallbackProviders(
+    String currentProviderId,
+    String model,
+    List<Map<String, String>> messages,
+    int? maxTokens,
+    bool webSearch,
+  ) async {
+    // Free-tier providers first (registry order preserved inside each group).
+    // 'local' is excluded: its address only exists on the computer, so it can
+    // never answer a phone-side chat request.
+    final allProviders = providers.apiProviders
+        .where((p) => p.id != currentProviderId && p.id != 'local');
+    final candidates = [
+      ...allProviders.where((p) => _freeTierProviderIds.contains(p.id)),
+      ...allProviders.where((p) => !_freeTierProviderIds.contains(p.id)),
+    ];
+
+    // Cap the attempts: each try can take up to 60s and a voice user is
+    // waiting. Three is enough to get past a single rate-limited provider.
+    var attempts = 0;
+    for (final p in candidates) {
+      if (attempts >= 3) {
+        _logger.log('OpenAIService', 'Fallback attempt cap (3) reached — giving up');
+        break;
+      }
+      final apiKey = await providers.getApiKeyForProvider(p.id);
+      // Kilo's gateway accepts the anonymous free tier when no key is set.
+      final candidateKey = apiKey.isEmpty && p.id == 'kilo_code' ? 'anonymous' : apiKey;
+      if (candidateKey.isEmpty) continue;
+      if (p.id == 'custom') {
+        final url = await providers.getBaseUrlForProvider('custom');
+        if (url.isEmpty) continue;
+      }
+
+      _logger.log('OpenAIService', 'Trying fallback provider: ${p.id}');
+      try {
+        // Match against the bare model name — the original may carry a
+        // ":online" suffix added by the web-search pass above.
+        final bareModel = model.replaceFirst(RegExp(r':online$'), '');
+        final fallbackModel = _pickFallbackModel(p, bareModel);
+
+        // Honour the raw web-search intent per candidate.
+        var finalModel = fallbackModel;
+        if (webSearch && p.supportsWebSearch && !finalModel.contains(':online')) {
+          finalModel = '$finalModel:online';
+        }
+        if (finalModel.isEmpty) {
+          _logger.log('OpenAIService', 'Fallback ${p.id} has no model configured, skipping');
+          continue;
+        }
+
+        final baseUrl = await providers.getBaseUrlForProvider(p.id);
+        final requiresReferer = providers.getRequiresRefererForProvider(p.id);
+
+        attempts++;
+        final response = await _postChat(
+          baseUrl: baseUrl,
+          apiKey: candidateKey,
+          requiresReferer: requiresReferer,
+          model: finalModel,
+          messages: messages,
+          maxTokens: maxTokens,
+        );
+
+        if (response.statusCode == 200) {
+          final content = _extractContent(response.body);
+          if (content != null && content.isNotEmpty) {
+            _logger.log('OpenAIService', 'Fallback to ${p.id} ($finalModel) succeeded');
+            // Persist the working provider/model everywhere, including the
+            // per-category routing pairs that still point at the blocked one.
+            await _persistFallbackChoice(currentProviderId, model, p.id, finalModel);
+            lastServedProviderId = p.id;
+            lastServedModel = finalModel;
+            var answer =
+                '$content\n\nNote: ARYA switched to ${p.name} ($finalModel) because your primary provider was rate limited.';
+            if (_isPaidChoice(p, finalModel)) {
+              answer +=
+                  ' Heads up: $finalModel uses paid credits. You can pick another model in Settings.';
+            }
+            return answer;
+          }
+          _logger.log('OpenAIService', 'Fallback ${p.id} returned empty content, trying next...');
+        } else if (response.statusCode == 429) {
+          _logger.log('OpenAIService', 'Fallback ${p.id} also rate limited, trying next...');
+        } else {
+          _logger.log('OpenAIService', 'Fallback ${p.id} HTTP ${response.statusCode}, trying next...');
+        }
+      } catch (e) {
+        _logger.log('OpenAIService', 'Fallback ${p.id} error: $e');
+      }
+    }
+    return null;
+  }
+
+  /// Pick the model a fallback candidate should use: the original model when
+  /// the provider carries it, otherwise that provider's first free model,
+  /// otherwise the provider default.
+  String _pickFallbackModel(providers.ApiProvider p, String bareModel) {
+    if (p.models.any((m) => m.id == bareModel)) return bareModel;
+    for (final m in p.models) {
+      final label = m.label.toLowerCase();
+      if (m.id.contains(':free') || (label.contains('free') && !label.contains('paid'))) {
+        return m.id;
+      }
+    }
+    return p.defaultModel;
+  }
+
+  /// True when the chosen model bills paid credits. Free-tier providers and
+  /// custom endpoints count as free (flat-rate or self-hosted).
+  bool _isPaidChoice(providers.ApiProvider p, String modelId) {
+    if (_freeTierProviderIds.contains(p.id) || p.id == 'custom') return false;
+    final bare = modelId.replaceFirst(RegExp(r':online$'), '');
+    final matches = p.models.where((m) => m.id == bare);
+    if (matches.isNotEmpty) {
+      final label = matches.first.label.toLowerCase();
+      if (label.contains('paid')) return true;
+      if (label.contains('free')) return false;
+    }
+    if (p.id == 'openrouter') return !modelId.contains(':free');
+    if (p.id == 'openai' || p.id == 'deepseek') return true;
+    return false;
+  }
+
+  /// Persist a successful fallback: the global provider/model plus every
+  /// per-category routing pair that still points at the blocked provider,
+  /// so smart routing does not keep hitting the same rate limit.
+  Future<void> _persistFallbackChoice(
+    String failedProviderId,
+    String failedModel,
+    String newProviderId,
+    String newModel,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_provider', newProviderId);
+    await prefs.setString('api_model', newModel);
+    final bareNew = newModel.replaceFirst(RegExp(r':online$'), '');
+    final newProvider = providers.apiProviders.firstWhere(
+      (p) => p.id == newProviderId,
+      orElse: () => providers.apiProviders.first,
+    );
+    for (final category in ['quick', 'reasoning', 'creative', 'coding']) {
+      final rp = prefs.getString('routing_${category}_provider_id') ?? '';
+      if (rp != failedProviderId) continue;
+      final rm = prefs.getString('routing_${category}_model') ?? '';
+      final bareRm = rm.replaceFirst(RegExp(r':online$'), '');
+      // Keep the category's own model when the new provider carries it,
+      // otherwise point it at the model that just worked.
+      final keepModel = bareRm.isNotEmpty && newProvider.models.any((m) => m.id == bareRm);
+      final targetModel = keepModel ? bareRm : bareNew;
+      await prefs.setString('routing_${category}_provider_id', newProviderId);
+      await prefs.setString('routing_${category}_model', targetModel);
+      _logger.log('OpenAIService', 'Repaired $category routing -> $newProviderId / $targetModel');
+    }
+    clearCachedSettings();
+    _logger.log('OpenAIService', 'Persisted fallback $newProviderId / $newModel (was $failedProviderId / $failedModel)');
   }
 
   Future<void> _persistModel(String providerId, String model, String badModel) async {
@@ -529,6 +947,31 @@ class _ModelFetcher {
       _fetch('https://api.deepseek.com/models', key, (_) => false);
   Future<List<Map<String, dynamic>>> fetchCerebrasModels(String key) =>
       _fetch('https://api.cerebras.ai/v1/models', key, (_) => false);
+  Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String key) =>
+      _fetch('https://api.kilo.ai/api/gateway/models', key,
+          (m) => (m['id'] ?? '').toString().toLowerCase().contains('free'));
+  Future<List<Map<String, dynamic>>> fetchOllamaModels(String key) =>
+      _fetch('https://ollama.com/v1/models', key, (_) => false);
+
+  Future<List<Map<String, dynamic>>> fetchVeniceModels(String key) =>
+      _fetch('https://api.venice.ai/api/v1/models', key, (_) => false);
+
+  Future<List<Map<String, dynamic>>> fetchRequestyModels(String key) =>
+      _fetch('https://router.requesty.ai/v1/models', key, (m) {
+        final input = (m['input_price'] as num?) ?? 1;
+        final output = (m['output_price'] as num?) ?? 1;
+        return input == 0 && output == 0;
+      });
+
+  Future<List<Map<String, dynamic>>> fetchMistralModels(String key) =>
+      _fetch('https://api.mistral.ai/v1/models', key, (_) => true);
+
+  Future<List<Map<String, dynamic>>> fetchZenithModels(String key) =>
+      _fetch('https://api.zenllm.org/v1/models', key, (m) {
+        final pricing = m['pricing'];
+        if (pricing is Map) return ((pricing['input_per_mtok'] as num?) ?? 1) == 0;
+        return false;
+      });
 
   Future<List<Map<String, dynamic>>> _fetch(
     String url,
@@ -538,7 +981,9 @@ class _ModelFetcher {
     try {
       final response = await http.get(
         Uri.parse(url),
-        headers: {'Authorization': 'Bearer $key'},
+        headers: {
+          if (key.isNotEmpty) 'Authorization': 'Bearer $key',
+        },
       ).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body);
