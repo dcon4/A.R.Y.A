@@ -225,7 +225,24 @@ class _HomeScreenState extends State<HomeScreen> {
       final currentId = prefs.getString('api_provider') ?? 'openrouter';
       // 'local' is local-search only - its address exists on the PC, never
       // on the phone, so it must never become the general-chat provider.
-      final selectable = apiProviders.where((p) => p.id != 'local').toList();
+      // Only providers with a saved key are offered: announcing one with no
+      // key just sets up a request that cannot succeed. Custom also needs a
+      // base URL, otherwise the request has nowhere to go.
+      final selectable = <ApiProvider>[];
+      for (final p in apiProviders) {
+        if (p.id == 'local') continue;
+        final key = (prefs.getString(p.prefKey) ?? '').trim();
+        if (key.isEmpty) continue;
+        if (p.id == 'custom' &&
+            (prefs.getString('api_custom_base_url') ?? '').trim().isEmpty) {
+          continue;
+        }
+        selectable.add(p);
+      }
+      if (selectable.isEmpty) {
+        systemSpeak('No provider API keys saved yet');
+        return;
+      }
       final currentIndex = selectable.indexWhere((p) => p.id == currentId);
       final nextIndex = (currentIndex + 1) % selectable.length;
       final next = selectable[nextIndex];

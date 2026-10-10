@@ -255,6 +255,11 @@ class HelpScreen extends StatelessWidget {
                 'headset buttons can drive those controls, so '
                 'you can run ARYA hands-free without touching '
                 'the phone.'),
+            _body('Switching providers only steps through '
+                'providers you have actually saved an API key '
+                'for, so you never land on one that cannot '
+                'answer. If no keys are saved yet, ARYA says '
+                'so instead of switching.'),
             _body('While speech is paused, ARYA stays quiet. Tap '
                 'Resume Speech on the notification, or simply '
                 'use the microphone again - the mic always '

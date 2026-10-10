@@ -104,6 +104,10 @@ lets your standard Bluetooth headset buttons (play, pause, next,
 previous) drive those notification controls, so ARYA can be run
 hands-free without touching the phone.
 
+Switching providers only steps through providers you have actually
+saved an API key for, so you never land on one that cannot answer. If
+no keys are saved yet, ARYA says so instead of switching.
+
 Speech pauses hold everything ARYA would say. Tap Resume Speech on the
 notification to continue, or just use the microphone again - the mic
 wins - and ARYA picks up inside the sentence it stopped in rather than
