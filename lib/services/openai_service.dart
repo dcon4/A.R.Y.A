@@ -135,6 +135,89 @@ When the user asks a research question, you must present a balanced view:
   String lastServedProviderId = '';
   String lastServedModel = '';
 
+  /// Rate-limit cooldowns learned from 429 responses: provider id -> the
+  /// epoch millisecond when it may be tried again. In-memory only, so a
+  /// restart clears them, which is fine for cooldowns measured in minutes.
+  static final Map<String, int> _cooldownUntil = {};
+
+  /// Backoff used when the provider does not say when its limit resets.
+  static const Duration _defaultCooldown = Duration(minutes: 5);
+
+  /// Milliseconds left before [providerId] may be tried again (0 = free).
+  int _cooldownRemaining(String providerId) {
+    final until = _cooldownUntil[providerId];
+    if (until == null) return 0;
+    final remaining = until - DateTime.now().millisecondsSinceEpoch;
+    if (remaining <= 0) {
+      _cooldownUntil.remove(providerId);
+      return 0;
+    }
+    return remaining;
+  }
+
+  void _noteAnswered(String providerId) {
+    _cooldownUntil.remove(providerId);
+  }
+
+  /// Remember that [providerId] refused with a 429, for as long as the
+  /// provider itself asked us to wait.
+  void _noteRateLimited(String providerId, http.Response response) {
+    final duration = _cooldownFrom(response);
+    _cooldownUntil[providerId] =
+        DateTime.now().millisecondsSinceEpoch + duration.inMilliseconds;
+    _logger.log('OpenAIService',
+        'Rate limit on $providerId - cooling down for ${duration.inSeconds}s');
+  }
+
+  Duration _cooldownFrom(http.Response response) {
+    final retryAfter = response.headers['retry-after'];
+    if (retryAfter != null) {
+      final seconds = _secondsFromLimitHeader(retryAfter);
+      if (seconds != null && seconds > 0) {
+        return _clampCooldown(Duration(seconds: seconds));
+      }
+    }
+    for (final name in const [
+      'x-ratelimit-reset',
+      'x-ratelimit-reset-requests',
+      'x-ratelimit-reset-tokens',
+    ]) {
+      final raw = response.headers[name];
+      if (raw == null) continue;
+      final seconds = _secondsFromLimitHeader(raw);
+      if (seconds == null || seconds <= 0) continue;
+      if (seconds > 1000000000) {
+        // Unix timestamp rather than "seconds until reset".
+        final until = DateTime.fromMillisecondsSinceEpoch(seconds * 1000)
+            .difference(DateTime.now());
+        if (until.inSeconds > 0) return _clampCooldown(until);
+        continue;
+      }
+      return _clampCooldown(Duration(seconds: seconds));
+    }
+    return _defaultCooldown;
+  }
+
+  /// Parses "30", "30s", "30 seconds" or "500ms" into whole seconds.
+  int? _secondsFromLimitHeader(String raw) {
+    final match = RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?)\s*(ms|s|sec|secs|second|seconds)?\s*$',
+            caseSensitive: false)
+        .firstMatch(raw);
+    if (match == null) return null;
+    final value = double.tryParse(match.group(1)!);
+    if (value == null) return null;
+    final unit = (match.group(2) ?? 's').toLowerCase();
+    return (unit == 'ms' ? value / 1000 : value).round();
+  }
+
+  Duration _clampCooldown(Duration d) {
+    const shortest = Duration(seconds: 10);
+    const longest = Duration(minutes: 30);
+    if (d < shortest) return shortest;
+    if (d > longest) return longest;
+    return d;
+  }
+
   Future<String?> chatGPTAPI(
     String prompt, {
     List<Map<String, String>>? history,
@@ -330,6 +413,26 @@ When the user asks a research question, you must present a balanced view:
       }
       messages.add({'role': 'user', 'content': prompt});
 
+      // Respect a learned rate limit: don't spend a request (and up to a
+      // minute of waiting) on a provider we already know refused us. The
+      // others get first refusal; if none of them is free we ask this one
+      // anyway, because a probable 429 beats no answer at all.
+      final primaryCooldown = _cooldownRemaining(resolvedProviderId);
+      if (primaryCooldown > 0) {
+        _logger.log('OpenAIService',
+            '$resolvedProviderId is still cooling down (${primaryCooldown ~/ 1000}s left) - trying other providers first');
+        final early = await _tryFallbackProviders(
+          resolvedProviderId,
+          model,
+          messages,
+          maxTokens,
+          webSearch,
+        );
+        if (early != null) return early;
+        _logger.log('OpenAIService',
+            'No other provider available - trying $resolvedProviderId anyway');
+      }
+
       http.Response response;
       try {
         response = await _postChat(
@@ -357,6 +460,7 @@ When the user asks a research question, you must present a balanced view:
       }
 
       if (response.statusCode == 200) {
+        _noteAnswered(resolvedProviderId);
         _logger.log('OpenAIService', 'API response OK (${response.body.length} chars)');
         var content = _extractContent(response.body);
         if ((content == null || content.isEmpty) && maxTokens != null) {
@@ -415,6 +519,7 @@ When the user asks a research question, you must present a balanced view:
 
       // Rate limited (429) — try other providers with keys
       if (response.statusCode == 429) {
+        _noteRateLimited(resolvedProviderId, response);
         _logger.log('OpenAIService', 'Rate limited (429) on $resolvedProviderId, trying fallback providers...');
         final fallback = await _tryFallbackProviders(
           resolvedProviderId,
@@ -743,10 +848,18 @@ When the user asks a research question, you must present a balanced view:
     // 'local' is excluded: its address only exists on the computer, so it can
     // never answer a phone-side chat request.
     final allProviders = providers.apiProviders
-        .where((p) => p.id != currentProviderId && p.id != 'local');
+        .where((p) => p.id != currentProviderId && p.id != 'local')
+        .toList();
+    // Providers we are not cooling down come first, free-tier ones ahead of
+    // paid ones. Known-limited providers are pushed to the back rather than
+    // dropped: if nothing else is left, a probable 429 still beats silence.
+    final ready = allProviders.where((p) => _cooldownRemaining(p.id) == 0);
+    final cooling = allProviders.where((p) => _cooldownRemaining(p.id) > 0);
     final candidates = [
-      ...allProviders.where((p) => _freeTierProviderIds.contains(p.id)),
-      ...allProviders.where((p) => !_freeTierProviderIds.contains(p.id)),
+      ...ready.where((p) => _freeTierProviderIds.contains(p.id)),
+      ...ready.where((p) => !_freeTierProviderIds.contains(p.id)),
+      ...cooling.where((p) => _freeTierProviderIds.contains(p.id)),
+      ...cooling.where((p) => !_freeTierProviderIds.contains(p.id)),
     ];
 
     // Cap the attempts: each try can take up to 60s and a voice user is
@@ -766,6 +879,11 @@ When the user asks a research question, you must present a balanced view:
         if (url.isEmpty) continue;
       }
 
+      final coolingLeft = _cooldownRemaining(p.id);
+      if (coolingLeft > 0) {
+        _logger.log('OpenAIService',
+            '${p.id} still cooling down (${coolingLeft ~/ 1000}s left) - trying it anyway');
+      }
       _logger.log('OpenAIService', 'Trying fallback provider: ${p.id}');
       try {
         // Match against the bare model name — the original may carry a
@@ -800,6 +918,7 @@ When the user asks a research question, you must present a balanced view:
           final content = _extractContent(response.body);
           if (content != null && content.isNotEmpty) {
             _logger.log('OpenAIService', 'Fallback to ${p.id} ($finalModel) succeeded');
+            _noteAnswered(p.id);
             // Persist the working provider/model everywhere, including the
             // per-category routing pairs that still point at the blocked one.
             await _persistFallbackChoice(currentProviderId, model, p.id, finalModel);
@@ -815,6 +934,7 @@ When the user asks a research question, you must present a balanced view:
           }
           _logger.log('OpenAIService', 'Fallback ${p.id} returned empty content, trying next...');
         } else if (response.statusCode == 429) {
+          _noteRateLimited(p.id, response);
           _logger.log('OpenAIService', 'Fallback ${p.id} also rate limited, trying next...');
         } else {
           _logger.log('OpenAIService', 'Fallback ${p.id} HTTP ${response.statusCode}, trying next...');

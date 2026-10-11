@@ -392,7 +392,12 @@ class RoutingHelpScreen extends StatelessWidget {
                 'that worked - including any category rows that pointed '
                 'at the busy provider - and the answer ends with a note '
                 'naming the switch, plus a paid-credits warning if it '
-                'had to use a paid model.'),
+                'had to use a paid model. ARYA also remembers the '
+                'provider that refused it: it waits as long as that '
+                'service asked before trying it again, and puts known-'
+                'busy providers at the back of the queue. If every other '
+                'service is unavailable it will still ask the busy one '
+                'rather than stay silent.'),
 
             _heading('Auto-route'),
             _body('Auto-route sorts every question into one of four '

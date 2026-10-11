@@ -272,7 +272,11 @@ the fallback for every question when auto-route is on.
   three attempts - saves the one that worked (repairing any category
   rows that pointed at the busy provider), and adds a note naming the
   switch, with a paid-credits warning when it had to leave the free
-  tier.
+  tier. ARYA also remembers the provider that refused it: it waits as
+  long as that service asked before trying it again, and puts
+  known-busy providers at the back of the queue. If every other
+  service is unavailable it will still ask the busy one rather than
+  stay silent.
 
 ### Auto-route
 
