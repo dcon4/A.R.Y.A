@@ -59,7 +59,18 @@ class _ModelSelectorState extends State<ModelSelector> {
   }
 
   Future<void> _fetchModels() async {
-    if (widget.apiKey.isEmpty) {
+    // NVIDIA NIM, Cloudflare, and Ollama publish their model lists openly,
+    // and OpenCode Zen is served from the built-in registry - none needs
+    // a phone-side key. Kilo's gateway list is open too (anonymous tier).
+    final keyRequired = widget.providerId != 'nim' &&
+        widget.providerId != 'zen' &&
+        widget.providerId != 'kiloworks_ai' &&
+        widget.providerId != 'ollama' &&
+        widget.providerId != 'venice' &&
+        widget.providerId != 'requesty' &&
+        widget.providerId != 'zenith' &&
+        widget.providerId != 'kilo_code';
+    if (keyRequired && widget.apiKey.isEmpty) {
       setState(() {
         _error = 'Enter an API key to fetch available models';
       });
@@ -90,12 +101,59 @@ class _ModelSelectorState extends State<ModelSelector> {
         case 'cerebras':
           models = await _fetcher.fetchCerebrasModels(widget.apiKey);
           break;
+        case 'nim':
+          models = await _fetcher.fetchNvidiaNimModels(widget.apiKey);
+          break;
+        case 'kiloworks_ai':
+          // Cloudflare's public model list endpoint was retired, so the
+          // picker uses the verified list from the provider registry.
+          final cfProvider = providers.apiProviders
+              .firstWhere((p) => p.id == 'kiloworks_ai',
+                  orElse: () => providers.apiProviders.first);
+          models = cfProvider.models
+              .map((m) => {
+                    'id': m.id,
+                    'name': m.label,
+                    'is_free': m.label.toLowerCase().contains('(free)'),
+                    'supports_vision': false,
+                  })
+              .toList();
+          break;
+        case 'zen':
+          // Fixed list from the provider registry, so the privacy note
+          // stays next to every Zen model.
+          final zenProvider = providers.apiProviders
+              .firstWhere((p) => p.id == 'zen',
+                  orElse: () => providers.apiProviders.first);
+          models = zenProvider.models
+              .map((m) => {
+                    'id': m.id,
+                    'name': m.label,
+                    'is_free': m.label.toLowerCase().contains('(free)'),
+                    'supports_vision': false,
+                  })
+              .toList();
+          break;
+        case 'kilo_code':
+          models = await _fetcher.fetchKiloCodeModels(widget.apiKey);
+          break;
+        case 'ollama':
+          models = await _fetcher.fetchOllamaModels(widget.apiKey);
+          break;
+        case 'venice':
+          models = await _fetcher.fetchVeniceModels(widget.apiKey);
+          break;
+        case 'requesty':
+          models = await _fetcher.fetchRequestyModels(widget.apiKey);
+          break;
+        case 'mistral':
+          models = await _fetcher.fetchMistralModels(widget.apiKey);
+          break;
+        case 'zenith':
+          models = await _fetcher.fetchZenithModels(widget.apiKey);
+          break;
         default:
           _error = 'Model fetching not supported for this provider';
-      }
-
-      if (models.isEmpty && _error == null) {
-        _error = 'No models found. Check your API key.';
       }
 
       setState(() {

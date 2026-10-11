@@ -6,12 +6,18 @@ class ConversationEntry {
   final String userQuery;
   final String aiResponse;
   final String model;
+  final String provider;
+  final String routingCategory;
   final DateTime timestamp;
+  final Duration? responseTime;
 
   ConversationEntry({
     required this.userQuery,
     required this.aiResponse,
     required this.model,
+    this.provider = '',
+    this.routingCategory = '',
+    this.responseTime,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }
@@ -65,6 +71,11 @@ class ConversationService {
     return truncated.isEmpty ? 'Conversation' : truncated;
   }
 
+  String _formatResponseTime(Duration d) {
+    final seconds = d.inMilliseconds / 1000;
+    return '${seconds.toStringAsFixed(1)} seconds';
+  }
+
   Future<String> getSaveDir() async {
     final dir = await getApplicationDocumentsDirectory();
     return dir.path;
@@ -79,9 +90,15 @@ class ConversationService {
   String buildContent(String subject) {
     final firstModel =
         _entries.isNotEmpty ? _entries.first.model : 'unknown';
+    final firstProvider =
+        _entries.isNotEmpty ? _entries.first.provider : 'unknown';
+    final firstRoutingCategory =
+        _entries.isNotEmpty ? _entries.first.routingCategory : 'unknown';
     final buffer = StringBuffer();
     buffer.writeln('Subject: $subject');
     buffer.writeln('Model: $firstModel');
+    buffer.writeln('Provider: $firstProvider');
+    buffer.writeln('Routing: $firstRoutingCategory');
     buffer.writeln('Date: ${_formatDateTime(DateTime.now())}');
     buffer.writeln('---');
     buffer.writeln('');
@@ -90,7 +107,10 @@ class ConversationService {
       buffer.writeln('--- User ---');
       buffer.writeln(entry.userQuery);
       buffer.writeln('');
-      buffer.writeln('--- ARYA (${entry.model}) ---');
+      buffer.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
+      if (entry.responseTime != null) {
+        buffer.writeln('Response time: ${_formatResponseTime(entry.responseTime!)}');
+      }
       buffer.writeln(entry.aiResponse);
       buffer.writeln('');
     }
@@ -158,7 +178,10 @@ class ConversationService {
     content.writeln('--- User ---');
     content.writeln(entry.userQuery);
     content.writeln('');
-    content.writeln('--- ARYA (${entry.model}) ---');
+    content.writeln('--- ARYA (${entry.model}, ${entry.provider}, ${entry.routingCategory}) ---');
+    if (entry.responseTime != null) {
+      content.writeln('Response time: ${_formatResponseTime(entry.responseTime!)}');
+    }
     content.writeln(entry.aiResponse);
     content.writeln('');
     await file.writeAsString(content.toString(), mode: FileMode.append);
