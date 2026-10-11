@@ -45,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _obscureKey = true;
   String _selectedProviderId = 'openrouter';
   int _announceMode = 0;
+  bool _processingStatusEnabled = true;
   int _listeningDuration = 30;
   int _pauseDuration = 3;
   bool _autoRouteEnabled = false;
@@ -96,6 +97,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _customBaseUrlController.text = savedCustomBaseUrl;
       _currentModels = provider.models;
       _announceMode = prefs.getInt('mic_announcement_mode') ?? 0;
+      _processingStatusEnabled =
+          prefs.getBool('processing_status_enabled') ?? true;
       _listeningDuration = prefs.getInt('listening_duration_seconds') ?? 60;
       _pauseDuration = prefs.getInt('pause_duration_seconds') ?? 12;
       _autoRouteEnabled = prefs.getBool('auto_route_enabled') ?? false;
@@ -3439,6 +3442,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await prefs.setInt('mic_announcement_mode', v);
                 if (mounted) setState(() => _announceMode = v);
               },
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              "Processing Announcements",
+              style: TextStyle(
+                color: MyAppTheme.mainFontColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cera Pro',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "While ARYA is waiting for an answer it says \"Processing\", "
+              "\"Searching\", \"Thinking\" or \"Please wait\" every five "
+              "seconds, so you know it is still working. It stops the "
+              "moment the real answer is ready.",
+              style: TextStyle(
+                color: Color.fromRGBO(255, 138, 101, 0.8),
+                fontSize: 14,
+                fontFamily: 'Cera Pro',
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Announce while processing",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontFamily: 'Cera Pro',
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: _processingStatusEnabled,
+                  onChanged: (val) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('processing_status_enabled', val);
+                    if (mounted) {
+                      setState(() => _processingStatusEnabled = val);
+                    }
+                  },
+                  activeColor: MyAppTheme.mainFontColor,
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             const Text(

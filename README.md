@@ -203,6 +203,13 @@ flutter run
   shortcut, for example "l s where is my passport".
 - If a request fails (busy model or dropped connection), a Retry button
   appears under the answer - tap it to send the same request again.
+- While ARYA is waiting - for an answer, a web search, or an article
+  to open - she says a short filler line ("Processing", "Searching",
+  "Thinking", "Please wait") every five seconds so you know she is
+  still working. The phone speaks it while the request runs in
+  parallel, so it never delays the answer, and it stops the instant
+  the real reply is ready. Turn it off in Settings, under Processing
+  Announcements.
 - Second opinion: after an answer, say "second opinion" (or "another
   opinion"), or tap the Second opinion button under the answer. ARYA
   re-asks the same question - with the same injected search results -
@@ -222,6 +229,7 @@ flutter run
 | Weather Settings | Your US ZIP code for forecasts |
 | Web search toggle | Appends OpenRouter's `:online` suffix (extra credits) |
 | Text to Speech | Voice, speed, and related playback options |
+| Processing Announcements | Filler speech every 5 seconds while a request runs; on/off |
 | Brave Search | Web results injected into the prompt; optional research-only mode |
 | Exa Search | Web results injected into the prompt plus article text in voice search; optional research-only mode |
 | SearXNG | Optional self-hosted search server for prompt grounding and the voice-search source |

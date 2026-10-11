@@ -202,6 +202,9 @@ class HelpScreen extends StatelessWidget {
                 'and get balanced research answers'),
             _bullet('Weather Settings: your US ZIP code'),
             _bullet('Text to Speech: voice and speed'),
+            _bullet('Processing Announcements: a filler line like '
+                '"Processing" or "Thinking" every five seconds while a '
+                'request is running, with an on/off switch'),
             _bullet('Brave Search: web results for research questions'),
             _bullet('Exa Search: web results for answers, plus article '
                 'text in voice web search'),

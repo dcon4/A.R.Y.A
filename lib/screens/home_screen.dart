@@ -69,6 +69,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakChain = Future.value();
   // Bumped when the user barges in; queued speech from before is skipped.
   int _speakGen = 0;
+  // Filler spoken while a request is in flight ("Processing", "Searching",
+  // "Thinking", "Please wait"), one every five seconds. Started by
+  // [_awaiting] and the web search hooks, and cancelled by any spoken reply,
+  // so it can never compete with or delay the answer.
+  Timer? _processingStatusTimer;
+  int _processingStatusIndex = 0;
+  bool _processingStatusActive = false;
+  bool _processingStatusUtterance = false;
+  DateTime? _processingStatusStarted;
+  static const List<String> _processingStatuses = [
+    'Processing',
+    'Searching',
+    'Thinking',
+    'Please wait',
+  ];
   static const int _maxTtsChunkSize = 600;
   List<String> _responseChunks = [];
   int _responseChunkIndex = 0;
@@ -131,10 +146,13 @@ class _HomeScreenState extends State<HomeScreen> {
     // reset(), including "New conversation" before a search ever ran.
     _browserFlow.tts = flutterTts;
     _browserFlow.logger = _logger;
+    // Filler announcements while a web search or article fetch is running.
+    _browserFlow.onWaiting = _startProcessingStatus;
     // Results go on screen as well as being spoken, and searches and
     // read articles are saved into the conversation transcript.
     _browserFlow.onResults = (results, query, elapsed) async {
       if (!mounted) return;
+      await _stopProcessingStatus();
       if (results.isEmpty) {
         setState(() {
           _webSearchResultsText = '';
@@ -374,6 +392,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onTtsCompletion() {
+    // A filler line finished on its own. It carries no reply and no chunk
+    // chain, so leave the rest of the machinery alone.
+    if (_processingStatusUtterance) {
+      _processingStatusUtterance = false;
+      return;
+    }
     // If an announcement completer is pending, complete it first. This also
     // covers an utterance that finished in the instant before a pause began:
     // the waiter is released instead of being replayed on resume.
@@ -402,6 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> systemSpeak(String content) async {
+    await _stopProcessingStatus();
     if (_speechPaused) {
       _logger.verbose('HomeScreen', 'Holding response speech (paused)');
       return;
@@ -619,6 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onIdle: () {
             _browserMode = false;
             setState(() {});
+            _stopProcessingStatus();
             resumeMic();
           },
           onError: (msg) async {
@@ -711,7 +737,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _retryAction = null;
     });
     final localTimer = Stopwatch()..start();
-    final reachable = await ResearchAssistantService.instance.checkReachable();
+    final reachable = await _awaiting(
+        () => ResearchAssistantService.instance.checkReachable());
     if (!reachable) {
       const message =
           "Your computer is not reachable. Check that it is on and on the "
@@ -725,8 +752,8 @@ class _HomeScreenState extends State<HomeScreen> {
       await _speakAndWait(message);
       return;
     }
-    final result = await ResearchAssistantService.instance
-        .ask(trimmed, history: _recentHistoryTurns(), scope: searchScope);
+    final result = await _awaiting(() => ResearchAssistantService.instance
+        .ask(trimmed, history: _recentHistoryTurns(), scope: searchScope));
     localTimer.stop();
     final answerScreen = _localSearchScreenText(result);
     final answerSpoken = _localSearchSpeech(result);
@@ -891,6 +918,93 @@ class _HomeScreenState extends State<HomeScreen> {
     return (providerId: resolvedPid, model: resolvedModel, routingCategory: category);
   }
 
+  /// Switches the filler announcements on for as long as [run] takes, and
+  /// off again the instant the wait ends - before any reply is spoken.
+  Future<T> _awaiting<T>(Future<T> Function() run) async {
+    await _startProcessingStatus();
+    try {
+      return await run();
+    } finally {
+      await _stopProcessingStatus();
+    }
+  }
+
+  /// Starts saying "Processing", "Searching", "Thinking" or "Please wait"
+  /// every five seconds until something else takes over. TTS runs on its own
+  /// engine thread, so this costs the request no time at all.
+  Future<void> _startProcessingStatus() async {
+    if (_processingStatusActive || _processingStatusTimer != null) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('processing_status_enabled') ?? true)) return;
+    if (!mounted) return;
+    _processingStatusActive = true;
+    _processingStatusIndex = 0;
+    _processingStatusStarted = DateTime.now();
+    await _speakProcessingStatus();
+    _processingStatusTimer =
+        Timer.periodic(const Duration(seconds: 5), (_) => _onProcessingStatusTick());
+  }
+
+  void _onProcessingStatusTick() {
+    if (!_processingStatusActive) return;
+    // Safety valve: nothing has spoken for three minutes, so the wait is
+    // over (or stuck) either way - stop talking rather than drone on.
+    if (_processingStatusStarted != null &&
+        DateTime.now().difference(_processingStatusStarted!) >
+            const Duration(seconds: 180)) {
+      _logger.log('HomeScreen', 'Processing announcements timed out - stopping');
+      _stopProcessingStatus();
+      return;
+    }
+    _processingStatusIndex =
+        (_processingStatusIndex + 1) % _processingStatuses.length;
+    _speakProcessingStatus();
+  }
+
+  Future<void> _speakProcessingStatus() async {
+    if (!_processingStatusActive || _speechPaused) return;
+    // Never talk over the microphone: whatever the user is saying must win.
+    if (speechToText.isListening) {
+      _logger.verbose('HomeScreen', 'Processing announcement skipped - mic is open');
+      return;
+    }
+    final text = _processingStatuses[_processingStatusIndex];
+    // A line that outlasted its five-second slot is cut, so lines never
+    // queue up behind one another.
+    if (_processingStatusUtterance) {
+      _processingStatusUtterance = false;
+      try {
+        await flutterTts.stop();
+      } catch (_) {}
+    }
+    _processingStatusUtterance = true;
+    _logger.verbose('HomeScreen', 'Processing status: $text');
+    try {
+      await flutterTts.speak(text);
+    } catch (e) {
+      _processingStatusUtterance = false;
+      _logger.log('HomeScreen', 'Processing status speech failed: $e');
+    }
+  }
+
+  /// Switches the filler off and cuts off any line in progress, so the reply
+  /// that follows starts immediately instead of queueing behind it.
+  Future<void> _stopProcessingStatus() async {
+    final wasActive = _processingStatusActive;
+    _processingStatusActive = false;
+    _processingStatusTimer?.cancel();
+    _processingStatusTimer = null;
+    if (!_processingStatusUtterance) return;
+    _processingStatusUtterance = false;
+    // Something else already stopped the loop; leave the engine alone so a
+    // reply that is about to start cannot be cut off by us.
+    if (!wasActive) return;
+    _logger.verbose('HomeScreen', 'Cutting off the processing announcement');
+    try {
+      await flutterTts.stop();
+    } catch (_) {}
+  }
+
   Future<void> _speakAndWait(String text) {
     final gen = _speakGen;
     final next = _speakChain
@@ -905,6 +1019,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speakNow(String text, int gen) async {
     // Superseded by a barge-in while queued — drop it.
     if (gen != _speakGen) return;
+    await _stopProcessingStatus();
     // Paused (user button or phone call): say nothing and release the
     // caller, so a held prompt can never stall a later flow.
     if (_speechPaused) {
@@ -1039,6 +1154,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// current wait, stop TTS, and drop any queued speech.
   Future<void> _interruptSpeech() async {
     _speakGen++;
+    await _stopProcessingStatus();
     _clearResponseChunks();
     // Kill any in-flight article chunk chain — the user is taking over.
     _browserFlow.invalidateReading();
@@ -1448,7 +1564,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _searchState = SearchState.showingResults;
           });
           await _speakAndWait("Searching for ${lastWords}.");
-          final results = await WebSearchService.instance.search(lastWords);
+          final results =
+              await _awaiting(() => WebSearchService.instance.search(lastWords));
           if (results.isEmpty) {
             await _speakAndWait("No results found.");
             setState(() {
@@ -1789,7 +1906,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final isResearch = classification?.isResearch ?? false;
 
-      final response = await openaiService.chatGPTAPI(
+      final response = await _awaiting(() => openaiService.chatGPTAPI(
         query,
         history: isSecondOpinion
             ? (secondOpinionHistory!.isNotEmpty ? secondOpinionHistory : null)
@@ -1799,7 +1916,7 @@ class _HomeScreenState extends State<HomeScreen> {
         memories: relevantMemories.isNotEmpty ? relevantMemories : null,
         maxTokens: 2000,
         isResearch: isResearch,
-      );
+      ));
       responseTimer.stop();
 
       _logger.log('HomeScreen', 'AI response received (${response?.length ?? 0} chars)');
@@ -2168,6 +2285,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _speechTimeout?.cancel();
     _stitchTimer?.cancel();
     _statusTimer?.cancel();
+    _processingStatusTimer?.cancel();
+    _processingStatusActive = false;
     _textInputController.dispose();
     _textFocusNode.dispose();
     super.dispose();

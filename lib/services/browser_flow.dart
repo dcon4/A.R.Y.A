@@ -50,6 +50,9 @@ class BrowserFlow {
   Future<void> Function(List<ws.SearchResult> results, String query,
       Duration elapsed)? onResults;
   Future<void> Function(String title, String url, String text)? onArticleRead;
+  /// Called just before a network wait starts, so HomeScreen can fill the
+  /// silence with its "Processing" / "Searching" announcements.
+  Future<void> Function()? onWaiting;
 
   bool get hasResults => _allResults.isNotEmpty;
   bool get isReading => _isReadingPage;
@@ -162,6 +165,7 @@ class BrowserFlow {
     _logger.log('BrowserFlow', 'Performing search: "$query"');
     _queuedResultIndexes = [];
     await _onSpeak("Searching for: $query.");
+    await onWaiting?.call();
     final stopwatch = Stopwatch()..start();
 
     try {
@@ -418,6 +422,7 @@ class BrowserFlow {
       // Exa can hand back clean page text directly - try it first when
       // the key is saved, and fall back to the normal page fetcher.
       String? content;
+      await onWaiting?.call();
       if (await ExaSearchService.isUsable()) {
         _logger.log('BrowserFlow', 'Getting page text from Exa: $url');
         content = await ExaSearchService().fetchPageText(url);
