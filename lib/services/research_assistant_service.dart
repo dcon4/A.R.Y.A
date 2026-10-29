@@ -47,7 +47,7 @@ class ResearchAssistantService {
   static final ResearchAssistantService instance = ResearchAssistantService._();
   ResearchAssistantService._();
 
-  static const String defaultAddress = 'http://192.168.0.210:8080/assistant';
+  static const String defaultAddress = 'http://192.168.1.249:8642/assistant';
 
   final _logger = DebugLogger();
 
@@ -71,8 +71,25 @@ class ResearchAssistantService {
     while (address.endsWith('/')) {
       address = address.substring(0, address.length - 1);
     }
+    // The Research Assistant's own chat agent quotes full URLs such as
+    // .../assistant/api/ask. The setting is the base address only, so a
+    // trailing API path is stripped here instead of failing later with
+    // a silent 404.
+    for (final suffix in ['/api/ask', '/api/status']) {
+      while (address.toLowerCase().endsWith(suffix)) {
+        address = address.substring(0, address.length - suffix.length);
+        while (address.endsWith('/')) {
+          address = address.substring(0, address.length - 1);
+        }
+      }
+    }
     return address;
   }
+
+  /// The address without http:// or https://, for speaking aloud or
+  /// putting in a log line.
+  static String prettyAddress(String address) =>
+      address.replaceFirst(RegExp(r'^https?://'), '');
 
   static Future<void> setAddress(String value) async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,19 +120,29 @@ class ResearchAssistantService {
 
   Future<bool> checkReachable() async {
     final address = await getAddress();
+    final uri = Uri.parse('$address/api/status');
     // 10s per try, one retry after 2 seconds: a single dropped first
     // packet must not read as "the computer is not reachable".
     for (var attempt = 1; attempt <= 2; attempt++) {
       try {
-        final response = await http
-            .get(Uri.parse('$address/api/status'))
-            .timeout(const Duration(seconds: 10));
-        if (response.statusCode != 200) return false;
+        final response =
+            await http.get(uri).timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) {
+          _logger.log('LocalSearch',
+              'Status check got HTTP ${response.statusCode} from $uri');
+          return false;
+        }
         final data = jsonDecode(response.body);
-        return data['ok'] == true;
+        if (data['ok'] != true) {
+          _logger.log('LocalSearch',
+              'Status check reached $uri but the answer was not ok');
+          return false;
+        }
+        _logger.log('LocalSearch', 'Status check ok ($uri)');
+        return true;
       } catch (e) {
         _logger.log('LocalSearch',
-            'Status check attempt $attempt failed (${e.runtimeType}): $e');
+            'Status check attempt $attempt failed for $uri (${e.runtimeType}): $e');
         if (attempt == 1) {
           await Future.delayed(const Duration(seconds: 2));
         }
@@ -135,6 +162,7 @@ class ResearchAssistantService {
     String scope = 'public',
   }) async {
     final address = await getAddress();
+    final pretty = prettyAddress(address);
     final model = await getModel();
     final provider = await getProvider();
     _logger.log(
@@ -152,8 +180,13 @@ class ResearchAssistantService {
         return _failure('The question was empty.', <LocalSearchSource>[]);
       }
       if (response.statusCode != 200) {
+        _logger.log('LocalSearch',
+            'Ask got HTTP ${response.statusCode} from $address/api/ask');
         return _failure(
-            'The computer answered with an error.', <LocalSearchSource>[]);
+            'The computer answered with error ${response.statusCode}. The '
+            'address should be $pretty and end with the port number or '
+            '/assistant, with no /api/ask at the end.',
+            <LocalSearchSource>[]);
       }
 
 final data = jsonDecode(response.body);
@@ -199,14 +232,14 @@ final data = jsonDecode(response.body);
     } on TimeoutException catch (e) {
       _logger.error('LocalSearch', 'Ask timed out after both attempts (${e.runtimeType})', e);
       return _failure(
-          'Your computer is not reachable. Check that it is on and on the '
-          'same wifi, then try again.',
+          'Your computer at $pretty is not reachable. Check that it is on '
+          'and on the same wifi, then try again.',
           <LocalSearchSource>[]);
     } catch (e) {
       _logger.error('LocalSearch', 'Ask failed (${e.runtimeType})', e);
       return _failure(
-          'Your computer is not reachable. Check that it is on and on the '
-          'same wifi, then try again.',
+          'Your computer at $pretty is not reachable. Check that it is on '
+          'and on the same wifi, then try again.',
           <LocalSearchSource>[]);
     }
   }

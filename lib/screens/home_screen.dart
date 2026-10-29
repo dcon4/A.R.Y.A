@@ -740,9 +740,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final reachable = await _awaiting(
         () => ResearchAssistantService.instance.checkReachable());
     if (!reachable) {
-      const message =
-          "Your computer is not reachable. Check that it is on and on the "
-          "same wifi, then try again.";
+      final pretty = ResearchAssistantService.prettyAddress(
+          await ResearchAssistantService.instance.getAddress());
+      final message =
+          "Your computer at $pretty is not reachable. Check that it is on "
+          "and on the same wifi, then try again.";
       setState(() {
         generatedContent = message;
         isLoading = false;

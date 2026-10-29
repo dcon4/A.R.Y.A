@@ -1077,7 +1077,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: InputDecoration(
             hintText: ResearchAssistantService.defaultAddress,
             hintStyle: TextStyle(color: Colors.grey[600]),
-            helperText: "Address of your computer's Research Assistant.",
+            helperText: "Address of your computer's Research Assistant. No username or password is needed.",
             helperStyle: TextStyle(color: Colors.grey[600]),
             filled: true,
             fillColor: const Color.fromRGBO(255, 255, 255, 0.08),
@@ -2338,7 +2338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave or Exa - no API key, nothing paid. SearXNG always runs first; Exa and Brave fill in when SearXNG is off or finds nothing. Your computer's address, for example http://192.168.0.210:8888",
+              "Optional. SearXNG is a free search program you run on your own computer. ARYA can ask it for web results and feed them into the AI, just like Brave or Exa - no API key, nothing paid. SearXNG always runs first; Exa and Brave fill in when SearXNG is off or finds nothing. Your computer's address, for example http://192.168.1.249:8888",
               style: TextStyle(
                 color: Color.fromRGBO(255, 138, 101, 0.8),
                 fontSize: 14,
@@ -2436,7 +2436,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               controller: urlController,
                               decoration: const InputDecoration(
                                 labelText: "SearXNG address",
-                                hintText: "http://192.168.0.210:8888",
+                                hintText: "http://192.168.1.249:8888",
                                 border: OutlineInputBorder(),
                                 labelStyle: TextStyle(color: Colors.white70),
                                 hintStyle: TextStyle(color: Colors.white38),
