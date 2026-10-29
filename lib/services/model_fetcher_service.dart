@@ -187,6 +187,281 @@ class ModelFetcherService {
     }
   }
 
+  /// Fetch models from NVIDIA NIM (public list, no key required)
+  Future<List<Map<String, dynamic>>> fetchNvidiaNimModels(
+      [String apiKey = '']) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from NVIDIA NIM...');
+
+      final headers = <String, String>{};
+      if (apiKey.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $apiKey';
+      }
+      final response = await http
+          .get(
+            Uri.parse('https://integrate.api.nvidia.com/v1/models'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'is_free': false, // NIM is paid per token
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} NIM models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'NIM API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch NIM models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Kilo's gateway (open list, key optional)
+  Future<List<Map<String, dynamic>>> fetchKiloCodeModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Kilo Code...');
+
+      final response = await http.get(
+        Uri.parse('https://api.kilo.ai/api/gateway/models'),
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          return {
+            'id': m['id'] ?? '',
+            'name': m['id'] ?? 'Unknown',
+            'created': m['created'] ?? 0,
+            // Kilo's gateway mixes free and paid models; free ones are
+            // marked ":free" or carry "free" in the id (kilo-auto/free).
+            'is_free': m['id']?.toString().toLowerCase().contains('free') ?? false,
+            'supports_vision': (m['id'] as String).contains('vision'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Kilo models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Kilo Code API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Kilo Code models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Ollama Cloud (ollama.com).
+  ///
+  /// The list is public, so it works without a key too; chat itself always
+  /// needs one. Response is OpenAI-style: {"data": [{"id": "..."}]}.
+  Future<List<Map<String, dynamic>>> fetchOllamaModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Ollama...');
+
+      final response = await http.get(
+        Uri.parse('https://ollama.com/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': false,
+            'supports_vision': false,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Ollama models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Ollama API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Ollama models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Venice.ai (api.venice.ai). The list is readable
+  /// without a key; per-token pricing and vision support come along too.
+  Future<List<Map<String, dynamic>>> fetchVeniceModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Venice...');
+
+      final response = await http.get(
+        Uri.parse('https://api.venice.ai/api/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final spec = m['model_spec'] ?? const {};
+          final pricing = (spec['pricing'] ?? const {})['input'] ?? const {};
+          final caps = spec['capabilities'] ?? const {};
+          final usd = ((pricing['usd'] as num?) ?? 1).toDouble();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': usd == 0,
+            'supports_vision': caps['supportsVision'] == true,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Venice models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Venice API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Venice models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Requesty (router.requesty.ai). The list is readable
+  /// without a key; free models carry zero input and output prices.
+  Future<List<Map<String, dynamic>>> fetchRequestyModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Requesty...');
+
+      final response = await http.get(
+        Uri.parse('https://router.requesty.ai/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final input = (m['input_price'] as num?) ?? 1;
+          final output = (m['output_price'] as num?) ?? 1;
+          return {
+            'id': id,
+            'name': id,
+            'is_free': input == 0 && output == 0,
+            'supports_vision': m['supports_vision'] == true,
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Requesty models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Requesty API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Requesty models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Mistral (api.mistral.ai). The list needs a key;
+  /// the free plan is rate limited but bills nothing.
+  Future<List<Map<String, dynamic>>> fetchMistralModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Mistral...');
+
+      final response = await http.get(
+        Uri.parse('https://api.mistral.ai/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          return {
+            'id': id,
+            'name': id,
+            'is_free': true,
+            'supports_vision': false,
+          };
+        }).where((m) => (m['id'] as String).isNotEmpty).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Mistral models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Mistral API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Mistral models', e);
+      return [];
+    }
+  }
+
+  /// Fetch models from Zenith (api.zenllm.org). The list is readable without
+  /// a key; pricing is prepaid micro-USD per token (nothing free today).
+  Future<List<Map<String, dynamic>>> fetchZenithModels(String apiKey) async {
+    try {
+      _logger.log('ModelFetcher', 'Fetching models from Zenith...');
+
+      final response = await http.get(
+        Uri.parse('https://api.zenllm.org/v1/models'),
+        headers: {
+          if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = (data['data'] as List).map((m) {
+          final id = (m['id'] ?? '').toString();
+          final pricing = m['pricing'] ?? const {};
+          final perMtok = (pricing['input_per_mtok'] as num?) ?? 1;
+          final modalities =
+              (m['architecture']?['input_modalities'] as List?) ?? const [];
+          return {
+            'id': id,
+            'name': (m['display_name'] ?? id).toString(),
+            'is_free': perMtok == 0,
+            'supports_vision': modalities.contains('image'),
+          };
+        }).toList();
+
+        _logger.log('ModelFetcher', 'Fetched ${models.length} Zenith models');
+        return models;
+      } else {
+        _logger.error('ModelFetcher', 'Zenith API error: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      _logger.error('ModelFetcher', 'Failed to fetch Zenith models', e);
+      return [];
+    }
+  }
+
   /// Filter models based on criteria
   List<Map<String, dynamic>> filterModels({
     required List<Map<String, dynamic>> models,
