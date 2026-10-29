@@ -741,7 +741,7 @@ class _HomeScreenState extends State<HomeScreen> {
         () => ResearchAssistantService.instance.checkReachable());
     if (!reachable) {
       final pretty = ResearchAssistantService.prettyAddress(
-          await ResearchAssistantService.instance.getAddress());
+          await ResearchAssistantService.getAddress());
       final message =
           "Your computer at $pretty is not reachable. Check that it is on "
           "and on the same wifi, then try again.";
